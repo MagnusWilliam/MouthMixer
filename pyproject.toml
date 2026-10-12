@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mouthmixer"
+version = "0.1.0"
+description = "Turns hums, whistles and beatbox into clean notes and drum hits (prototype)."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "librosa>=0.10",
+  "soundfile>=0.12",
+  "pretty_midi>=0.2.10",
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+# The parts that need real hardware or a desktop: mic capture, tray icon, global hotkey.
+windows = [
+  "sounddevice>=0.4.6",
+  "pystray>=0.19",
+  "pillow>=10",
+  "pynput>=1.7",
+]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+mouthmixer = "mouthmixer.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mouthmixer = ["app/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
