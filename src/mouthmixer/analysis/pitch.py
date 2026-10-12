@@ -25,7 +25,8 @@ def track(y: np.ndarray, sr: int, fmin: float = 65.0, fmax: float = 1050.0) -> P
     f0, voiced, prob = librosa.pyin(
         y, fmin=fmin, fmax=fmax, sr=sr, frame_length=frame, hop_length=hop, center=True
     )
-    rms = librosa.feature.rms(y=y, frame_length=frame, hop_length=hop, center=True)[0]
+    # A short loudness window (32 ms) so quick re-articulations ("hm-hm" on one pitch) show as dips.
+    rms = librosa.feature.rms(y=y, frame_length=frame // 2, hop_length=hop, center=True)[0]
     n = min(len(f0), len(rms))
     midi = np.full(n, np.nan)
     ok = voiced[:n] & np.isfinite(f0[:n])

@@ -16,3 +16,10 @@ Constraints that hold for every session:
 - **LINE ZERO stays untouched** until the user approves the tool and its music.
 - Change a critic rule's value only with a line in `docs/MUSIC_KNOWLEDGE.md` §13 (tuning log).
 - Build in the phase order of `docs/PLAN.md` §14.
+
+Working in this repo:
+- Status and what's next: `docs/PLAN.md` §14 "Build status".
+- Tests: `python -m pytest` (all on generated audio from `src/mouthmixer/synth.py`; add a synthetic case
+  for every behaviour you change). Hardware code (`sounddevice`, `pystray`, `pynput`, `winreg`) is
+  imported lazily so the tests run without it.
+- Try the app headless: `python -m mouthmixer demo` then `python -m mouthmixer app` (port 8765).

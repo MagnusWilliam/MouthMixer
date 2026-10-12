@@ -52,27 +52,33 @@ class Grid:
         }
 
 
-def _score(onsets, weights, bpm, drift, span, subdiv, sigma=0.035):
-    """Best phase and fit score for one tempo hypothesis. Returns (score, phase)."""
+SWINGS = (0.5, 0.58, 0.64, 0.67)
+
+
+def _targets(subdiv: int, swing: float) -> np.ndarray:
+    """Allowed positions inside one beat: straight 8ths/16ths, or swung 8ths."""
+    if swing <= 0.5:
+        return np.arange(subdiv + 1) / subdiv
+    return np.array([0.0, swing, 1.0])
+
+
+def _score(onsets, weights, bpm, drift, span, targets, sigma=0.035):
+    """Best phase and fit score for one tempo hypothesis. Returns (score, phase_seconds)."""
     rate = bpm / 60.0
     k = drift / span
     t = onsets - onsets[0]
-    pos = rate * (t + 0.5 * k * t * t) * subdiv  # in grid units
-    best = (-1.0, 0.0)
-    for ph in np.linspace(0, 1, 16, endpoint=False):
-        d = (pos - ph) - np.round(pos - ph)
-        sec = np.abs(d) / (rate * subdiv)
-        fit = np.exp(-((sec / sigma) ** 2))
-        # Onsets that also land on whole beats make a reading more likely (rules out 3:2 readings).
-        bpos = (pos - ph) / subdiv
-        on_beat = np.exp(-(((bpos - np.round(bpos)) / (rate * sigma)) ** 2))
-        s = float(np.sum(weights * fit * (0.6 + 0.4 * on_beat)))
-        if s > best[0]:
-            best = (s, ph)
-    score, ph = best
-    phase_sec = onsets[0] + ph / (rate * subdiv)
-    # Move the phase to the nearest whole beat at or before the first onset.
-    return score / max(1e-9, weights.sum()), phase_sec
+    pos = rate * (t + 0.5 * k * t * t)  # in beats
+    phases = np.linspace(0, 1, 32, endpoint=False)[:, None]
+    rel = pos[None, :] - phases
+    frac = rel - np.floor(rel)
+    d = np.min(np.abs(frac[:, :, None] - targets[None, None, :]), axis=2)
+    fit = np.exp(-((d / rate / sigma) ** 2))
+    # Onsets that also land on whole beats make a reading more likely (rules out 3:2 readings).
+    db = np.minimum(frac, 1 - frac)
+    on_beat = np.exp(-((db / rate / sigma) ** 2))
+    scores = np.sum(weights[None, :] * fit * (0.6 + 0.4 * on_beat), axis=1)
+    b = int(np.argmax(scores))
+    return float(scores[b]) / max(1e-9, weights.sum()), onsets[0] + float(phases[b, 0]) / rate
 
 
 def fit_tempo(onsets, weights=None, *, subdiv: int = 2, lo: float = 60.0, hi: float = 180.0,
@@ -94,20 +100,22 @@ def fit_tempo(onsets, weights=None, *, subdiv: int = 2, lo: float = 60.0, hi: fl
         dens = np.exp(-0.5 * (np.log2(ioi_beats / 0.6) / 0.8) ** 2)
         plaus = prior * dens
         for drift in (-0.08, -0.04, 0.0, 0.04, 0.08):
-            s, ph = _score(onsets, weights, bpm, drift, span, subdiv)
-            results.append((s * (0.6 + 0.4 * plaus) - 0.02 * abs(drift) / 0.08, s, bpm, drift, ph))
+            for sw in SWINGS:
+                s, ph = _score(onsets, weights, bpm, drift, span, _targets(subdiv, sw))
+                # Swing must earn its place: a small cost keeps straight readings for straight playing.
+                s -= 0.01 * (sw > 0.5)
+                results.append((s * (0.6 + 0.4 * plaus) - 0.02 * abs(drift) / 0.08, s, bpm, drift, sw, ph))
     results.sort(reverse=True)
-    best = results[0]
     # Refine around the best with finer steps.
-    _, _, b0, d0, _ = best
+    _, _, b0, d0, sw0, _ = results[0]
     fine = []
     for bpm in np.arange(b0 - 1.0, b0 + 1.01, 0.1):
         for drift in np.arange(d0 - 0.03, d0 + 0.031, 0.01):
-            s, ph = _score(onsets, weights, bpm, drift, span, subdiv)
+            s, ph = _score(onsets, weights, bpm, drift, span, _targets(subdiv, sw0))
             fine.append((s - 0.02 * abs(drift) / 0.08, s, bpm, drift, ph))
     fine.sort(reverse=True)
     _, s, bpm, drift, ph = fine[0]
-    grid = Grid(float(bpm), float(drift), float(ph), float(span), confidence=float(s))
+    grid = Grid(float(bpm), float(drift), float(ph), float(span), swing=float(sw0), confidence=float(s))
     # Phase: the fitted grid point may be an off-beat; pick the beat alignment that puts most weight on beats.
     best_off, best_w = 0.0, -1.0
     for off in np.arange(subdiv) / subdiv:
@@ -122,7 +130,7 @@ def fit_tempo(onsets, weights=None, *, subdiv: int = 2, lo: float = 60.0, hi: fl
     alts = []
     for f in (0.5, 2.0):
         if 50 <= bpm * f <= 220:
-            alts.append({"bpm": round(bpm * f, 1)})
+            alts.append({"bpm": round(float(bpm * f), 1)})
     grid.alternatives = alts
     return grid
 
@@ -135,13 +143,18 @@ def find_downbeat(grid: Grid, onsets, weights, kicks=None, snares=None) -> int:
     for d in range(grid.meter):
         idx = (np.round(b).astype(int) - d) % grid.meter
         s = float(np.sum(weights[near & (idx == 0)])) * 1.0 + float(np.sum(weights[near & (idx == 2)])) * 0.4
+        # Only hits that sit on a beat count (an off-beat kick says nothing about where "1" is).
         if kicks is not None and len(kicks):
-            kb = np.round(grid.beats(kicks)).astype(int)
+            kf = grid.beats(kicks)
+            kb = np.round(kf[np.abs(kf - np.round(kf)) < 0.15]).astype(int)
             s += 1.5 * float(np.sum((kb - d) % grid.meter == 0))
         if snares is not None and len(snares):
-            sb = np.round(grid.beats(snares)).astype(int)
+            sf_ = grid.beats(snares)
+            sb = np.round(sf_[np.abs(sf_ - np.round(sf_)) < 0.15]).astype(int)
             s += 1.5 * float(np.sum(((sb - d) % grid.meter) % 2 == 1))
-        # Small bias to the first strong onset being a downbeat (pickups are handled by the weights).
+        # When the evidence is even, the first onset is most likely on "1".
+        if near[0] and (int(np.round(b[0])) - d) % grid.meter == 0:
+            s += 0.5 * float(np.max(weights))
         if s > best_s:
             best, best_s = d, s
     return best

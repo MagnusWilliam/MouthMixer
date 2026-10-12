@@ -16,7 +16,6 @@ from .. import synth
 from . import beatbox, cleanup, detect, melody, pitch, timing
 
 ANALYSIS_SR = 16000
-PREVIEW_LEAD = 0  # General MIDI program for the preview melody (0 = piano) in the MIDI file
 MIDI_PROGRAM = 4  # Electric Piano 1
 
 # The readings "not what I hummed" steps through, in order (PLAN §7.10 / Phase 2 done-when).
@@ -66,7 +65,9 @@ def analyse(y: np.ndarray, sr: int, *, reading: dict | None = None, calibration:
         first = float(np.min(grid.beats(on_a)))
         if first < -0.5:
             grid.downbeat -= int(np.ceil(-first / grid.meter)) * grid.meter
-        grid.swing = timing.detect_swing(grid, on_a)
+        # Measure the swing on the final grid; keep the fitted value when too few off-beats to tell.
+        measured = timing.detect_swing(grid, on_a)
+        grid.swing = measured if measured > 0.5 or grid.swing <= 0.5 else grid.swing
 
     settings = cleanup.CleanSettings(
         strength=reading.get("strength", 0.7),

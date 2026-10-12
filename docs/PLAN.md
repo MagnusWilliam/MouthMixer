@@ -37,6 +37,9 @@ no black-box AI song generator in the main path.
 - **First style packs confirmed:** city-pop day, neon night, acid-jazz battle.
 - **Lyrics and real vocals:** the tool suggests lyrics that fit a finished song; you sing them; it cleans
   up and mixes the vocal (§7.13, Phase 6).
+- **Lyrics model: the Claude API** (decided 2026-10-12). Used only in Phase 6, opt-in, text only.
+- **Prototype started 2026-10-12** (Phases 1-2, first version), built against synthetic audio; see
+  §14 "Build status".
 - **Songs don't have to come only from your voice.** The tool may write its own parts and add sounds
   when something is missing (§7.12). Your ideas stay the centre; additions support them.
 
@@ -949,6 +952,22 @@ recording mode, comping, timing and pitch correction, the vocal chain and the in
 **Phase 7: the rest of the packs and polish.** The other packs from §8.2, taste learning, the surprise
 slider, packaging as a Windows app.
 
+**Build status (2026-10-12): Phases 1-2, first version, built.**
+- Built: listener (segmenter with pre-roll and 30 s ring buffer, hotkey, tray icon with states, mute
+  detection, auto-pause for call apps and quiet hours, retry when the mic is missing); the music gate
+  (hand-written features from §3 B2 only); melody transcription (pYIN + hysteresis note cutting); beatbox
+  transcription with rule classifier and per-user kNN calibration; tempo with linear drift, swing,
+  downbeat, quantising with strength, key/mode with tuning offset and probabilistic scale snap, note
+  tidying, phrases; MIDI and preview export; the inbox app (keep / toss / not music / "not what I
+  hummed" readings, calibration, mic test, upload) and the Windows setup + shortcut.
+- Results on synthetic audio: the gate sorts all test clips (hums, beatbox, talking, typing); beatbox
+  hits 100% on 8 test patterns; 33 of 36 drifting, off-pitch hums note-perfect (the 3 misses read
+  72 BPM as 144; the "half tempo" reading fixes them).
+- Not built yet from Phases 1-2: Silero VAD and the YAMNet/PANNs classifier (B1), the speaker check and
+  loopback check (B3), the personal classifier trained on inbox answers, noise suppression
+  (DeepFilterNet), Basic Pitch/CREPE as second pitch tracker, idea threads (Phase 3).
+- **Next:** the user's first real hums and Phase 0 recordings; tune the gate and transcription on them.
+
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.
 
@@ -959,9 +978,7 @@ biggest amount of work.
 Answered 2026-10-12: own repo (`mouthmixer`), mic (QuadCast 2 + pop shield, headphones, boom arm for the
 loud keyboard), app (browser page with a shortcut), LINE ZERO (only after the tool is proven), PC
 (Ryzen 9 7900 + RX 7900 XT), free instruments, steer-only (no editing), MIDI downloads OK, first packs
-(city-pop day, neon night, acid-jazz battle), lyrics and vocals (yes). Still open:
+(city-pop day, neon night, acid-jazz battle), lyrics and vocals (yes), lyrics model (Claude API). Still open:
 
-1. **Lyrics model:** the Claude API (better lyrics, a few cents per request, needs an API key) or a free
-   local model on your graphics card (offline, weaker)?
-2. **The Hum:** try writing LINE ZERO's motif H with the tool once it works (no commitment until you
+1. **The Hum:** try writing LINE ZERO's motif H with the tool once it works (no commitment until you
    approve it for the game)?

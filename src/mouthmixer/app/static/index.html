@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MouthMixer</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo"></span>MouthMixer</div>
+  <nav>
+    <button data-view="inbox" class="tab active">Inbox <span id="count-inbox" class="badge"></span></button>
+    <button data-view="kept" class="tab">Kept</button>
+    <button data-view="tossed" class="tab">Tossed</button>
+    <button data-view="setup" class="tab">Setup</button>
+  </nav>
+  <div class="listener">
+    <span id="dot" class="dot"></span>
+    <span id="state">…</span>
+    <button id="pause" class="ghost">Pause</button>
+    <button id="save-last" class="ghost" title="Same as the hotkey">Save last 30 s</button>
+  </div>
+</header>
+
+<main>
+  <section id="list-pane">
+    <div id="list"></div>
+    <p id="empty" class="muted hidden">Nothing here yet. Hum, whistle or beatbox while you work, or press
+      <b id="hotkey-hint">Ctrl+Alt+M</b> right after an idea to save the last 30 seconds.</p>
+  </section>
+
+  <section id="detail" class="hidden">
+    <div class="detail-head">
+      <h2 id="d-title"></h2>
+      <div id="d-chips" class="chips"></div>
+    </div>
+    <div class="players">
+      <div><label>What you did</label><audio id="a-raw" controls preload="none"></audio></div>
+      <div><label>Cleaned up</label><audio id="a-preview" controls preload="none"></audio></div>
+    </div>
+    <canvas id="roll" height="300"></canvas>
+    <p class="legend muted"><span class="sw raw"></span>as heard <span class="sw clean"></span>cleaned
+      <span class="sw chrom"></span>kept off-scale on purpose</p>
+    <div class="actions">
+      <button id="b-keep" class="primary">Keep</button>
+      <button id="b-toss">Toss</button>
+      <button id="b-notmusic" title="Teaches the detector">Not music</button>
+      <span class="spacer"></span>
+      <button id="b-reading" title="Try the next way of reading it">Not what I hummed</button>
+      <span id="d-reading" class="muted"></span>
+    </div>
+    <p class="muted small">Downloads: <a id="m-clean" href="#">cleaned MIDI</a> · <a id="m-raw" href="#">raw MIDI</a></p>
+  </section>
+
+  <section id="setup" class="hidden">
+    <div class="card">
+      <h3>Beatbox calibration</h3>
+      <p class="muted">Do each sound about 10 times, with the pop shield where you normally keep it. MouthMixer learns
+        <i>your</i> kick, snare and hats. Redo it if you move the shield.</p>
+      <div id="cal-rows"></div>
+      <button id="cal-reset" class="ghost">Start calibration over</button>
+    </div>
+    <div class="card">
+      <h3>Mic test (keyboard vs voice)</h3>
+      <p class="muted">Type normally for 8 seconds, then hum for 8 seconds. It shows how far apart they are; aim for
+        at least 15 dB. If it's less, move the mic closer to your mouth, point its back at the keyboard, and lower the
+        gain.</p>
+      <button id="mic-test">Start the test</button>
+      <div id="mic-result"></div>
+    </div>
+    <div class="card">
+      <h3>Add a recording</h3>
+      <p class="muted">A WAV file of a hum, or a long recording of your workday (only the musical parts are kept).</p>
+      <input type="file" id="upload" accept=".wav,audio/wav">
+      <span id="upload-result" class="muted"></span>
+    </div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
