@@ -15,6 +15,9 @@ dependencies = [
   "pretty_midi>=0.2.10",
   "fastapi>=0.110",
   "uvicorn>=0.27",
+  "tinysoundfont>=0.3.7",  # instruments (GeneralUser GS in assets/soundfonts)
+  "pedalboard>=0.9",       # effects
+  "pyloudnorm>=0.1.1",     # loudness
 ]
 
 [project.optional-dependencies]

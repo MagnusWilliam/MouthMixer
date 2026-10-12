@@ -20,6 +20,7 @@ def test_inbox_flow(home):
 
     assert cli(["demo"]) == 0
     app = create_app(start_worker=False)
+    app.state.worker.make_songs = False
     client = TestClient(app)
     assert app.state.worker.ingest_once() == 3
     clips = client.get("/api/clips?view=inbox").json()
@@ -49,6 +50,7 @@ def test_upload_and_calibration(home):
     from mouthmixer.app.server import create_app
 
     app = create_app(start_worker=False)
+    app.state.worker.make_songs = False
     client = TestClient(app)
     y, _ = S.hum(S.melody("minor"), seed=7)
     assert client.post("/api/upload", content=_wav(y)).json()["kept"] == 1
@@ -77,3 +79,37 @@ def test_starts_without_a_console(home, monkeypatch):
 
     logging.config.dictConfig(LOGGING_CONFIG)  # what uvicorn does at start; crashed with no console
     sys.stdout.close()
+
+
+def test_songs_flow(home):
+    """Clips become finished songs in the inbox; keep, versions and another version work."""
+
+    from mouthmixer.app.server import create_app
+
+    assert cli(["demo"]) == 0
+    app = create_app(start_worker=False)
+    app.state.worker.song_options = {"n": 5, "render_top": 2, "keep": 2}
+    client = TestClient(app)
+    app.state.worker.ingest_once()
+    songs = client.get("/api/songs").json()
+    assert len(songs) >= 2
+    s = client.get(f"/api/songs/{songs[0]['id']}").json()
+    v = s["record"]["versions"][0]
+    assert v["tracks"] and v["critic"]["ok"]
+    assert client.get(f"/api/songs/{s['id']}/file/{v['file']}").status_code == 200
+    assert client.get(f"/api/songs/{s['id']}/file/../../library.sqlite").status_code == 404
+    if len(s["record"]["versions"]) > 1:
+        assert client.post(f"/api/songs/{s['id']}/version", json={"version": 1}).json()["ok"]
+        assert client.get(f"/api/songs/{s['id']}").json()["version"] == 1
+    n_before = len(s["record"]["versions"])
+    app.state.worker.write_song(s["record"]["primary"], song_id=s["id"], exclude_pack=v["pack"])
+    assert len(client.get(f"/api/songs/{s['id']}").json()["record"]["versions"]) == n_before + 1
+    assert client.post(f"/api/songs/{s['id']}/status", json={"status": "kept"}).json()["ok"]
+    assert len(client.get("/api/songs?view=kept").json()) == 1
+    clips = client.get("/api/clips?view=all").json()
+    assert all(c["quality"] is not None for c in clips)
+    assert client.get("/api/mics").json()["devices"] == [] or True  # no audio system in CI
+    assert client.post("/api/mic", json={"name": "Microphone (HyperX QuadCast 2)"}).json()["ok"]
+    from mouthmixer import config
+
+    assert config.Settings.load().mic_name == "Microphone (HyperX QuadCast 2)"

@@ -5,6 +5,12 @@ moments, and turns them into clean notes and drum hits you can listen to and dow
 phases build finished, original game music around them in the style you ask for, with a critic that only
 shows you the best options (see the plan).
 
+**New:** every good clip now becomes a **finished song** before it reaches your inbox: a full arrangement
+in one of six styles (city-pop day, neon night, acid-jazz battle, orchestral adventure, arcade, dream) with
+many instruments, effects and a mastered mix. MouthMixer tries many versions and combinations of your clips,
+checks each against the music rules in `docs/MUSIC_KNOWLEDGE.md`, and shows the best three. Raw clips live
+in the **Clips** tab; pick your microphone in **Setup**.
+
 **Status (prototype, 2026-10-12):** Phases 1-2 of [`docs/PLAN.md`](docs/PLAN.md) are built as a first
 version: background capture, the music detector, hum and beatbox transcription, cleanup (tempo drift,
 swing, key, scale), the inbox app and the Windows shortcut. It has only been tested on generated audio so

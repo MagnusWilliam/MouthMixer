@@ -8,34 +8,45 @@ const api = async (path, opts = {}) => {
 };
 const post = (path, body) =>
   api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-let view = "inbox";
+let view = "songs";
 let selected = null;
-let current = null;
+let currentSong = null;
+let currentClip = null;
 let listenerPaused = false;
+let lastStatus = null;
 
 const NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
 const noteName = (m) => NAMES[m % 12] + (Math.floor(m / 12) - 1);
 const fmtTime = (t) => new Date(t * 1000).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const fmtLen = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 const KIND = { melody: "Melody", beat: "Beat", both: "Melody + beat" };
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
-// ---- listener status --------------------------------------------------------------------------
+// ---- status bar -------------------------------------------------------------------------------
 async function refreshStatus() {
   try {
     const s = await api("/api/status");
-    const st = s.listener.state || "not running";
+    lastStatus = s;
+    const L = s.listener;
+    const st = L.state || "not running";
     $("#dot").className = "dot " + st;
-    let text = { listening: "Listening", capturing: "Capturing…", paused: "Paused", muted: "Mic muted", "no mic": "Mic not found (retrying)",
-      "not running": "Listener not running" }[st] || st;
-    if (s.listener.auto_pause_reason) text += ` (${s.listener.auto_pause_reason})`;
-    if (st !== "not running") text += ` · kept ${s.listener.kept_today || 0}, ignored ${s.listener.dropped_today || 0} today`;
+    let text = { listening: "Listening", capturing: "Capturing…", paused: "Paused", muted: "Mic muted",
+      "no mic": "Mic not found (pick one in Setup)", "not running": "Listener not running" }[st] || st;
+    if (L.auto_pause_reason) text += ` (${L.auto_pause_reason})`;
+    if (L.device && st !== "not running") text += ` · ${L.device}`;
+    if (st !== "not running") text += ` · kept ${L.kept_today || 0}, ignored ${L.dropped_today || 0} today`;
     $("#state").textContent = text;
-    listenerPaused = !!s.listener.paused_by_user;
+    listenerPaused = !!L.paused_by_user;
     $("#pause").textContent = listenerPaused ? "Resume" : "Pause";
     $("#pause").disabled = $("#save-last").disabled = st === "not running";
-    const inbox = (s.counts.new || 0) + (s.counts.processing || 0);
-    $("#count-inbox").textContent = inbox || "";
-    $("#hotkey-hint").textContent = (s.hotkey || "").replace(/[<>]/g, "").replace(/\+/g, "+").replace(/\b\w/g, (c) => c.toUpperCase());
+    $("#count-songs").textContent = (s.songs && s.songs.new) || "";
+    const busy = s.writing > 0 ? "Writing a song: trying styles and combinations, checking each one…" :
+      s.processing > 0 ? "Listening to a new clip…" : "";
+    $("#working").classList.toggle("hidden", !busy);
+    $("#working-text").textContent = busy;
+    if (view === "setup") updateLevel(L);
   } catch (e) {
     $("#state").textContent = "App not responding";
   }
@@ -46,93 +57,249 @@ $("#save-last").onclick = async () => { await post("/api/listener/save_last"); s
 // ---- list ---------------------------------------------------------------------------------------
 async function refreshList() {
   if (view === "setup") return;
-  const items = await api("/api/clips?view=" + view);
   const list = $("#list");
+  let items;
+  if (view === "clips") items = await api("/api/clips?view=all");
+  else items = await api("/api/songs?view=" + (view === "kept" ? "kept" : "inbox"));
   list.innerHTML = "";
-  $("#empty").classList.toggle("hidden", items.length > 0);
-  for (const c of items) {
+  const empty = $("#empty");
+  empty.classList.toggle("hidden", items.length > 0);
+  empty.innerHTML = view === "songs"
+    ? "No songs yet. Hum, whistle or beatbox while you work (or press the hotkey right after an idea). Each good clip becomes a finished song here; this takes a little while after you stop."
+    : view === "kept" ? "Songs you keep show up here." : "Every clip MouthMixer kept shows up here.";
+  for (const it of items) {
     const el = document.createElement("div");
-    el.className = "item" + (c.id === selected ? " sel" : "");
-    const what = c.status === "processing" ? "Working on it…" : c.status === "failed" ? "Couldn't analyse this one" :
-      [KIND[c.kind], c.key, c.bpm ? Math.round(c.bpm) + " BPM" : null].filter(Boolean).join(" · ");
-    el.innerHTML = `<div class="t">${fmtTime(c.created)}${c.source === "hotkey" ? " · saved by hotkey" : ""}</div>
-      <div class="s">${what} · ${c.duration ? c.duration.toFixed(1) + " s" : ""}</div>`;
-    el.onclick = () => select(c.id);
+    el.className = "item" + (it.id === selected ? " sel" : "");
+    if (view === "clips") {
+      const q = it.quality == null ? "" : it.quality >= 0.6 ? " · good" : " · unsure";
+      const what = it.status === "processing" ? "Working on it…" : it.status === "failed" ? "Couldn't analyse" :
+        [KIND[it.kind], it.key, it.bpm ? Math.round(it.bpm) + " BPM" : null].filter(Boolean).join(" · ");
+      el.innerHTML = `<div class="t">${fmtTime(it.created)}${it.source === "hotkey" ? " · hotkey" : ""}</div>
+        <div class="s">${esc(what)}${q}${it.song_id ? " · in a song" : ""}</div>`;
+      el.onclick = () => selectClip(it.id);
+    } else {
+      el.innerHTML = `<div class="t">${esc(it.title || "Song")}</div>
+        <div class="s">${fmtTime(it.created)} · ${it.versions} version${it.versions > 1 ? "s" : ""}</div>`;
+      el.onclick = () => selectSong(it.id);
+    }
     list.appendChild(el);
   }
-  if (!selected && items.length && items[0].status !== "processing") select(items[0].id);
+  if (!selected && items.length) (view === "clips" ? selectClip : selectSong)(items[0].id);
 }
 
-// ---- detail -------------------------------------------------------------------------------------
-async function select(id) {
-  selected = id;
+function showPane(name) {
+  $("#song").classList.toggle("hidden", name !== "song");
+  $("#clip").classList.toggle("hidden", name !== "clip");
+}
+function markSelected() {
   document.querySelectorAll(".item").forEach((e) => e.classList.remove("sel"));
-  current = await api("/api/clips/" + id);
-  $("#detail").classList.remove("hidden");
-  const r = current.result;
-  $("#d-title").textContent = fmtTime(current.created) + (r ? " · " + KIND[r.kind] : "");
+}
+
+// ---- songs --------------------------------------------------------------------------------------
+async function selectSong(id) {
+  selected = id;
+  markSelected();
+  currentSong = await api("/api/songs/" + id);
+  showPane("song");
+  renderSong();
+  refreshList();
+}
+
+function renderSong() {
+  const s = currentSong, rec = s.record, vi = s.version || 0, v = rec.versions[vi];
+  $("#s-title").textContent = v.title;
+  const secs = v.critic.details.seconds || 0;
+  $("#s-chips").innerHTML = [v.style, v.key, Math.round(v.bpm) + " BPM", fmtLen(secs), `version ${vi + 1} of ${rec.versions.length}`]
+    .map((c) => `<span class="chip">${esc(c)}</span>`).join("");
+  const mine = v.tracks.filter((t) => t.mine).map((t) => `${t.name.toLowerCase()} (${t.instrument})`);
+  const clips = [...new Set(v.spec.clips)];
+  $("#s-parts").innerHTML = `<b>Yours:</b> ${mine.length ? esc(mine.join(", ")) : "the idea it grew from"} ` +
+    `<span class="muted">(from ${clips.length} clip${clips.length > 1 ? "s" : ""})</span><br>` +
+    `<b>Added:</b> ${esc((v.added || []).join(", "))}`;
+  $("#s-audio").src = `/api/songs/${s.id}/file/${v.file}`;
+  $("#s-dl-audio").href = `/api/songs/${s.id}/file/${v.file}`;
+  $("#s-dl-midi").href = `/api/songs/${s.id}/file/${v.midi}`;
+  const vers = $("#s-versions");
+  vers.innerHTML = "";
+  rec.versions.forEach((x, i) => {
+    const b = document.createElement("button");
+    b.className = "ver" + (i === vi ? " on" : "");
+    b.innerHTML = `<b>${i + 1}</b> ${esc(x.style)} <span class="muted">${Math.round(x.score * 100)}</span>`;
+    b.title = x.describe;
+    b.onclick = async () => { await post(`/api/songs/${s.id}/version`, { version: i }); await selectSong(s.id); };
+    vers.appendChild(b);
+  });
+  $("#s-summary").textContent = rec.summary + (rec.history ? " " + rec.history.join(" ") : "");
+  const d = v.critic.details, sec = v.critic.sections;
+  const checks = [
+    [`Melody notes on the beat that belong to the chord: ${Math.round(d.chord_tones_on_beats * 100)}%`, d.chord_tones_on_beats >= 0.6],
+    [`Clashing notes: ${d.clashes}`, d.clashes === 0],
+    [`Chord flow ${Math.round(d.progression_flow * 100)}/100, smooth voice leading (avg ${d.voice_leading} semitones)`, d.progression_flow >= 0.5],
+    [`Kick and bass together: ${Math.round(d.kick_bass_lock * 100)}% of kicks`, d.kick_bass_lock >= 0.4],
+    [`Melody ${d.lead_vs_rest_db > 0 ? d.lead_vs_rest_db + " dB above" : Math.abs(d.lead_vs_rest_db) + " dB under"} the band where the ear listens (1-4 kHz)`, d.lead_vs_rest_db >= -2],
+    [`Bass still heard on phone speakers (${Math.round(d.bass_audible_on_phones * 100)}% of its energy above 150 Hz)`, d.bass_audible_on_phones >= 0.05],
+    [`Loudness -14 LUFS, peak ${d.peak_db} dB (no clipping), stereo safe in mono (${d.stereo_corr})`, true],
+    [`Scores: melody ${pct(sec.melody)}, harmony ${pct(sec.harmony)}, bass ${pct(sec.bass)}, arrangement ${pct(sec.arrangement)}, mix ${pct(sec.mix)}`, true],
+  ];
+  $("#s-checks").innerHTML = checks.map(([t, ok]) => `<li class="${ok ? "ok" : "warn"}">${esc(t)}</li>`).join("");
+  drawScore();
+}
+const pct = (x) => Math.round(x * 100);
+
+for (const [btn, status] of [["#s-keep", "kept"], ["#s-toss", "tossed"]]) {
+  $(btn).onclick = async () => {
+    if (!currentSong) return;
+    await post(`/api/songs/${currentSong.id}/status`, { status });
+    selected = null; currentSong = null; showPane(null);
+    refreshList(); refreshStatus();
+  };
+}
+async function another(different) {
+  if (!currentSong) return;
+  const id = currentSong.id, before = currentSong.record.versions.length;
+  await post(`/api/songs/${id}/another`, { different_style: different });
+  refreshStatus();
+  for (let i = 0; i < 120; i++) {  // poll until the new version is there (up to 4 minutes)
+    await new Promise((r) => setTimeout(r, 2000));
+    const s = await api("/api/songs/" + id);
+    if (s.record.versions.length > before) { if (selected === id) { currentSong = s; renderSong(); } return; }
+    if (!(lastStatus && lastStatus.writing > 0) && i > 3) break;
+  }
+}
+$("#s-another").onclick = () => another(false);
+$("#s-different").onclick = () => another(true);
+
+// The score: one lane per part, sections and chords on top, a playhead while it plays.
+const ROLE_ORDER = ["lead", "counter", "arp", "comp", "pad", "bass", "timpani", "drums"];
+function drawScore(playBeat) {
+  if (!currentSong) return;
+  const v = currentSong.record.versions[currentSong.version || 0];
+  const tracks = v.tracks.slice().sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role));
+  const cv = $("#score"), dpr = window.devicePixelRatio || 1;
+  const laneH = 30, top = 40, left = 150;
+  const w = cv.clientWidth, h = top + tracks.length * laneH + 6;
+  cv.style.height = h + "px"; cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext("2d");
+  ctx.scale(dpr, dpr);
+  const total = v.bars * 4;
+  const X = (b) => left + (b / total) * (w - left - 8);
+  ctx.font = "11px system-ui";
+  // Sections
+  v.sections.forEach((s, i) => {
+    ctx.fillStyle = i % 2 ? css("--grid") : css("--bg");
+    ctx.fillRect(X(s.start * 4), 0, X((s.start + s.bars) * 4) - X(s.start * 4), h);
+    ctx.fillStyle = css("--ink");
+    ctx.fillText(s.name, X(s.start * 4) + 4, 13);
+  });
+  // Chords
+  ctx.fillStyle = css("--muted");
+  let lastX = -99;
+  for (const c of v.chords) {
+    const x = X(c.start);
+    if (x - lastX > 34) { ctx.fillText(c.name, x + 2, 29); lastX = x; }
+  }
+  // Bar lines
+  for (let b = 0; b <= v.bars; b++) {
+    ctx.strokeStyle = css("--bar"); ctx.globalAlpha = b % 4 === 0 ? 0.9 : 0.35;
+    ctx.beginPath(); ctx.moveTo(X(b * 4), top - 4); ctx.lineTo(X(b * 4), h); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  const colours = { lead: "--clean", counter: "--violet", arp: "--teal", comp: "--green", pad: "--pad", bass: "--amber", timpani: "--red", drums: "--muted" };
+  tracks.forEach((t, i) => {
+    const y0 = top + i * laneH;
+    ctx.fillStyle = css("--ink");
+    ctx.fillText(t.name + (t.mine ? "  ★ yours" : ""), 6, y0 + 12);
+    ctx.fillStyle = css("--muted");
+    ctx.fillText(t.instrument, 6, y0 + 25);
+    ctx.strokeStyle = css("--line"); ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(w, y0); ctx.stroke();
+    if (!t.notes.length) return;
+    const ps = t.notes.map((n) => n[2]);
+    const lo = Math.min(...ps), hi = Math.max(...ps), span = Math.max(1, hi - lo);
+    ctx.fillStyle = css(colours[t.role] || "--clean");
+    for (const [s, l, p, vel] of t.notes) {
+      const y = t.role === "drums" ? y0 + 4 + (1 - (p - lo) / span) * (laneH - 10) : y0 + 3 + (1 - (p - lo) / span) * (laneH - 9);
+      ctx.globalAlpha = 0.35 + 0.65 * vel / 127;
+      ctx.fillRect(X(s), y, Math.max(1.5, X(s + l) - X(s) - 0.5), t.role === "drums" ? 2.5 : 3);
+    }
+    ctx.globalAlpha = 1;
+  });
+  if (playBeat != null) {
+    ctx.strokeStyle = css("--red"); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(X(playBeat), 0); ctx.lineTo(X(playBeat), h); ctx.stroke();
+  }
+}
+$("#s-audio").ontimeupdate = () => {
+  if (!currentSong) return;
+  const v = currentSong.record.versions[currentSong.version || 0];
+  drawScore($("#s-audio").currentTime * v.bpm / 60);
+};
+
+// ---- clips --------------------------------------------------------------------------------------
+async function selectClip(id) {
+  selected = id;
+  markSelected();
+  currentClip = await api("/api/clips/" + id);
+  showPane("clip");
+  const c = currentClip, r = c.result;
+  $("#d-title").textContent = fmtTime(c.created) + (r ? " · " + KIND[r.kind] : "");
   const chips = [];
   if (r) {
     const t = r.tempo;
     chips.push(Math.round(t.bpm) + " BPM" + (Math.abs(t.drift) >= 0.02 ? ` (drifted ${t.drift > 0 ? "faster" : "slower"} ${Math.round(Math.abs(t.drift) * 100)}%, fixed)` : ""));
-    if (r.key && r.notes.length) chips.push(r.key.name + (r.keys[0] ? ` (${Math.round(r.keys[0].confidence * 100)}% sure)` : ""));
+    if (r.key && r.notes.length) chips.push(r.key.name);
     if (t.swing > 0.5) chips.push("swung " + Math.round(t.swing * 100) + "%");
     if (r.notes.length) chips.push(r.notes.length + " notes");
     if (r.drums.length) chips.push(r.drums.length + " drum hits");
-    if (r.phrases.length) chips.push(r.phrases.length + " phrase" + (r.phrases.length > 1 ? "s" : ""));
-    if (Math.abs(r.tuning_offset) > 0.15) chips.push(`you were ${Math.round(Math.abs(r.tuning_offset) * 100)} cents ${r.tuning_offset < 0 ? "flat" : "sharp"} overall (fixed)`);
+    if (Math.abs(r.tuning_offset) > 0.15) chips.push(`${Math.round(Math.abs(r.tuning_offset) * 100)} cents ${r.tuning_offset < 0 ? "flat" : "sharp"} overall (fixed)`);
   }
-  $("#d-chips").innerHTML = chips.map((c) => `<span class="chip">${c}</span>`).join("");
+  $("#d-chips").innerHTML = chips.map((x) => `<span class="chip">${esc(x)}</span>`).join("");
+  const reasons = c.quality_reasons ? JSON.parse(c.quality_reasons) : [];
+  $("#d-quality").innerHTML = c.quality == null ? "" : c.quality >= 0.6
+    ? `<span class="okc">Follows musical rules (${pct(c.quality)}/100)</span>${c.song_id ? " · already in a song" : ""}`
+    : `<span class="warnc">Unsure (${pct(c.quality)}/100): ${esc(reasons.join(", ") || "weak")}</span> · no song was made automatically`;
   $("#a-raw").src = `/api/clips/${id}/audio/raw`;
-  $("#a-preview").src = `/api/clips/${id}/audio/preview?r=${current.reading || 0}`;
+  $("#a-preview").src = `/api/clips/${id}/audio/preview?r=${c.reading || 0}`;
   $("#m-clean").href = `/api/clips/${id}/midi/clean`;
   $("#m-raw").href = `/api/clips/${id}/midi/raw`;
-  $("#d-reading").textContent = current.reading ? "Reading: " + current.reading_label : "";
+  $("#d-reading").textContent = c.reading ? "Reading: " + c.reading_label : "";
   drawRoll();
   refreshList();
 }
-
-for (const [btn, status] of [["#b-keep", "kept"], ["#b-toss", "tossed"], ["#b-notmusic", "not_music"]]) {
+$("#b-song").onclick = async () => {
+  if (!currentClip) return;
+  await post(`/api/clips/${currentClip.id}/song`);
+  $("#b-song").textContent = "Writing… it'll appear under Songs";
+  setTimeout(() => { $("#b-song").textContent = "Make a song from this"; }, 8000);
+  refreshStatus();
+};
+for (const [btn, status] of [["#b-toss", "tossed"], ["#b-notmusic", "not_music"]]) {
   $(btn).onclick = async () => {
-    if (!selected) return;
-    await post(`/api/clips/${selected}/status`, { status });
-    selected = null;
-    $("#detail").classList.add("hidden");
-    refreshList();
-    refreshStatus();
+    if (!currentClip) return;
+    await post(`/api/clips/${currentClip.id}/status`, { status });
+    selected = null; currentClip = null; showPane(null); refreshList();
   };
 }
 $("#b-reading").onclick = async () => {
-  if (!selected) return;
+  if (!currentClip) return;
   $("#b-reading").disabled = true;
   $("#d-reading").textContent = "Listening again…";
-  try {
-    await post(`/api/clips/${selected}/reading`);
-    await select(selected);
-  } finally {
-    $("#b-reading").disabled = false;
-  }
+  try { await post(`/api/clips/${currentClip.id}/reading`); await selectClip(currentClip.id); }
+  finally { $("#b-reading").disabled = false; }
 };
 
-// ---- piano roll (read only: you steer, you don't edit) ------------------------------------------
 function beatsOf(t, g) {
   const tt = t - g.phase, rate = g.bpm / 60, k = g.drift / Math.max(g.span, 1e-6);
   return rate * (tt + 0.5 * k * tt * tt) - g.downbeat;
 }
 function drawRoll(playBeat) {
-  const r = current && current.result;
-  const cv = $("#roll");
-  const dpr = window.devicePixelRatio || 1;
+  const r = currentClip && currentClip.result;
+  const cv = $("#roll"), dpr = window.devicePixelRatio || 1;
   const hasNotes = r && (r.notes.length || r.notes_raw.length);
   const w = cv.clientWidth, h = hasNotes ? 300 : 70;
-  cv.style.height = h + "px";
-  cv.width = w * dpr; cv.height = h * dpr;
+  cv.style.height = h + "px"; cv.width = w * dpr; cv.height = h * dpr;
   const ctx = cv.getContext("2d");
   ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, h);
   if (!r) return;
-  const css = getComputedStyle(document.documentElement);
-  const col = (n) => css.getPropertyValue(n).trim();
   const g = r.grid;
   const raw = r.notes_raw.map((n) => ({ s: beatsOf(n.onset, g), e: beatsOf(n.onset + n.duration, g), p: n.pitch }));
   const end = Math.max(4, ...r.notes.map((n) => n.start + n.length), ...r.drums.map((d) => d.start + 0.5), ...raw.map((n) => n.e));
@@ -146,44 +313,40 @@ function drawRoll(playBeat) {
   const rowH = rollH / (hi - lo + 1);
   ctx.font = "10px system-ui";
   for (let p = lo; hasNotes && p <= hi; p++) {
-    if (NAMES[p % 12].length === 2) { ctx.fillStyle = col("--grid"); ctx.fillRect(left, Y(p), w - left, rowH); }
-    if (p % 12 === 0 || p === lo) { ctx.fillStyle = col("--muted"); ctx.fillText(noteName(p), 2, Y(p) + rowH - 2); }
+    if (NAMES[p % 12].length === 2) { ctx.fillStyle = css("--grid"); ctx.fillRect(left, Y(p), w - left, rowH); }
+    if (p % 12 === 0 || p === lo) { ctx.fillStyle = css("--muted"); ctx.fillText(noteName(p), 2, Y(p) + rowH - 2); }
   }
   for (let b = 0; b <= bars * 4; b++) {
-    ctx.strokeStyle = b % 4 === 0 ? col("--bar") : col("--grid");
+    ctx.strokeStyle = b % 4 === 0 ? css("--bar") : css("--grid");
     ctx.beginPath(); ctx.moveTo(X(b), top); ctx.lineTo(X(b), h - 4); ctx.stroke();
   }
-  ctx.fillStyle = col("--raw");
+  ctx.fillStyle = css("--raw");
   for (const n of raw) ctx.fillRect(X(n.s), Y(n.p) + 1, Math.max(2, X(n.e) - X(n.s)), rowH - 2);
   for (const n of r.notes) {
-    ctx.fillStyle = n.chromatic ? col("--chrom") : col("--clean");
+    ctx.fillStyle = n.chromatic ? css("--chrom") : css("--clean");
     const x = X(n.start), wd = Math.max(3, X(n.start + n.length) - x - 1);
     ctx.beginPath(); ctx.roundRect(x, Y(n.pitch) + 1, wd, rowH - 2, 3); ctx.fill();
   }
   if (drumH) {
     const lanes = { kick: 0, snare: 1, hat: 2, open_hat: 2, clap: 1, rim: 1, tom: 0 };
     const y0 = h - drumH - 2;
-    ctx.fillStyle = col("--muted");
+    ctx.fillStyle = css("--muted");
     ["kick", "snare", "hats"].forEach((l, i) => ctx.fillText(l, 2, y0 + i * 15 + 11));
     for (const d of r.drums) {
-      ctx.fillStyle = d.name === "open_hat" ? col("--chrom") : col("--clean");
+      ctx.fillStyle = d.name === "open_hat" ? css("--chrom") : css("--clean");
       ctx.globalAlpha = 0.35 + 0.65 * d.velocity / 127;
       ctx.beginPath(); ctx.arc(X(d.start), y0 + (lanes[d.name] ?? 1) * 15 + 7, 5, 0, 7); ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
   if (playBeat != null) {
-    ctx.strokeStyle = col("--red"); ctx.lineWidth = 2;
+    ctx.strokeStyle = css("--red"); ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(X(playBeat), top); ctx.lineTo(X(playBeat), h - 4); ctx.stroke();
   }
 }
-$("#a-preview").ontimeupdate = () => {
-  if (current && current.result) drawRoll($("#a-preview").currentTime * current.result.tempo.bpm / 60);
-};
-$("#a-raw").ontimeupdate = () => {
-  if (current && current.result) drawRoll(beatsOf($("#a-raw").currentTime, current.result.grid));
-};
-window.onresize = () => drawRoll();
+$("#a-preview").ontimeupdate = () => { if (currentClip && currentClip.result) drawRoll($("#a-preview").currentTime * currentClip.result.tempo.bpm / 60); };
+$("#a-raw").ontimeupdate = () => { if (currentClip && currentClip.result) drawRoll(beatsOf($("#a-raw").currentTime, currentClip.result.grid)); };
+window.onresize = () => { if (currentSong && view !== "clips") drawScore(); if (currentClip) drawRoll(); };
 
 // ---- tabs -------------------------------------------------------------------------------------
 document.querySelectorAll(".tab").forEach((t) => {
@@ -191,19 +354,43 @@ document.querySelectorAll(".tab").forEach((t) => {
     document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
     t.classList.add("active");
     view = t.dataset.view;
-    selected = null;
-    $("#detail").classList.add("hidden");
+    selected = null; currentSong = null; currentClip = null;
+    showPane(null);
     const setup = view === "setup";
     $("#setup").classList.toggle("hidden", !setup);
     $("#list-pane").classList.toggle("hidden", setup);
-    if (setup) refreshCalibration(); else refreshList();
+    if (setup) { refreshMics(); refreshCalibration(); } else refreshList();
   };
 });
 
-// ---- browser recording (calibration and mic test) -----------------------------------------------
+// ---- setup: microphone --------------------------------------------------------------------------
+async function refreshMics() {
+  const m = await api("/api/mics");
+  const sel = $("#mic-select");
+  sel.innerHTML = "";
+  if (!m.devices.length) sel.innerHTML = `<option value="">(no microphones found)</option>`;
+  for (const d of m.devices) {
+    const o = document.createElement("option");
+    o.value = d.name; o.textContent = d.name;
+    if (d.name === m.current || (!m.devices.some((x) => x.name === m.current) && m.current && d.name.toLowerCase().includes(m.current.toLowerCase()))) o.selected = true;
+    sel.appendChild(o);
+  }
+}
+$("#mic-use").onclick = async () => {
+  await post("/api/mic", { name: $("#mic-select").value });
+  $("#mic-now").textContent = "Switching…";
+  setTimeout(refreshStatus, 1500);
+};
+function updateLevel(L) {
+  const db = L.level_db;
+  $("#mic-level").style.width = db == null ? "0%" : Math.max(0, Math.min(100, (db + 70) * 1.6)) + "%";
+  $("#mic-now").textContent = L.device ? `Listening on: ${L.device}${db != null ? ` (${Math.round(db)} dB)` : ""}` :
+    L.state === "not running" ? "The listener isn't running." : "No mic open.";
+}
+
+// ---- setup: calibration, mic test, upload -------------------------------------------------------
 async function record(seconds, onLevel) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(stream);
   const proc = ctx.createScriptProcessor(4096, 1, 1);
@@ -231,9 +418,7 @@ function wavBlob(samples, sr) {
   for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
   return new Blob([buf], { type: "audio/wav" });
 }
-
-const CAL = [["kick", "Kick (\"b\" / \"puh\")"], ["snare", "Snare (\"pf\" / \"k\")"], ["hat", "Closed hat (\"ts\" / \"t\")"],
-  ["open_hat", "Open hat (\"tsss\")"]];
+const CAL = [["kick", "Kick (\"b\" / \"puh\")"], ["snare", "Snare (\"pf\" / \"k\")"], ["hat", "Closed hat (\"ts\" / \"t\")"], ["open_hat", "Open hat (\"tsss\")"]];
 async function refreshCalibration() {
   const c = await api("/api/calibration");
   const rows = $("#cal-rows");
@@ -254,10 +439,7 @@ async function refreshCalibration() {
     rows.appendChild(row);
   }
 }
-$("#cal-reset").onclick = async () => {
-  if (confirm("Forget all your beatbox examples?")) { await api("/api/calibration", { method: "DELETE" }); refreshCalibration(); }
-};
-
+$("#cal-reset").onclick = async () => { if (confirm("Forget all your beatbox examples?")) { await api("/api/calibration", { method: "DELETE" }); refreshCalibration(); } };
 $("#mic-test").onclick = async () => {
   const out = $("#mic-result"), btn = $("#mic-test");
   btn.disabled = true;
@@ -277,18 +459,17 @@ $("#mic-test").onclick = async () => {
   } catch (err) { out.textContent = "Couldn't use the mic: " + err.message; }
   btn.disabled = false;
 };
-
 $("#upload").onchange = async (e) => {
   const f = e.target.files[0];
   if (!f) return;
   $("#upload-result").textContent = "Scanning…";
   try {
     const r = await api("/api/upload?name=" + encodeURIComponent(f.name), { method: "POST", body: f });
-    $("#upload-result").textContent = `Found ${r.segments} sound${r.segments === 1 ? "" : "s"}, kept ${r.kept}. They'll show up in the inbox.`;
+    $("#upload-result").textContent = `Found ${r.segments} sound${r.segments === 1 ? "" : "s"}, kept ${r.kept}. Songs from them will show up under Songs.`;
   } catch (err) { $("#upload-result").textContent = "Couldn't read that file: " + err.message; }
 };
 
 refreshStatus();
 refreshList();
-setInterval(refreshStatus, 2000);
-setInterval(() => { if (view !== "setup") refreshList(); }, 4000);
+setInterval(refreshStatus, 1000);
+setInterval(() => { if (view !== "setup") refreshList(); }, 5000);

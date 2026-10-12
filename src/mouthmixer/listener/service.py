@@ -50,6 +50,8 @@ class ClipWriter:
         y16 = librosa.resample(audio.astype(np.float32), orig_sr=self.sr, target_sr=16000)
         verdict = detect.judge(y16, 16000)
         if not verdict.is_music and source != "hotkey":
+            verdict = self.second_opinion(y16, verdict)
+        if not verdict.is_music and source != "hotkey":
             self.dropped_today += 1
             return False
         stamp = datetime.fromtimestamp(created).strftime("%Y%m%d-%H%M%S-%f")[:-3]
@@ -62,6 +64,29 @@ class ClipWriter:
         self.kept_today += 1
         self.last_kept = stamp
         return True
+
+    @staticmethod
+    def second_opinion(y16: np.ndarray, verdict: detect.Verdict) -> detect.Verdict:
+        """Unsure? (some held notes or some beat, below the bar.) Transcribe it and check whether it follows
+        musical rules and is consistent (critic.clip_quality). Kept only if it does."""
+        sc = verdict.scores
+        if sc.get("melody", 0) < 0.2 and sc.get("beat", 0) < 0.15:
+            return verdict
+        from ..analysis import pipeline
+        from ..arrange.critic import clip_quality
+
+        try:
+            result = pipeline.analyse(y16, 16000, verdict=detect.Verdict(True, "both" if sc.get("beat", 0) >= 0.15
+                                                                          and sc.get("melody", 0) >= 0.2 else
+                                                                          "beat" if sc.get("beat", 0) >= 0.15 else "melody",
+                                                                          sc))
+            q = clip_quality(result)
+        except Exception:
+            log.exception("second opinion failed")
+            return verdict
+        if q["ok"]:
+            return detect.Verdict(True, result["kind"], {**sc, "rescued_by_rules": q["score"]})
+        return verdict
 
     def _run(self):
         while True:
@@ -124,13 +149,19 @@ def apps_using_mic(watch: list[str]) -> list[str]:
     return sorted(set(found))
 
 
-def find_input_device(name_part: str):
+def find_input_device(name: str):
+    """The input device the user picked: an exact name match first (from the app's mic list), then a
+    partial match (the default setting "QuadCast"). None = the system default."""
     import sounddevice as sd
 
-    if not name_part:
+    if not name:
         return None
-    for i, d in enumerate(sd.query_devices()):
-        if d["max_input_channels"] > 0 and name_part.lower() in d["name"].lower():
+    devs = list(enumerate(sd.query_devices()))
+    for i, d in devs:
+        if d["max_input_channels"] > 0 and d["name"] == name:
+            return i
+    for i, d in devs:
+        if d["max_input_channels"] > 0 and name.lower() in d["name"].lower():
             return i
     return None
 
@@ -175,6 +206,7 @@ class Listener:
             "kept_today": self.writer.kept_today,
             "dropped_today": self.writer.dropped_today,
             "device": self.device_name,
+            "level_db": round(float(getattr(self, "level_db", -120.0)), 1) if self.stream is not None else None,
             "mic_error": self.mic_error,
             "hotkey": self.settings.hotkey,
             "updated": time.time(),
@@ -185,8 +217,12 @@ class Listener:
 
     # --- audio --------------------------------------------------------------------------------
     def _callback(self, indata, frames, t, status):
+        block = indata[:, 0]
+        # Input level for the app's meter (smoothed dBFS).
+        db = 10 * np.log10(float(np.mean(block.astype(np.float64) ** 2)) + 1e-12)
+        self.level_db = max(db, self.level_db - 1.5) if hasattr(self, "level_db") else db
         try:
-            self.audio_q.put_nowait(indata[:, 0].copy())
+            self.audio_q.put_nowait(block.copy())
         except queue.Full:
             pass
 
@@ -260,6 +296,11 @@ class Listener:
                     self.save_last()
                 elif cmd == "quit":
                     self.quit()
+                elif cmd == "reload_mic":
+                    self.settings = config.Settings.load()
+                    self.stop_stream()
+                    if not self.paused:
+                        self.start_stream()
             if time.time() - last_auto > 5:
                 last_auto = time.time()
                 reason = ""

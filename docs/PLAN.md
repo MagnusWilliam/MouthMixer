@@ -968,6 +968,24 @@ slider, packaging as a Windows app.
   (DeepFilterNet), Basic Pitch/CREPE as second pitch tracker, idea threads (Phase 3).
 - **Next:** the user's first real hums and Phase 0 recordings; tune the gate and transcription on them.
 
+**Build status (2026-10-12, later): songs before the inbox (parts of Phases 4-5, at the user's request).**
+- The user asked that nothing reach the inbox until it's inside a full, polished arrangement, with many
+  instruments, clip combinations, effects, and rule-based checks for unsure clips; and for a mic picker.
+- Built: `arrange/` with six style packs (city-pop day, neon night, acid-jazz battle, orchestral
+  adventure, arcade, dream) and 60 instruments plus 8 drum kits from GeneralUser GS (bundled in
+  `assets/soundfonts`, free for commercial music); harmonisation by beam search; bass, comping, pad,
+  arpeggio, guide-tone counter-line, drums (from the user's beatbox when there is one), timpani;
+  form Intro/A/A'/B/A''/Ending with a B section grown from the motif (or another clip's melody);
+  rendering through TinySoundFont, effects through pedalboard, sidechain, reverb/delay buses, mono lows,
+  -14 LUFS master with a look-ahead limiter; the critic (MUSIC_KNOWLEDGE rules H1, H2, H6, A4, B3, M1-M15,
+  X1, X4, X7, X10, X11 and §10 weights); the songwriter (14 candidates per clip, render the best 4, keep
+  3 versions, rotate styles); clip quality Q1-Q6 and the listener's second opinion; songs inbox with a
+  multi-part score view, versions, another version / different style; mic picker with a live level.
+- Measured on synthetic clips: 78 of 80 candidates pass the critic; every rendered mix at -14 LUFS with
+  peaks at or under -1 dBFS; talking and typing never rescued.
+- Not yet: the user's taste model, direction chips, loops for the game (§11.2), stems export,
+  the originality check (Phase 3).
+
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.
 

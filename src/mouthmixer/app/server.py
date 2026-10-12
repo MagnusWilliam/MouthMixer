@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .. import config
 from ..analysis import beatbox, detect, pipeline
+from ..arrange import critic, songwriter
 from ..library.db import Library
 
 log = logging.getLogger("mouthmixer.app")
@@ -42,6 +43,10 @@ class Worker:
         self.cal = beatbox.Calibration(paths["calibration"])
         self._stop = False
         self.busy = 0
+        self.writing = 0  # songs being made right now
+        self.song_lock = threading.Lock()
+        self.make_songs = True
+        self.song_options: dict = {}  # passed to songwriter.write_songs (tests use fewer candidates)
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True, name="ingest").start()
@@ -87,11 +92,58 @@ class Worker:
             result = pipeline.process_file(d / "audio.wav", d, reading=pipeline.READINGS[reading_index],
                                            calibration=self.cal, verdict=verdict)
             self.lib.set_result(clip_id, result, reading_index)
+            q = critic.clip_quality(result)
+            self.lib.set_quality(clip_id, q)
+            if q["ok"] and self.make_songs and reading_index == 0:
+                self.write_song(clip_id)
         except Exception:
             log.exception("analysis failed for %s", clip_id)
             self.lib.set_status(clip_id, "failed")
         finally:
             self.busy -= 1
+
+
+    # --- songs -------------------------------------------------------------------------------------
+    def _clip_info(self, row: dict) -> songwriter.ClipInfo | None:
+        rp = self.lib.clip_dir(row["id"]) / "result.json"
+        if not rp.exists():
+            return None
+        return songwriter.ClipInfo(row["id"], json.loads(rp.read_text()), row["created"])
+
+    def write_song(self, clip_id: str, *, song_id: str | None = None, exclude_pack: str | None = None) -> str | None:
+        """Make (or add versions to) a song from a clip plus the rest of the usable library."""
+        with self.song_lock:
+            self.writing += 1
+            try:
+                primary = self._clip_info(self.lib.get(clip_id))
+                if primary is None:
+                    return None
+                others = [c for c in (self._clip_info(r) for r in self.lib.usable_clips()) if c and c.id != clip_id]
+                if song_id is None:
+                    song_id = f"{clip_id}-song"
+                    out = self.lib.song_dir(song_id)
+                    recent = [r["style"] for r in self.lib.list_songs(["new", "kept", "tossed"])[:6]]
+                    recent = [k for k, v in songwriter.PACKS.items() for t in recent if v["title"] == t]
+                    rec = songwriter.write_songs(primary, others, out, recent=recent, **self.song_options)
+                    if rec is None:
+                        log.info("no song passed the critic for %s", clip_id)
+                        return None
+                    self.lib.add_song(song_id, rec)
+                    return song_id
+                out = self.lib.song_dir(song_id)
+                record = json.loads((out / "song.json").read_text())
+                start = max(int(v["file"][1:-4]) for v in record["versions"]) + 1
+                opts = {**self.song_options, "keep": 1}
+                rec = songwriter.write_songs(primary, others, out, exclude_pack=exclude_pack, start_index=start, **opts)
+                if rec is None:
+                    return None
+                record["versions"] += rec["versions"]
+                record["history"] = record.get("history", []) + [rec["summary"]]
+                (out / "song.json").write_text(json.dumps(record, default=float))
+                self.lib.update_song(song_id, record, len(record["versions"]) - 1)
+                return song_id
+            finally:
+                self.writing -= 1
 
 
 def _wav_from_body(body: bytes) -> tuple[np.ndarray, int]:
@@ -142,19 +194,117 @@ def create_app(start_worker: bool = True) -> FastAPI:
         counts = {}
         for row in lib.conn.execute("SELECT status, COUNT(*) c FROM clips GROUP BY status"):
             counts[row["status"]] = row["c"]
-        return {"listener": st, "counts": counts, "processing": worker.busy, "hotkey": settings.hotkey}
+        songs = {}
+        for row in lib.conn.execute("SELECT status, COUNT(*) c FROM songs GROUP BY status"):
+            songs[row["status"]] = row["c"]
+        return {"listener": st, "counts": counts, "songs": songs, "processing": worker.busy,
+                "writing": worker.writing, "hotkey": settings.hotkey}
 
     @app.post("/api/listener/{cmd}")
     def listener_cmd(cmd: str):
-        if cmd not in ("pause", "resume", "save_last", "quit"):
+        if cmd not in ("pause", "resume", "save_last", "quit", "reload_mic"):
             raise HTTPException(400, "unknown command")
         (paths["control"] / f"{cmd}-{time.time_ns()}.cmd").write_text("")
         return {"ok": True}
 
     @app.get("/api/clips")
-    def clips(view: str = "inbox"):
-        statuses = {"inbox": ["new", "processing", "failed"], "kept": ["kept"], "tossed": ["tossed", "not_music"]}
+    def clips(view: str = "all"):
+        statuses = {"inbox": ["new", "processing", "failed"], "kept": ["kept"], "tossed": ["tossed", "not_music"],
+                    "all": None}
         return lib.list(statuses.get(view))
+
+    # --- songs ---------------------------------------------------------------------------------------
+    @app.get("/api/songs")
+    def songs(view: str = "inbox"):
+        statuses = {"inbox": ["new"], "kept": ["kept"], "tossed": ["tossed"]}.get(view, ["new"])
+        return lib.list_songs(statuses)
+
+    @app.get("/api/songs/{song_id}")
+    def song(song_id: str):
+        row = lib.get_song(song_id)
+        if not row:
+            raise HTTPException(404)
+        row["record"] = json.loads((lib.song_dir(song_id) / "song.json").read_text())
+        return row
+
+    @app.get("/api/songs/{song_id}/file/{name}")
+    def song_file(song_id: str, name: str):
+        p = (lib.song_dir(song_id) / name).resolve()
+        if p.parent != lib.song_dir(song_id).resolve() or not p.exists() or p.suffix not in (".ogg", ".mid"):
+            raise HTTPException(404)
+        media = "audio/ogg" if p.suffix == ".ogg" else "audio/midi"
+        return FileResponse(p, media_type=media, filename=f"{song_id}-{name}")
+
+    @app.post("/api/songs/{song_id}/status")
+    def song_status(song_id: str, body: dict = Body(...)):
+        st = body.get("status")
+        if st not in ("kept", "tossed", "new") or not lib.get_song(song_id):
+            raise HTTPException(400)
+        lib.set_song_status(song_id, st)
+        return {"ok": True}
+
+    @app.post("/api/songs/{song_id}/version")
+    def song_version(song_id: str, body: dict = Body(...)):
+        row = lib.get_song(song_id)
+        if not row:
+            raise HTTPException(404)
+        record = json.loads((lib.song_dir(song_id) / "song.json").read_text())
+        v = int(body.get("version", 0))
+        if not 0 <= v < len(record["versions"]):
+            raise HTTPException(400)
+        lib.update_song(song_id, record, v)
+        return {"ok": True}
+
+    @app.post("/api/songs/{song_id}/another")
+    def song_another(song_id: str, body: dict = Body(default={})):
+        """A new version, the same style mix or a different style (runs in the background)."""
+        row = lib.get_song(song_id)
+        if not row:
+            raise HTTPException(404)
+        record = json.loads((lib.song_dir(song_id) / "song.json").read_text())
+        current = record["versions"][row["version"]]
+        exclude = current["pack"] if body.get("different_style") else None
+        primary = record["primary"]
+        threading.Thread(target=worker.write_song, args=(primary,),
+                         kwargs={"song_id": song_id, "exclude_pack": exclude}, daemon=True).start()
+        return {"ok": True}
+
+    @app.post("/api/clips/{clip_id}/song")
+    def clip_song(clip_id: str):
+        """Make a song from this clip now (also for clips the quality check wasn't sure about)."""
+        if not lib.get(clip_id):
+            raise HTTPException(404)
+        threading.Thread(target=worker.write_song, args=(clip_id,), daemon=True).start()
+        return {"ok": True}
+
+    # --- microphone ----------------------------------------------------------------------------------
+    @app.get("/api/mics")
+    def mics():
+        try:
+            import sounddevice as sd
+
+            devs, apis = sd.query_devices(), sd.query_hostapis()
+        except Exception as e:  # no audio system (e.g. tests)
+            return {"devices": [], "current": settings.mic_name, "error": str(e)}
+        seen, out = set(), []
+        prefer = "MME" if any(a["name"] == "MME" for a in apis) else None
+        for d in devs:
+            api = apis[d["hostapi"]]["name"]
+            if d["max_input_channels"] <= 0 or (prefer and api != prefer) or d["name"] in seen:
+                continue
+            seen.add(d["name"])
+            out.append({"name": d["name"]})
+        cur = config.Settings.load().mic_name
+        return {"devices": out, "current": cur}
+
+    @app.post("/api/mic")
+    def set_mic(body: dict = Body(...)):
+        s = config.Settings.load()
+        s.mic_name = str(body.get("name", ""))
+        s.save()
+        settings.mic_name = s.mic_name
+        (paths["control"] / f"reload_mic-{time.time_ns()}.cmd").write_text("")
+        return {"ok": True, "mic": s.mic_name}
 
     @app.get("/api/clips/{clip_id}")
     def clip(clip_id: str):

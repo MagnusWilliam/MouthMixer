@@ -62,5 +62,33 @@ a { color: var(--accent); }
 .calrow { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .calrow b { width: 90px; }
 .calrow .n { color: var(--muted); width: 90px; }
+.calrow button { white-space: nowrap; }
 .meter { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; margin: 8px 0; }
 .meter > div { height: 100%; background: var(--accent); width: 0; transition: width 0.1s; }
+
+/* v0.2: songs, score, versions, critic, mic */
+:root { --violet: #8a63d2; --teal: #1f9e9a; --pad: #b07ad6; }
+@media (prefers-color-scheme: dark) { :root { --violet: #a98bf0; --teal: #4cc6c0; --pad: #c69ae8; } }
+.pane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.working { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#s-audio { margin: 12px 0 8px; }
+.versions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.ver { padding: 4px 10px; font-size: 12.5px; }
+.ver.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.score-wrap { overflow-x: auto; }
+#score { min-width: 640px; }
+.critic { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.critic summary { cursor: pointer; font-weight: 600; }
+.checks { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.checks li.ok::marker { content: "✓  "; color: var(--green); }
+.checks li.warn::marker { content: "!  "; color: var(--amber); }
+.okc { color: var(--green); } .warnc { color: var(--amber); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select { font: inherit; padding: 6px 8px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink); max-width: 100%; }
+.meter.big { height: 12px; }
+.dot.no { background: var(--red); }

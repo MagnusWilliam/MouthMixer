@@ -234,7 +234,21 @@ Covered in PLAN §10. In the critic:
 | V6 | **Comp joins are inaudible** | Edits shouldn't be heard | level, tone and room changes at each join | below thresholds | PENALTY |
 | V7 | **Key fits the singer's range** | Straining sounds bad; pitch-shifting a voice far sounds fake | melody range vs the singer's measured range | within it | **REJECT** if outside |
 
-## 10. How the critic adds it up
+## 9c. Clip quality (when the detector is unsure)
+
+A clip is only built on (and a borderline clip only kept) if it follows musical rules and is consistent.
+Implemented in `arrange/critic.py: clip_quality`.
+
+| # | Rule | Why | Measure | Start | Severity |
+|---|---|---|---|---|---|
+| Q1 | **Notes are held** like humming or singing | Talking glides; music holds pitches | the gate's held-note share (plateau_frac) | ≥ 0.4 (hums measured 0.93-1.0, talking 0-0.25) | **REJECT** below |
+| Q2 | **Steady pulse** | No pulse = no rhythm to build on | tempo-fit confidence | ≥ 0.5 for melodies, ≥ 0.55 for beats (hums 0.8+, talking ~0.41) | **REJECT** below (caps the score) |
+| Q3 | **A beat repeats** | Syllables have "hits" too, but they don't repeat | onset periodicity | ≥ 0.32 (beatbox 0.52-0.62, talking ~0.23) | **REJECT** below |
+| Q4 | Enough material | One note isn't a melody | ≥ 5 notes, ≥ 3 pitches; beats ≥ 8 hits with kicks and snares/hats | — | PENALTY |
+| Q5 | In a key | Mostly in-scale notes | chromatic share | ≤ 15% | PENALTY |
+| Q6 | Pitch steady within notes | Wobbly pitch is talking or noise | mean distance of note pitches from the semitone grid | < 0.16 semitone | PENALTY |
+
+
 
 1. **Hard rejects first.** Any REJECT → out. Reasons are counted for the "made 30, rejected 19 because..."
    line.
@@ -314,3 +328,5 @@ to 50-85%: the user loved three options that were rejected for leaps").
 |---|---|---|---|
 | 2026-10-12 | all | first version | written from the sources in §12 |
 | 2026-10-12 | L1-L8, V1-V7 | added | lyrics and vocals feature |
+| 2026-10-12 | Q1-Q6 | added, thresholds from synthetic hums/talking/beatbox | the user asked for unsure clips to be checked against musical rules |
+| 2026-10-12 | H1 | the half-step check now flags only a minor 2nd, or a minor 9th with the melody on top | a melody a semitone *below* a chord note an octave down is a major 7th (consonant); the old check rejected good songs |

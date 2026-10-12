@@ -10,9 +10,9 @@
 <header>
   <div class="brand"><span class="logo"></span>MouthMixer</div>
   <nav>
-    <button data-view="inbox" class="tab active">Inbox <span id="count-inbox" class="badge"></span></button>
+    <button data-view="songs" class="tab active">Songs <span id="count-songs" class="badge"></span></button>
     <button data-view="kept" class="tab">Kept</button>
-    <button data-view="tossed" class="tab">Tossed</button>
+    <button data-view="clips" class="tab">Clips</button>
     <button data-view="setup" class="tab">Setup</button>
   </nav>
   <div class="listener">
@@ -22,18 +22,45 @@
     <button id="save-last" class="ghost" title="Same as the hotkey">Save last 30 s</button>
   </div>
 </header>
+<div id="working" class="working hidden"><span class="spin"></span><span id="working-text"></span></div>
 
 <main>
   <section id="list-pane">
     <div id="list"></div>
-    <p id="empty" class="muted hidden">Nothing here yet. Hum, whistle or beatbox while you work, or press
-      <b id="hotkey-hint">Ctrl+Alt+M</b> right after an idea to save the last 30 seconds.</p>
+    <p id="empty" class="muted hidden"></p>
   </section>
 
-  <section id="detail" class="hidden">
+  <!-- A finished song -->
+  <section id="song" class="pane hidden">
+    <div class="detail-head">
+      <h2 id="s-title"></h2>
+      <div id="s-chips" class="chips"></div>
+      <p id="s-parts" class="small"></p>
+    </div>
+    <audio id="s-audio" controls preload="none"></audio>
+    <div id="s-versions" class="versions"></div>
+    <div class="score-wrap"><canvas id="score"></canvas></div>
+    <div class="actions">
+      <button id="s-keep" class="primary">Keep</button>
+      <button id="s-toss">Toss</button>
+      <span class="spacer"></span>
+      <button id="s-another" title="Another take in a style that suits it">Another version</button>
+      <button id="s-different" title="Try a different style">Different style</button>
+    </div>
+    <details class="critic" open>
+      <summary>How it was checked</summary>
+      <p id="s-summary" class="small"></p>
+      <ul id="s-checks" class="checks"></ul>
+    </details>
+    <p class="muted small">Downloads: <a id="s-dl-audio" href="#">audio</a> · <a id="s-dl-midi" href="#">MIDI (every part)</a></p>
+  </section>
+
+  <!-- A raw clip -->
+  <section id="clip" class="pane hidden">
     <div class="detail-head">
       <h2 id="d-title"></h2>
       <div id="d-chips" class="chips"></div>
+      <p id="d-quality" class="small"></p>
     </div>
     <div class="players">
       <div><label>What you did</label><audio id="a-raw" controls preload="none"></audio></div>
@@ -43,17 +70,24 @@
     <p class="legend muted"><span class="sw raw"></span>as heard <span class="sw clean"></span>cleaned
       <span class="sw chrom"></span>kept off-scale on purpose</p>
     <div class="actions">
-      <button id="b-keep" class="primary">Keep</button>
-      <button id="b-toss">Toss</button>
-      <button id="b-notmusic" title="Teaches the detector">Not music</button>
-      <span class="spacer"></span>
+      <button id="b-song" class="primary">Make a song from this</button>
       <button id="b-reading" title="Try the next way of reading it">Not what I hummed</button>
       <span id="d-reading" class="muted"></span>
+      <span class="spacer"></span>
+      <button id="b-toss">Toss clip</button>
+      <button id="b-notmusic" title="Teaches the detector">Not music</button>
     </div>
     <p class="muted small">Downloads: <a id="m-clean" href="#">cleaned MIDI</a> · <a id="m-raw" href="#">raw MIDI</a></p>
   </section>
 
   <section id="setup" class="hidden">
+    <div class="card">
+      <h3>Microphone</h3>
+      <p class="muted">Pick the mic MouthMixer listens to. The meter should jump when you hum.</p>
+      <div class="row"><select id="mic-select"></select><button id="mic-use" class="primary">Use this mic</button></div>
+      <div class="meter big"><div id="mic-level"></div></div>
+      <p id="mic-now" class="small muted"></p>
+    </div>
     <div class="card">
       <h3>Beatbox calibration</h3>
       <p class="muted">Do each sound about 10 times, with the pop shield where you normally keep it. MouthMixer learns
@@ -63,9 +97,8 @@
     </div>
     <div class="card">
       <h3>Mic test (keyboard vs voice)</h3>
-      <p class="muted">Type normally for 8 seconds, then hum for 8 seconds. It shows how far apart they are; aim for
-        at least 15 dB. If it's less, move the mic closer to your mouth, point its back at the keyboard, and lower the
-        gain.</p>
+      <p class="muted">Type normally for 8 seconds, then hum for 8 seconds. Aim for at least 15 dB between them. If it's
+        less, move the mic closer to your mouth, point its back at the keyboard, and lower the gain.</p>
       <button id="mic-test">Start the test</button>
       <div id="mic-result"></div>
     </div>
