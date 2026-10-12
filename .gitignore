@@ -5,6 +5,6 @@ __pycache__/
 build/
 dist/
 # Local library and recordings never go into git.
-library/
+/library/
 *.wav
 !tests/data/*.wav
