@@ -33,6 +33,10 @@ no black-box AI song generator in the main path.
   (§7.11) filters out weak ideas and bad mixes before you ever hear them, using the rulebook in
   [`MUSIC_KNOWLEDGE.md`](MUSIC_KNOWLEDGE.md).
 - **MIDI downloads are OK** for the originality check's reference set and danger list.
+- **Loud keyboard:** move the mic onto a **boom arm**, back of the mic toward the keyboard (§2 mic setup).
+- **First style packs confirmed:** city-pop day, neon night, acid-jazz battle.
+- **Lyrics and real vocals:** the tool suggests lyrics that fit a finished song; you sing them; it cleans
+  up and mixes the vocal (§7.13, Phase 6).
 - **Songs don't have to come only from your voice.** The tool may write its own parts and add sounds
   when something is missing (§7.12). Your ideas stay the centre; additions support them.
 
@@ -105,7 +109,18 @@ when the PC is idle. Stages E to H run when you open the app.
 
 **Mic setup (HyperX QuadCast 2):**
 - It's a USB condenser mic, so it's very sensitive: it hears the keyboard and desk thumps too. The
-  shock mount helps with thumps; the beatbox-vs-typing rules (§3 B2) handle the keyboard.
+  beatbox-vs-typing rules (§3 B2) handle what gets through, but less noise in = better notes out.
+- **Your keyboard is loud, so use a boom arm** (decided):
+  - The arm takes the mic off the desk, so typing thumps no longer travel up the stand. Keep the shock
+    mount on the arm.
+  - The QuadCast 2 is a **side-address** mic: you talk into the side with the logo. It hears least from
+    directly behind. Point the **back of the mic toward the keyboard** and the front toward your mouth.
+    If your model has a pattern setting, use cardioid.
+  - **Distance matters most.** Noise drops about 6 dB every time its distance doubles. Aim for the mic
+    about 15-25 cm from your mouth while you work (close enough for quiet hums, not in your face) and as
+    far from the keyboard as the arm allows. Then turn the gain down until loud hums don't clip; lower
+    gain also means less keyboard.
+  - Setup runs a short test: type for 10 s, hum for 10 s, and it shows how far apart they are.
 - Its **tap-to-mute** on top doubles as a hardware privacy switch: muted means the tool hears nothing.
   The tray icon shows "mic muted" so you know it isn't listening.
 - **Pop shield:** good for hums and singing. But beatbox kicks and snares *are* plosives ("b", "p"),
@@ -522,6 +537,68 @@ melody goes through the originality check (§10) and the critic (§7.11) like ev
 - direction chips include **"more of my idea"** and **"add something"** ("needs a hook", "needs a
   bridge", "needs atmosphere").
 
+### 7.13 Lyrics and vocals (Phase 6)
+
+For songs that should have real vocals (in LINE ZERO: the main theme, Soren's song and the finale,
+per AUDIO_PLAN), the tool suggests lyrics, guides you through singing them and cleans up the vocal.
+You still only steer: you pick lyrics and sing; you don't edit.
+
+**1. Fitting the lyric to the melody (before any words are written).** The melody becomes a
+"syllable map": for each phrase, how many notes (= syllables), which notes fall on strong beats (=
+stressed syllables), which notes are long (= open vowels like "ah", "oh", "day"), and where the
+rhymes go (phrase ends). Melismas (one syllable over several notes) are allowed where the style uses
+them.
+
+**2. Writing the lyrics.** A language model writes the words, because that's what it's good at:
+- **Input:** the syllable map, the song's brief ("Soren's song: a busker who keeps forgetting the last
+  bar; hopeful, a little lonely"), the mood, the rhyme scheme (for example ABAB verses, AABB chorus) and
+  the house rules (English, clean for a teen audience, no real song lyrics, no brand names).
+- **Which model:** either the **Claude API** (best lyrics; opt-in; costs a few cents per request; sends
+  only the brief and syllable map, never audio) or a **local model** on your RX 7900 XT (its 20 GB of
+  video memory runs a mid-size open model through llama.cpp's Vulkan backend; free and offline, but
+  weaker lyrics). Decision open (§15).
+- **Output:** 3 lyric options per section, each with a one-line idea ("the chorus turns the forgotten
+  bar into a promise").
+
+**3. Checking the lyrics** (the critic, rules in MUSIC_KNOWLEDGE.md §9b): syllable counts match the
+notes; stressed syllables land on strong beats (checked with the CMU Pronouncing Dictionary); long and
+high notes get open vowels; rhymes are real rhymes (or deliberate near-rhymes); the hook line is short
+and repeatable; no lines that match known lyrics. You see the best 3; the chips work here too ("more
+hopeful", "simpler words", "less cheesy", "rhyme less").
+
+**4. Fitting the song to your voice.** A 1-minute range test (sing low to high on "ah") finds your
+comfortable range. The whole song is moved to a key where the melody sits in it. A song written for a
+very different voice isn't forced through pitch-shifting (that sounds fake); the key moves instead.
+
+**5. Recording (a deliberate mode, not background capture).**
+- Headphones on, so the backing track doesn't leak into the mic; pop shield in front; keyboard
+  untouched.
+- The backing track plays with a count-in and a guide melody, and the lyrics scroll karaoke-style.
+- Sing each section 3-5 times. The tool also asks for a **double** (the same part again) and, where
+  it fits, a **harmony** line (it plays you the harmony notes to follow). Real doubles and harmonies
+  sound far better than copies made by pitch-shifting one take.
+
+**6. Cleanup (automatic).**
+- **Comping:** each phrase is scored on pitch accuracy, timing, tone and noise, and the best take per
+  phrase is joined with short crossfades at breaths.
+- **Timing:** each syllable is found (forced alignment with a speech model such as wav2vec2/WhisperX),
+  then nudged toward the grid, gently, keeping the style's feel.
+- **Pitch correction:** each note is pulled toward its target with natural speed and vibrato kept, a
+  formant-preserving pitch shifter so it doesn't sound robotic (amount per style: light for neo-soul,
+  tighter for J-pop). A hard "auto-tune effect" only if a pack asks for it.
+- **Cleanup chain:** noise removal, breath reduction (lowered, not deleted), de-essing, plosive control,
+  EQ, compression, then the style's reverb and delay sends.
+- **Mix:** the vocal sits on top; the arrangement is carved around it (the lead melody instrument drops
+  out or moves under the vocal).
+
+**7. Checking the vocal:** pitch within about ±20 cents on held notes, timing within the style's pocket,
+and **intelligibility**: a speech recogniser (Whisper) transcribes the mixed song back, and if it can't
+make out the words, the vocal is buried or mumbled and the mix is fixed.
+
+**Not the default: singing-voice synthesis** (a computer voice singing the lyrics). Open-source options
+exist (DiffSinger, NNSVS), but quality and voice licences vary. It could make **guide vocals** so you hear
+the lyric before singing it; a final vocal should be yours (or a singer you work with).
+
 ---
 
 ## 8. Style packs, starting with the Persona-inspired family
@@ -747,6 +824,8 @@ common case (an accidental recreation of a known tune) and makes you look twice 
 | 15 | **Licensing of sounds** | SoundFonts/VSTs/samples have licences | keep a licence record per instrument; prefer CC0/permissive; no record samples; the AI-generation route stays off (AUDIO_PLAN §3.1) |
 | 16 | **Roblox playback limits** | stem sync, upload quota, moderation | full-mix intensity versions by default; upload only finished cues; loudness-normalised; instrumental and original content, so moderation is low risk |
 | 17 | **Scope creep** (it's a big project) | many stages | strict phases (§14); each phase is useful alone; MIDI export from Phase 2 means a DAW can do everything later stages don't do yet |
+| 19 | **Weak or awkward lyrics** | words that don't fit the notes or sound cheesy | syllable maps + stress and vowel checks (§7.13); 3 options; chips like "less cheesy" |
+| 20 | **The vocal sounds processed** | heavy pitch correction | key moved to your range first; real doubles and harmonies; gentle, formant-preserving correction |
 | 18 | **Losing the library** | a local folder on one PC | library folder in a synced location (OneDrive) or a separate git repo with Git LFS for audio; the SQLite database can be rebuilt from the files |
 
 ---
@@ -784,6 +863,9 @@ mouthmixer/
 | fingerprinting (listening log) | Chromaprint (`pyacoustid`) |
 | rendering | `pyfluidsynth`, `pedalboard`, `DawDreamer` |
 | loudness | `pyloudnorm` |
+| lyrics | Claude API (opt-in) or a local model via llama.cpp (Vulkan); CMU Pronouncing Dictionary (`pronouncing`) |
+| vocal timing / intelligibility | WhisperX or wav2vec2 forced alignment; Whisper |
+| vocal pitch correction | a formant-preserving shifter (Rubber Band library or WORLD vocoder via `pyworld`) |
 | tray app | `pystray` |
 | database | SQLite |
 
@@ -859,7 +941,12 @@ versions, cue data, (optional) Roblox upload.
 - *Done when:* an exported loop plays in Studio with no click at the loop point, at the same loudness as
   other cues, and the MusicDirector can switch day → night at a phrase without losing its place.
 
-**Phase 6: the rest of the packs and polish.** The other packs from §8.2, taste learning, the surprise
+**Phase 6: lyrics and vocals** (§7.13). Syllable maps, lyric writing and checking, range test, the
+recording mode, comping, timing and pitch correction, the vocal chain and the intelligibility check.
+- *Done when:* you can pick lyrics, sing 3 takes of a verse and chorus, and get back a clean, in-tune,
+  understandable vocal sitting well in the mix, without touching anything.
+
+**Phase 7: the rest of the packs and polish.** The other packs from §8.2, taste learning, the surprise
 slider, packaging as a Windows app.
 
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
@@ -869,11 +956,12 @@ biggest amount of work.
 
 ## 15. Open questions for you
 
-Answered 2026-10-12: own repo (`mouthmixer`), mic (QuadCast 2 + pop shield, headphones), app (browser page
-with a shortcut), LINE ZERO (only after the tool is proven), PC (Ryzen 9 7900 + RX 7900 XT), free
-instruments, steer-only (no editing), MIDI downloads OK. Still open:
+Answered 2026-10-12: own repo (`mouthmixer`), mic (QuadCast 2 + pop shield, headphones, boom arm for the
+loud keyboard), app (browser page with a shortcut), LINE ZERO (only after the tool is proven), PC
+(Ryzen 9 7900 + RX 7900 XT), free instruments, steer-only (no editing), MIDI downloads OK, first packs
+(city-pop day, neon night, acid-jazz battle), lyrics and vocals (yes). Still open:
 
-1. **Keyboard:** mechanical (loud) or quiet? It changes how hard the typing filter has to work.
-2. **First packs:** city-pop day, neon night and acid-jazz battle. Swap any?
-3. **The Hum:** try writing LINE ZERO's motif H with the tool once it works (no commitment until you
+1. **Lyrics model:** the Claude API (better lyrics, a few cents per request, needs an API key) or a free
+   local model on your graphics card (offline, weaker)?
+2. **The Hum:** try writing LINE ZERO's motif H with the tool once it works (no commitment until you
    approve it for the game)?

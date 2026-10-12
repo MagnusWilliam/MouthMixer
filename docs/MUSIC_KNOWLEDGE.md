@@ -31,6 +31,7 @@ user's reactions (the taste model) can outweigh them over time.
 8. Game music
 9. Originality
 10. How the critic adds it up
+9b. Lyrics and vocals
 11. Instrument reference (ranges and idioms)
 12. Further reading (the sources these rules come from)
 13. Tuning log
@@ -206,6 +207,33 @@ Covered in PLAN §10. In the critic:
 
 ---
 
+## 9b. Lyrics and vocals
+
+**Lyrics** (checked before you see them):
+
+| # | Rule | Why | Measure | Start | Severity |
+|---|---|---|---|---|---|
+| L1 | **Syllables match the notes** (melismas only where marked) | Extra or missing syllables force awkward cramming or stretching | syllable count (CMU dictionary) vs notes per phrase | exact, ±1 with a marked melisma | **REJECT** if off by 2+ |
+| L2 | **Stress matches the beat:** stressed syllables on strong beats and long notes | The #1 sign of amateur lyrics is "wrong-STRESS" words | dictionary stress vs beat strength | ≥ 85% of strong beats | PENALTY |
+| L3 | **Open vowels on long and high notes** ("ah", "oh", "ay"); closed ones ("ee", "ih") and hard consonants avoided there | Singability and tone | vowel of the syllable on notes ≥ 1 beat or in the top of the range | ≥ 80% | PENALTY |
+| L4 | **Rhyme scheme holds** (perfect or deliberate near-rhyme at phrase ends) | Structure and memorability | rhyme check on end words | per scheme | PENALTY |
+| L5 | **The hook line is short, repeatable and is the title idea** | Choruses are remembered by one line | hook length and repetition | ≤ 8 syllables, ≥ 2 repeats per chorus | PENALTY |
+| L6 | **Concrete images over abstract filler** ("the 0:00 train" beats "my feelings deep inside") | Clichés make lyrics forgettable | cliché phrase list + share of concrete nouns | — | PENALTY |
+| L7 | **Verses tell, choruses sum up**; the bridge says something new | Song form for lyrics | section roles | — | PENALTY |
+| L8 | **House rules:** English, clean for a teen audience, no brand names, no real song lyrics | Roblox moderation and originality | word lists + n-gram check against known lyric lines the user adds | 0 | **REJECT** |
+
+**Vocals** (checked after cleanup):
+
+| # | Rule | Why | Measure | Start | Severity |
+|---|---|---|---|---|---|
+| V1 | **In tune** on held notes | Obvious when wrong | pitch deviation on notes ≥ 1/4 beat | ≤ ±20 cents | PENALTY, REJECT above ±50 |
+| V2 | **Correction sounds natural:** vibrato and slides kept, no warble | Robotic vocals are worse than slightly off ones | correction amount, residual vibrato | per pack | STYLE |
+| V3 | **Words are understandable** in the final mix | The vocal's job | Whisper word error rate on the mix vs the lyrics | ≤ 20% | **REJECT** above 35% |
+| V4 | **Sits on top of the mix** without being separate from it | Balance | vocal vs backing loudness in 1-4 kHz | vocal +2 to +6 dB | PENALTY |
+| V5 | **No harsh "s" sounds, pops or loud breaths** | Distracting, tiring on loop | sibilance band peaks, plosive low bursts, breath level | below thresholds | PENALTY |
+| V6 | **Comp joins are inaudible** | Edits shouldn't be heard | level, tone and room changes at each join | below thresholds | PENALTY |
+| V7 | **Key fits the singer's range** | Straining sounds bad; pitch-shifting a voice far sounds fake | melody range vs the singer's measured range | within it | **REJECT** if outside |
+
 ## 10. How the critic adds it up
 
 1. **Hard rejects first.** Any REJECT → out. Reasons are counted for the "made 30, rejected 19 because..."
@@ -271,6 +299,8 @@ Written pitch ranges, comfortable part in brackets. Middle C = C4.
 - **Orchestration and ranges:** Samuel Adler, *The Study of Orchestration*.
 - **Mixing:** Mike Senior, *Mixing Secrets for the Small Studio*; Bob Katz, *Mastering Audio* (loudness,
   dynamics); EBU R128 / ITU-R BS.1770 for loudness measurement.
+- **Lyrics and prosody:** Pat Pattison, *Writing Better Lyrics*.
+- **Vocal production:** Mike Senior, *Mixing Secrets* (vocal chapters).
 - **Game music:** Winifred Phillips, *A Composer's Guide to Game Music*; Karen Collins, *Game Sound*.
 
 ---
@@ -283,3 +313,4 @@ to 50-85%: the user loved three options that were rejected for leaps").
 | Date | Rule | Change | Why |
 |---|---|---|---|
 | 2026-10-12 | all | first version | written from the sources in §12 |
+| 2026-10-12 | L1-L8, V1-V7 | added | lyrics and vocals feature |
