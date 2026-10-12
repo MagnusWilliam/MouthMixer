@@ -338,7 +338,11 @@ class Listener:
 
 
 def main(tray: bool = True):
-    p = config.ensure_dirs()
-    logging.basicConfig(filename=str(p["logs"] / "listener.log"), level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    Listener().run(tray=tray)
+    from ..runtime import setup
+
+    log = setup("listener")
+    try:
+        Listener().run(tray=tray)
+    except Exception:
+        log.exception("the listener stopped")
+        raise

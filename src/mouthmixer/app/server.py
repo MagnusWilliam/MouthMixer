@@ -265,8 +265,13 @@ def create_app(start_worker: bool = True) -> FastAPI:
 def main():
     import uvicorn
 
-    p = config.ensure_dirs()
-    logging.basicConfig(filename=str(p["logs"] / "app.log"), level=logging.INFO,
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    from ..runtime import setup
+
+    log = setup("app")
     settings = config.Settings.load()
-    uvicorn.run(create_app(), host="127.0.0.1", port=settings.port, log_level="warning")
+    try:
+        # log_config=None: uvicorn's own console logging breaks without a console (pythonw).
+        uvicorn.run(create_app(), host="127.0.0.1", port=settings.port, log_config=None, log_level="warning")
+    except Exception:
+        log.exception("the app stopped")
+        raise

@@ -60,3 +60,20 @@ def test_upload_and_calibration(home):
     assert client.post("/api/calibration/banjo", content=_wav(kick)).status_code == 400
     assert client.post("/api/listener/pause").json()["ok"]
     assert client.post("/api/listener/explode").status_code == 400
+
+
+def test_starts_without_a_console(home, monkeypatch):
+    """The shortcut runs pythonw.exe: no stdout/stderr. Startup must not crash on that (it used to)."""
+    import logging
+    import sys
+
+    from mouthmixer import runtime
+
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    runtime.setup("app")
+    assert sys.stdout is not None and sys.stderr is not None
+    from uvicorn.config import LOGGING_CONFIG
+
+    logging.config.dictConfig(LOGGING_CONFIG)  # what uvicorn does at start; crashed with no console
+    sys.stdout.close()

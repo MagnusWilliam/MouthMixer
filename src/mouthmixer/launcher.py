@@ -60,8 +60,36 @@ def _browser() -> str | None:
     return shutil.which("msedge") or shutil.which("google-chrome") or shutil.which("chromium")
 
 
+STARTING_PAGE = """<!doctype html><meta charset="utf-8"><title>MouthMixer</title>
+<style>body{font:15px system-ui,"Segoe UI",sans-serif;background:#15161a;color:#ecebf0;display:grid;place-items:center;
+height:100vh;margin:0}div{max-width:520px;text-align:center}.d{width:14px;height:14px;border-radius:50%;background:#3b6fe0;
+margin:0 auto 16px;animation:p 1s infinite}@keyframes p{50%{opacity:.3}}code{color:#9ab}</style>
+<div><div class="d"></div><h2>Starting MouthMixer…</h2><p id="m">The first start after setup can take up to a minute.</p></div>
+<script>
+const url = "http://127.0.0.1:__PORT__/";
+const t0 = Date.now();
+async function tick() {
+  try { await fetch(url + "api/ping", {mode: "no-cors", cache: "no-store"}); location.href = url; return; } catch (e) {}
+  if (Date.now() - t0 > 120000) {
+    document.querySelector("h2").textContent = "MouthMixer didn't start";
+    document.querySelector(".d").style.background = "#d2493f";
+    document.getElementById("m").innerHTML = "Send Claude the end of this file:<br><code>__LOG__</code>";
+    return;
+  }
+  setTimeout(tick, 700);
+}
+tick();
+</script>"""
+
+
 def open_app(port: int) -> None:
     url = f"http://127.0.0.1:{port}/"
+    if not app_running(port):
+        # Show a "starting" page that switches to the app as soon as it answers, instead of an error.
+        page = config.paths()["home"] / "starting.html"
+        log = config.paths()["logs"] / "app.log"
+        page.write_text(STARTING_PAGE.replace("__PORT__", str(port)).replace("__LOG__", str(log)), encoding="utf-8")
+        url = page.as_uri()
     b = _browser()
     if b:
         subprocess.Popen([b, f"--app={url}", "--window-size=1280,900"])
@@ -70,14 +98,12 @@ def open_app(port: int) -> None:
 
 
 def launch() -> None:
+    from .runtime import setup
+
+    setup("launcher")
     settings = config.Settings.load()
-    config.ensure_dirs()
     if not listener_running():
         _spawn(["listen"])
     if not app_running(settings.port):
         _spawn(["app"])
-        for _ in range(60):
-            if app_running(settings.port):
-                break
-            time.sleep(0.25)
     open_app(settings.port)
