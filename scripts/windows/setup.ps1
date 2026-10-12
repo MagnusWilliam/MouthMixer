@@ -24,12 +24,18 @@ if (-not $Py) {
 }
 Write-Host "Using Python: $($Py -join ' ')"
 
-# 2. Virtual environment + install.
-if (-not (Test-Path ".venv\Scripts\python.exe")) {
-  & $Py[0] $Py[1..9] -m venv .venv
+# 2. Virtual environment + install. It lives in %LOCALAPPDATA%\MouthMixer\venv, not in the repo folder,
+#    so OneDrive (or any synced folder) doesn't try to sync thousands of Python files.
+$Venv = Join-Path $env:LOCALAPPDATA "MouthMixer\venv"
+if (Test-Path (Join-Path $Repo ".venv\Scripts\python.exe")) {
+  Write-Host "Removing the old environment from the repo folder (moved to $Venv)."
+  Remove-Item -Recurse -Force (Join-Path $Repo ".venv")
 }
-$VPy = Join-Path $Repo ".venv\Scripts\python.exe"
-$VPyw = Join-Path $Repo ".venv\Scripts\pythonw.exe"
+if (-not (Test-Path (Join-Path $Venv "Scripts\python.exe"))) {
+  & $Py[0] $Py[1..9] -m venv $Venv
+}
+$VPy = Join-Path $Venv "Scripts\python.exe"
+$VPyw = Join-Path $Venv "Scripts\pythonw.exe"
 & $VPy -m pip install --upgrade pip --quiet
 & $VPy -m pip install -e ".[windows,dev]" --quiet
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
@@ -38,10 +44,10 @@ if ($LASTEXITCODE -ne 0) { throw "pip install failed" }
 $Ico = Join-Path $Repo "scripts\windows\mouthmixer.ico"
 & $VPy -m mouthmixer.icon $Ico
 $Shell = New-Object -ComObject WScript.Shell
-function New-Shortcut($Path, $Args) {
+function New-Shortcut([string]$Path, [string]$Arguments) {
   $s = $Shell.CreateShortcut($Path)
   $s.TargetPath = $VPyw
-  $s.Arguments = $Args
+  $s.Arguments = $Arguments
   $s.WorkingDirectory = "$Repo"
   $s.IconLocation = $Ico
   $s.Description = "MouthMixer: hums and beatbox into music"
@@ -68,3 +74,4 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Some self-checks failed; MouthMixer may s
 Write-Host ""
 Write-Host "Done. Double-click 'MouthMixer' on your desktop." -ForegroundColor Green
 Write-Host "Your clips live in $env:USERPROFILE\MouthMixer (never uploaded anywhere)."
+Write-Host "Command line, if you ever need it: $VPy -m mouthmixer --help"

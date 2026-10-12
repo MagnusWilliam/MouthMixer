@@ -14,7 +14,8 @@ far (the build machine has no mic), so **your first real hums are the real test.
 
 1. Install Python 3.12 if you don't have it: `winget install Python.Python.3.12`
 2. Download this repo (green **Code** button > Download ZIP, unzip it somewhere permanent) or clone it.
-3. Double-click **`scripts\windows\setup.cmd`**. It installs everything into the repo folder, makes the
+3. Double-click **`scripts\windows\setup.cmd`**. It installs everything into
+   `%LOCALAPPDATA%\MouthMixer\venv` (outside OneDrive), makes the
    **MouthMixer** shortcut on your desktop and in the Start menu, and runs the self-checks.
    - Want listening to start when Windows starts? Run `scripts\windows\setup.cmd -StartWithWindows`.
 4. Double-click **MouthMixer** on the desktop. The tray icon appears (bottom right) and the app opens in its
@@ -51,7 +52,7 @@ The detector's thresholds are starting guesses. Real recordings make them right:
 1. Record a normal stretch of work with any recorder (Audacity is free) and save it as WAV.
 2. Write down roughly when you hummed or beatboxed, as a CSV with one `start_seconds,end_seconds` line per
    moment.
-3. Run `.venv\Scripts\python -m mouthmixer scan yourfile.wav --labels yourfile.csv` in the repo folder. It
+3. Run `%LOCALAPPDATA%\MouthMixer\venv\Scripts\python -m mouthmixer scan yourfile.wav --labels yourfile.csv`. It
    prints how many moments it caught (goal: 85%) and how much junk it kept (goal: at most 20%).
 4. Share the WAV clips you're comfortable sharing with the next build session (the musical bits plus a few
    minutes of typing and talking), and it gets tuned against them.
