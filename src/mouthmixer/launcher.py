@@ -23,7 +23,9 @@ def _pythonw() -> str:
 
 
 def _spawn(args: list[str]) -> None:
-    kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    # Everything the process prints, including errors before its own logging starts, goes to a file.
+    out = open(config.paths()["logs"] / f"{args[0]}-console.log", "w", encoding="utf-8")
+    kw = {"stdin": subprocess.DEVNULL, "stdout": out, "stderr": subprocess.STDOUT}
     if sys.platform == "win32":
         kw["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     else:
@@ -31,9 +33,12 @@ def _spawn(args: list[str]) -> None:
     subprocess.Popen([_pythonw(), "-m", "mouthmixer", *args], **kw)
 
 
+_NO_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 def app_running(port: int) -> bool:
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/ping", timeout=1) as r:
+        with _NO_PROXY.open(f"http://127.0.0.1:{port}/api/ping", timeout=1) as r:
             return r.status == 200
     except OSError:
         return False
@@ -60,36 +65,73 @@ def _browser() -> str | None:
     return shutil.which("msedge") or shutil.which("google-chrome") or shutil.which("chromium")
 
 
-STARTING_PAGE = """<!doctype html><meta charset="utf-8"><title>MouthMixer</title>
-<style>body{font:15px system-ui,"Segoe UI",sans-serif;background:#15161a;color:#ecebf0;display:grid;place-items:center;
-height:100vh;margin:0}div{max-width:520px;text-align:center}.d{width:14px;height:14px;border-radius:50%;background:#3b6fe0;
-margin:0 auto 16px;animation:p 1s infinite}@keyframes p{50%{opacity:.3}}code{color:#9ab}</style>
-<div><div class="d"></div><h2>Starting MouthMixer…</h2><p id="m">The first start after setup can take up to a minute.</p></div>
-<script>
-const url = "http://127.0.0.1:__PORT__/";
-const t0 = Date.now();
-async function tick() {
-  try { await fetch(url + "api/ping", {mode: "no-cors", cache: "no-store"}); location.href = url; return; } catch (e) {}
-  if (Date.now() - t0 > 120000) {
-    document.querySelector("h2").textContent = "MouthMixer didn't start";
-    document.querySelector(".d").style.background = "#d2493f";
-    document.getElementById("m").innerHTML = "Send Claude the end of this file:<br><code>__LOG__</code>";
-    return;
-  }
-  setTimeout(tick, 700);
-}
-tick();
-</script>"""
+def _tail(path: Path, lines: int = 40) -> str:
+    try:
+        return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]) or "(empty)"
+    except OSError:
+        return "(no file)"
+
+
+def _error_page(port: int) -> str:
+    """A page that shows the end of the logs, so a failed start can be screenshotted as-is."""
+    import html
+
+    logs = config.paths()["logs"]
+    parts = []
+    for name in ("app-console.log", "app.log", "listener-console.log", "listener.log", "launcher.log"):
+        parts.append(f"<h3>{html.escape(str(logs / name))}</h3><pre>{html.escape(_tail(logs / name))}</pre>")
+    page = config.paths()["home"] / "didnt-start.html"
+    page.write_text(f"""<!doctype html><meta charset="utf-8"><title>MouthMixer didn't start</title>
+<style>body{{font:14px system-ui,"Segoe UI",sans-serif;background:#15161a;color:#ecebf0;margin:24px}}
+pre{{background:#1e2026;padding:10px;border-radius:6px;white-space:pre-wrap;font-size:12px}}h3{{font-size:13px;color:#9ab}}</style>
+<h2>MouthMixer didn't start</h2><p>Take a screenshot of this page (scroll if needed) and send it to Claude.
+Nothing was waiting on port {port}.</p>{"".join(parts)}""", encoding="utf-8")
+    return page.as_uri()
+
+
+def _wait_with_splash(port: int, seconds: float = 120) -> bool:
+    """Wait for the app to answer, showing a small "Starting..." window meanwhile."""
+    deadline = time.time() + seconds
+    try:
+        import tkinter as tk
+
+        root = tk.Tk()
+        root.title("MouthMixer")
+        root.configure(bg="#15161a")
+        root.resizable(False, False)
+        root.attributes("-topmost", True)
+        w, h = 340, 110
+        root.geometry(f"{w}x{h}+{(root.winfo_screenwidth() - w) // 2}+{(root.winfo_screenheight() - h) // 2}")
+        tk.Label(root, text="Starting MouthMixer…", fg="#ecebf0", bg="#15161a", font=("Segoe UI", 13)).pack(pady=(22, 4))
+        tk.Label(root, text="The first start can take up to a minute.", fg="#9a9aa6", bg="#15161a",
+                 font=("Segoe UI", 9)).pack()
+        result = {"ok": False}
+
+        def poll():
+            if app_running(port):
+                result["ok"] = True
+                root.destroy()
+            elif time.time() > deadline:
+                root.destroy()
+            else:
+                root.after(500, poll)
+
+        root.after(300, poll)
+        root.mainloop()
+        return result["ok"]
+    except Exception:
+        while time.time() < deadline:
+            if app_running(port):
+                return True
+            time.sleep(0.5)
+        return False
 
 
 def open_app(port: int) -> None:
-    url = f"http://127.0.0.1:{port}/"
-    if not app_running(port):
-        # Show a "starting" page that switches to the app as soon as it answers, instead of an error.
-        page = config.paths()["home"] / "starting.html"
-        log = config.paths()["logs"] / "app.log"
-        page.write_text(STARTING_PAGE.replace("__PORT__", str(port)).replace("__LOG__", str(log)), encoding="utf-8")
-        url = page.as_uri()
+    _open_window(f"http://127.0.0.1:{port}/")
+
+
+def _open_window(url: str) -> None:
     b = _browser()
     if b:
         subprocess.Popen([b, f"--app={url}", "--window-size=1280,900"])
@@ -100,10 +142,14 @@ def open_app(port: int) -> None:
 def launch() -> None:
     from .runtime import setup
 
-    setup("launcher")
+    log = setup("launcher")
     settings = config.Settings.load()
     if not listener_running():
         _spawn(["listen"])
     if not app_running(settings.port):
         _spawn(["app"])
+        if not _wait_with_splash(settings.port):
+            log.error("the app didn't answer on port %s", settings.port)
+            _open_window(_error_page(settings.port))
+            return
     open_app(settings.port)
