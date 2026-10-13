@@ -122,3 +122,86 @@ def test_listener_end_to_end_without_hardware(home, monkeypatch):
     (lst.paths["control"] / "quit-1.cmd").write_text("")
     time.sleep(1.5)
     assert not lst.running
+
+
+def test_frozen_mic_is_reopened_and_never_saves_stale_audio(home, monkeypatch):
+    """The reported bug: three hotkey saves gave the exact same clip, not what was just sung. That happens
+    when the mic stops calling back (USB drop-out, sleep) while the listener keeps running: the 30 s
+    memory freezes. Now the watchdog reopens the mic, a save with no fresh audio is refused, and an
+    identical clip is never written twice."""
+    import time
+
+    from mouthmixer import config
+    from mouthmixer.listener import service
+
+    lst = service.Listener(config.Settings(sample_rate=SR))
+    opened = []
+
+    class FakeStream:
+        active = True
+
+        def stop(self):
+            pass
+
+        def close(self):
+            pass
+
+    def fake_open():
+        lst.stream = FakeStream()
+        lst.opened_at = time.monotonic()
+        lst.last_block = 0.0
+        opened.append(1)
+
+    monkeypatch.setattr(lst, "_open_stream", fake_open)
+    lst.start_stream()
+    hum, _ = S.hum(S.melody("ode"), seed=5)
+    lst.seg.feed(up(hum))  # sound arrives...
+    lst.last_block = time.monotonic()
+    lst.save_last()
+    clip = lst.writer.q.get(timeout=2)
+    assert lst.writer.handle(*clip)
+
+    # ...then the mic goes quiet (no callbacks). A save now must not repeat the old audio.
+    lst.seg.last_feed -= 10
+    lst.last_block -= 10
+    lst.save_last()
+    assert lst.writer.q.empty() and "Nothing saved" in lst.writer.notice
+    assert len(opened) == 2  # the save reopened the mic
+
+    lst.last_block = time.monotonic() - 5  # still nothing arriving: the watchdog reopens it again
+    lst.check_stream()
+    assert len(opened) == 3 and lst.restarts == 2
+
+    # Belt and braces: the writer refuses a byte-identical copy of the previous clip.
+    assert not lst.writer.handle(clip[0], "hotkey", time.time())
+    assert len(list(lst.paths["incoming"].glob("*.wav"))) == 1
+    status = (lst.write_status(), json.loads(lst.paths["status"].read_text()))[1]
+    assert status["mic_restarts"] == 2 and status["notice"]
+
+
+def test_a_bad_block_does_not_stop_the_audio_thread(home, monkeypatch):
+    import threading
+    import time
+
+    from mouthmixer import config
+    from mouthmixer.listener import service
+
+    lst = service.Listener(config.Settings(sample_rate=SR))
+    real = lst.seg.feed
+    calls = []
+
+    def flaky(block):
+        calls.append(1)
+        if len(calls) == 1:
+            raise ValueError("boom")
+        real(block)
+
+    monkeypatch.setattr(lst.seg, "feed", flaky)
+    threading.Thread(target=lst._process_audio, daemon=True).start()
+    for _ in range(3):
+        lst.audio_q.put(np.zeros(1440, dtype=np.float32))
+    deadline = time.time() + 5
+    while time.time() < deadline and len(calls) < 3:
+        time.sleep(0.05)
+    assert len(calls) == 3 and lst.seg.last_feed > 0
+    lst.running = False

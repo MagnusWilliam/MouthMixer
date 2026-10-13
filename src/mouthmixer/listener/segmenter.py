@@ -8,6 +8,7 @@ the disk: the last 30 seconds live in RAM and are overwritten continuously.
 
 from __future__ import annotations
 
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Callable
@@ -73,12 +74,14 @@ class Segmenter:
         self.silent_frames = 0
         self.muted = False
         self._carry = np.zeros(0, dtype=np.float32)
+        self.last_feed = 0.0  # time.monotonic() of the last audio fed in (0 = none yet)
 
     @property
     def capturing(self) -> bool:
         return self.active
 
     def feed(self, block: np.ndarray) -> None:
+        self.last_feed = time.monotonic()
         x = np.concatenate([self._carry, np.asarray(block, dtype=np.float32).reshape(-1)])
         n = len(x) // self.frame * self.frame
         self._carry = x[n:]
@@ -140,3 +143,4 @@ class Segmenter:
         self.ring = Ring(len(self.ring.buf))
         self.active, self.parts, self.quiet_frames, self.loud_frames = False, [], 0, 0
         self._carry = np.zeros(0, dtype=np.float32)
+        self.last_feed = 0.0

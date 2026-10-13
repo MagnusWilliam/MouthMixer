@@ -31,5 +31,10 @@ def setup(name: str) -> logging.Logger:
         log.error("crashed:\n%s", "".join(traceback.format_exception(kind, value, tb)))
 
     sys.excepthook = hook
+    import threading
+
+    # A crash in a background thread (audio, control) is logged too, instead of vanishing.
+    threading.excepthook = lambda a: log.error("thread %s crashed:\n%s", a.thread.name if a.thread else "?",
+                                               "".join(traceback.format_exception(a.exc_type, a.exc_value, a.exc_traceback)))
     log.info("starting (%s)", sys.executable)
     return log

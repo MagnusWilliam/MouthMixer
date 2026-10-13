@@ -1029,6 +1029,13 @@ request).**
 - **Next:** the user listens: songs with the new packs, the mixer, and a first sung verse (run the sync test
   first). Rerun setup: new dependencies.
 
+**Fix (2026-10-13): frozen mic.** The user's three hotkey saves were identical and not what they had
+just done: the mic had stopped calling back (USB drop-out or sleep) while the listener kept running, so
+the 30 s memory froze. Now: a watchdog reopens the mic after 3 s without audio; a save with no fresh
+audio is refused (and reopens the mic); two identical hotkey clips are never both written; a crash in
+the audio thread is logged and skipped; the status bar says when the mic has gone quiet or was
+reconnected.
+
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.
 

@@ -8,6 +8,7 @@ Hardware parts (sounddevice, pystray, pynput, winreg) are imported lazily so the
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import queue
@@ -38,6 +39,8 @@ class ClipWriter:
         self.kept_today = 0
         self.dropped_today = 0
         self.last_kept: str | None = None
+        self.notice = ""
+        self._last_digest = ""
         self._day = datetime.now().date()
         threading.Thread(target=self._run, daemon=True, name="clip-writer").start()
 
@@ -45,6 +48,15 @@ class ClipWriter:
         self.q.put((audio, source, time.time()))
 
     def handle(self, audio: np.ndarray, source: str, created: float) -> bool:
+        # Two hotkey saves with the same audio mean the mic stopped delivering (the 30 s memory froze):
+        # never save the copy.
+        if source == "hotkey":
+            digest = hashlib.sha1(np.ascontiguousarray(audio, dtype=np.float32).tobytes()).hexdigest()
+            if digest == self._last_digest:
+                log.warning("dropped a hotkey clip identical to the previous one (no new audio from the mic)")
+                self.notice = "That save had no new sound in it: the mic had stopped sending audio."
+                return False
+            self._last_digest = digest
         if datetime.now().date() != self._day:
             self._day, self.kept_today, self.dropped_today = datetime.now().date(), 0, 0
         y16 = librosa.resample(audio.astype(np.float32), orig_sr=self.sr, target_sr=16000)
@@ -183,6 +195,10 @@ class Listener:
         self.device_name = ""
         self.mic_error = ""
         self._last_try = 0.0
+        self.last_block = 0.0  # time.monotonic() of the last block from the mic callback
+        self.opened_at = 0.0
+        self.restarts = 0
+        self._stream_lock = threading.RLock()
 
     # --- state --------------------------------------------------------------------------------
     @property
@@ -208,6 +224,9 @@ class Listener:
             "device": self.device_name,
             "level_db": round(float(getattr(self, "level_db", -120.0)), 1) if self.stream is not None else None,
             "mic_error": self.mic_error,
+            "notice": self.writer.notice,
+            "audio_age_s": round(time.monotonic() - self.last_block, 1) if self.stream is not None and self.last_block else None,
+            "mic_restarts": self.restarts,
             "hotkey": self.settings.hotkey,
             "updated": time.time(),
         }
@@ -217,6 +236,9 @@ class Listener:
 
     # --- audio --------------------------------------------------------------------------------
     def _callback(self, indata, frames, t, status):
+        self.last_block = time.monotonic()
+        if status:
+            self._cb_status = str(status)
         block = indata[:, 0]
         # Input level for the app's meter (smoothed dBFS).
         db = 10 * np.log10(float(np.mean(block.astype(np.float64) ** 2)) + 1e-12)
@@ -245,6 +267,8 @@ class Listener:
         self.stream = sd.InputStream(device=dev, channels=1, samplerate=self.sr, dtype="float32",
                                      blocksize=int(self.sr * 0.03), callback=self._callback)
         self.stream.start()
+        self.opened_at = time.monotonic()
+        self.last_block = 0.0
         log.info("listening on %s", self.device_name)
 
     def stop_stream(self):
@@ -264,7 +288,10 @@ class Listener:
             except queue.Empty:
                 continue
             if not self.paused:
-                self.seg.feed(block)
+                try:
+                    self.seg.feed(block)
+                except Exception:  # one bad block must not freeze the 30 s memory for good
+                    log.exception("could not process an audio block")
 
     # --- control ------------------------------------------------------------------------------
     def set_paused(self, paused: bool):
@@ -278,8 +305,42 @@ class Listener:
             self.start_stream()
 
     def save_last(self):
-        if not self.paused:
-            self.seg.save_last()
+        if self.paused:
+            return
+        # Only save sound that is actually fresh. If the mic stopped delivering, the memory holds old audio:
+        # saving it would give you the same clip again (not what you just did).
+        if not self.seg.last_feed or time.monotonic() - self.seg.last_feed > 2.0:
+            self.writer.notice = "Nothing saved: the mic isn't sending sound right now (reconnecting it)."
+            log.warning("hotkey save skipped: no fresh audio (last fed %.1f s ago)",
+                        time.monotonic() - self.seg.last_feed if self.seg.last_feed else -1)
+            self._restart_stream("hotkey found no fresh audio")
+            return
+        self.writer.notice = ""
+        self.seg.save_last()
+
+    def check_stream(self) -> None:
+        """Watchdog: USB mics drop out (sleep, a loose cable, Windows resetting the device) and PortAudio
+        then just stops calling back, with no error. No audio for 3 s = reopen the mic."""
+        if self.paused or self.stream is None:
+            return
+        now = time.monotonic()
+        since = now - (self.last_block or self.opened_at)
+        active = getattr(self.stream, "active", True)
+        if since > 3.0 or not active:
+            self._restart_stream(f"no audio from the mic for {since:.0f} s" if active else "the stream stopped")
+
+    def _restart_stream(self, why: str) -> None:
+        with self._stream_lock:
+            log.warning("reopening the mic: %s", why)
+            self.restarts += 1
+            try:
+                self.stop_stream()
+            except Exception:
+                log.exception("closing the stalled stream failed")
+                self.stream = None
+            self.start_stream()
+            if not self.mic_error and not self.writer.notice:
+                self.writer.notice = "The mic stopped sending sound for a moment and was reconnected."
 
     def _control_loop(self):
         ctl = self.paths["control"]
@@ -315,6 +376,7 @@ class Listener:
                     self._apply_pause()
             if not self.paused and self.stream is None and time.time() - self._last_try > 5:
                 self.start_stream()
+            self.check_stream()
             self.write_status()
             self._update_icon()
             time.sleep(0.5)

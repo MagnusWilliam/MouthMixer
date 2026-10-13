@@ -37,6 +37,8 @@ async function refreshStatus() {
     if (L.auto_pause_reason) text += ` (${L.auto_pause_reason})`;
     if (L.device && st !== "not running") text += ` · ${L.device}`;
     if (st !== "not running") text += ` · kept ${L.kept_today || 0}, ignored ${L.dropped_today || 0} today`;
+    if (st !== "not running" && L.audio_age_s != null && L.audio_age_s > 2) text += ` · no sound from the mic for ${Math.round(L.audio_age_s)} s`;
+    if (st !== "not running" && L.notice) text += ` · ${L.notice}`;
     $("#state").textContent = text;
     listenerPaused = !!L.paused_by_user;
     $("#pause").textContent = listenerPaused ? "Resume" : "Pause";
