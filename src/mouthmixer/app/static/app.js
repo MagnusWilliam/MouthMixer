@@ -113,6 +113,11 @@ function renderSong() {
   const secs = v.critic.details.seconds || 0;
   $("#s-chips").innerHTML = [v.style, v.key, Math.round(v.bpm) + " BPM", fmtLen(secs), `version ${vi + 1} of ${rec.versions.length}`]
     .map((c) => `<span class="chip">${esc(c)}</span>`).join("");
+  // Songs built in Make: a way back to that track to change the music (rebuilding adds a new version here)
+  const pid = (v.spec && v.spec.project) || rec.project;
+  $("#s-make").innerHTML = pid ? `<button id="s-tomake" class="ghost">✎ Back to Make: change the music</button>
+    <span class="small muted">Rebuild there and it comes back here as a new version.</span>` : "";
+  if (pid) $("#s-tomake").onclick = () => openInMake(pid);
   const mine = v.tracks.filter((t) => t.mine).map((t) => `${t.name.toLowerCase()} (${t.instrument})`);
   const clips = [...new Set(v.spec.clips)];
   $("#s-parts").innerHTML = `<b>Yours:</b> ${mine.length ? esc(mine.join(", ")) : "the idea it grew from"} ` +
@@ -350,6 +355,16 @@ function drawRoll(playBeat) {
 $("#a-preview").ontimeupdate = () => { if (currentClip && currentClip.result) drawRoll($("#a-preview").currentTime * currentClip.result.tempo.bpm / 60); };
 $("#a-raw").ontimeupdate = () => { if (currentClip && currentClip.result) drawRoll(beatsOf($("#a-raw").currentTime, currentClip.result.grid)); };
 window.onresize = () => { if (currentSong && view !== "clips") drawScore(); if (currentClip) drawRoll(); };
+
+// Open a Make track (from a song built from it).
+async function openInMake(pid) {
+  try {
+    const p = await api("/api/projects/" + pid);
+    if (window.Eng) Eng.stop(true);
+    Make.proj = p; Make.on = {};
+    document.querySelector('[data-view="make"]').click();  // Make.open() shows the track that's set
+  } catch (e) { alert("That Make track isn't there any more (it may have been deleted)."); }
+}
 
 // ---- tabs -------------------------------------------------------------------------------------
 document.querySelectorAll(".tab").forEach((t) => {
