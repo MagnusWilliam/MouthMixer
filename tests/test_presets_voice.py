@@ -117,7 +117,9 @@ def test_latency_uses_the_estimate_until_measured(home):
     assert s.latency_ms(120) == 120 and s.latency_ms(None) == 0
     assert s.latency_ms(5000) == 400  # a silly estimate is capped
     s.vocal_latency_ms, s.latency_measured = 85, True
-    assert s.latency_ms(120) == 85
+    assert s.latency_ms(120) == 120  # measured with the old capture: doesn't apply to the audio-thread one
+    s.latency_pipeline = "worklet"
+    assert s.latency_ms(120) == 85 and s.latency_ms(120, "script") == 120
 
 
 def test_api_presets_and_estimated_timing(home):
@@ -271,3 +273,15 @@ def test_bad_input_gets_a_clear_error_not_a_crash(home):
     q = c.post(f"/api/projects/{pid}/presets", json={"preset": "riff_clav"}).json()["added"]
     r = c.post(f"/api/projects/{pid}/pieces/{q}", json={"note_op": "earlier", "index": 1}).json()
     assert isinstance(r["note_index"], int)
+
+
+def test_scripts_are_served_as_javascript(home):
+    from fastapi.testclient import TestClient
+
+    from mouthmixer.app.server import create_app
+
+    c = TestClient(create_app(start_worker=False))
+    r = c.get("/static/capture-worklet.js")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/javascript")
+    assert "registerProcessor" in r.text
+    assert c.get("/static/../server.py").status_code == 404

@@ -1124,6 +1124,14 @@ the Make tab says so plainly if the starters can't load.
   recording or selected piece could carry over to the next track opened; Sing kept old section timings
   after a rebuild; "Whole piece earlier" wrapped a one-off melody's first note to its end; and a dozen
   bad inputs now get a clear 400/404 instead of a server error.
+- **Mic capture on the audio thread (the user: "my mic seems to be cutting a lot").** The page recorded through
+  a ScriptProcessor on the main thread, which browsers starve when the page is busy, and joined the blocks
+  back to back, so any dropped block would leave a hole and shift everything after it early. Now
+  `capture-worklet.js` records on the audio thread (Make, Sing and Setup), every block carries its exact
+  time and is placed there (a gap becomes silence and is reported as a dropout), and the meter redraws at
+  ~16 fps. Tested in Chromium with the page frozen 300 ms of every second: no gaps. A latency measured with
+  the old capture doesn't carry over, so the sync test asks to be run again. `.js` files are served as
+  JavaScript explicitly (Windows can map them to text/plain, which blocks a worklet).
 - Not yet: auditioning a ready-made part before adding it (adding plays it; delete or swap if it's wrong);
   per-section voice tweaks within one track.
 - **Next:** the user runs the sync test in Make, builds "Last Train, First Light" from a combo and a few

@@ -238,3 +238,7 @@ a few seconds, so you can try several voices before running the full "Make this 
 delay (output latency + base latency + the mic's reported latency). Before this, it was placed with no
 correction, so booth takes came out a 16th late. Takes recorded on that estimate are re-timed with the
 measured value once the sync test has run. The sync test is now on the Make recorder too.
+
+**Capture**: the page records on the audio thread (`capture-worklet.js`, an AudioWorklet), so a busy page
+can't drop mic audio; each 2048-sample block is placed by its own time, and any gap is filled with silence
+and reported. A sync-test value measured with the old main-thread capture isn't reused.

@@ -499,17 +499,18 @@ const Make = {
     this.stop();
     $("#mk-rec-go").disabled = false; $("#mk-rec-stop").disabled = true;
     if (!rec || !rec.chunks.length) return;
-    const sr = Eng.ctx.sampleRate, n = rec.chunks.reduce((a, c) => a + c.d.length, 0);
-    const all = new Float32Array(n); let o = 0; for (const c of rec.chunks) { all.set(c.d, o); o += c.d.length; }
-    const start = rec.chunks[0].t - this.t0;  // loop time of the first sample
+    const sr = Eng.ctx.sampleRate;
+    const { audio: all, start: t0, gaps } = joinChunks(rec.chunks, sr);
+    const start = t0 - this.t0;  // loop time of the first sample
     const st = $("#mk-status");
     busy(st, "Reading your takes…");
     try {
-      const r = await api(this.url(`/pieces/${this.recPiece}/record?start=${start.toFixed(4)}&est_ms=${latencyEstimateMs()}`),
+      const r = await api(this.url(`/pieces/${this.recPiece}/record?start=${start.toFixed(4)}&est_ms=${latencyEstimateMs()}&pipe=${Sing.pipeline || "worklet"}`),
         { method: "POST", body: wavBlob(all, sr) });
       busy(st, "");
       const q = r.pieces.find((x) => x.id === this.recPiece);
       $("#mk-rec-pass").textContent = `${r.new_takes.length} take${r.new_takes.length === 1 ? "" : "s"} saved`;
+      if (gaps) st.textContent = dropoutNote(gaps).trim();
       this.sel = this.recPiece;
       await this.refresh(r);
       if (q && !q.notes.length && !q.audio) st.textContent = "Nothing was heard in those takes: check the mic (Setup) and try again.";

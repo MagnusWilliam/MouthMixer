@@ -189,7 +189,8 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
             return p.public()
 
     @app.post("/api/projects/{pid}/pieces/{qid}/record")
-    async def record(pid: str, qid: str, request: Request, start: float = 0.0, est_ms: float | None = None):
+    async def record(pid: str, qid: str, request: Request, start: float = 0.0, est_ms: float | None = None,
+                     pipe: str = "worklet"):
         """A booth recording (WAV). `start`: loop time in seconds of the first sample, before latency.
         `est_ms`: the browser's own estimate of the round trip, used until the sync test has been done."""
         from .server import _wav_from_body
@@ -199,7 +200,7 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
             y, sr = _wav_from_body(body)
         except Exception:
             raise HTTPException(400, "not a WAV file")
-        lat = config.Settings.load().latency_ms(est_ms) / 1000.0
+        lat = config.Settings.load().latency_ms(est_ms, pipe) / 1000.0
         with _lock(pid):
             p = proj(pid)
             try:

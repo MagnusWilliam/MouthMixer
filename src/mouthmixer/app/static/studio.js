@@ -504,31 +504,56 @@ const Sing = {
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: this.deviceId ? { exact: this.deviceId } : undefined,
       echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
     await this.listMics();
-    const src = Eng.ctx.createMediaStreamSource(this.stream);
-    const proc = Eng.ctx.createScriptProcessor(2048, 1, 1);
-    const sink = Eng.ctx.createGain(); sink.gain.value = 0;
-    const hist = new Float32Array(4096);
-    proc.onaudioprocess = (e) => {
-      const d = e.inputBuffer.getChannelData(0);
-      // the input block ends roughly when this callback's output would start: song time of its first sample
-      const t = e.playbackTime - d.length / Eng.ctx.sampleRate;
-      if (this.recording) this.recording.chunks.push({ t, d: new Float32Array(d) });
-      hist.copyWithin(0, d.length); hist.set(d, hist.length - d.length);
-      let pk = 0; for (const x of d) pk = Math.max(pk, Math.abs(x));
-      $("#sg-level span").style.width = Math.min(100, Math.max(0, (20 * Math.log10(pk + 1e-9) + 60) * 1.67)) + "%";
-      $("#sg-level").classList.toggle("hot", pk > 0.7);
-      if (window.mkLevel) window.mkLevel(pk);
-      if (Eng.playing && this.mode) {
-        const f = detectPitch(hist, Eng.ctx.sampleRate);
-        this.trail.push({ s: this.songPosAt(t + d.length / Eng.ctx.sampleRate) * this.bpm / 60, m: f ? hzToMidi(f) : null });
-        if (this.trail.length > 600) this.trail.shift();
-      }
-    };
-    src.connect(proc); proc.connect(sink).connect(Eng.ctx.destination);
-    this.proc = proc;
+    const ctx = Eng.ctx;
+    const src = ctx.createMediaStreamSource(this.stream);
+    const sink = ctx.createGain(); sink.gain.value = 0;
+    this.hist = new Float32Array(4096);
+    this.lastMeter = 0;
+    try {
+      // On the audio thread: nothing the page does can drop mic audio (the old way lost blocks when busy).
+      if (!this.workletReady) { await ctx.audioWorklet.addModule("/static/capture-worklet.js"); this.workletReady = true; }
+      const node = new AudioWorkletNode(ctx, "mm-capture", { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1,
+        channelCountMode: "explicit" });
+      node.port.onmessage = (e) => this.onBlock(e.data.t, e.data.d);
+      src.connect(node); node.connect(sink).connect(ctx.destination);
+      this.proc = node; this.pipeline = "worklet";
+    } catch (err) {
+      const proc = ctx.createScriptProcessor(2048, 1, 1);
+      proc.onaudioprocess = (e) => {
+        const d = e.inputBuffer.getChannelData(0);
+        this.onBlock(e.playbackTime - d.length / ctx.sampleRate, new Float32Array(d));
+      };
+      src.connect(proc); proc.connect(sink).connect(ctx.destination);
+      this.proc = proc; this.pipeline = "script";
+    }
+    this.src = src;
+  },
+  // One block of mic audio: `t` = context time of its first sample.
+  onBlock(t, d) {
+    if (this.micStart == null) this.micStart = t;
+    if (this.recording) this.recording.chunks.push({ t, d });
+    const hist = this.hist;
+    hist.copyWithin(0, d.length); hist.set(d, hist.length - d.length);
+    let pk = 0; for (const x of d) pk = Math.max(pk, Math.abs(x));
+    this.peak = Math.max(this.peak || 0, pk);
+    const now = performance.now();
+    if (now - this.lastMeter > 60) {  // the meter at ~16 fps is plenty, and keeps the page light
+      this.lastMeter = now;
+      const p = this.peak; this.peak = 0;
+      const m = $("#sg-level span");
+      if (m) { m.style.width = Math.min(100, Math.max(0, (20 * Math.log10(p + 1e-9) + 60) * 1.67)) + "%"; $("#sg-level").classList.toggle("hot", p > 0.7); }
+      if (window.mkLevel) window.mkLevel(p);
+    }
+    if (Eng.playing && this.mode) {
+      const f = detectPitch(hist, Eng.ctx.sampleRate);
+      this.trail.push({ s: this.songPosAt(t + d.length / Eng.ctx.sampleRate) * this.bpm / 60, m: f ? hzToMidi(f) : null });
+      if (this.trail.length > 600) this.trail.shift();
+    }
   },
   closeMic() {
     if (this.proc) { this.proc.disconnect(); this.proc = null; }
+    if (this.src) { this.src.disconnect(); this.src = null; }
+    this.micStart = null;
     if (this.stream) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = null; }
   },
   songPosAt(ctxTime) { return Eng.from + (ctxTime - Eng.t0); },
@@ -557,19 +582,19 @@ const Sing = {
     const mode = this.mode; this.mode = null;
     const rec = this.recording; this.recording = null;
     if (mode !== "rec" || !rec || !rec.chunks.length) return;
-    const sr = Eng.ctx.sampleRate, n = rec.chunks.reduce((a, c) => a + c.d.length, 0);
-    const all = new Float32Array(n); let o = 0; for (const c of rec.chunks) { all.set(c.d, o); o += c.d.length; }
-    const start = this.songPosAt(rec.chunks[0].t);
+    const sr = Eng.ctx.sampleRate;
+    const { audio: all, start: t0, gaps } = joinChunks(rec.chunks, sr);
+    const start = this.songPosAt(t0);
     const st = $("#sg-result");
     busy($("#sg-status"), "Checking the take…");
     try {
-      const t = await api(songUrl(`/takes?start=${start.toFixed(4)}&section=${encodeURIComponent(rec.range && this.section.name)}&v=${curV()}&track=${encodeURIComponent($("#sg-track").value || "Lead")}&est_ms=${latencyEstimateMs()}`),
+      const t = await api(songUrl(`/takes?start=${start.toFixed(4)}&section=${encodeURIComponent(rec.range && this.section.name)}&v=${curV()}&track=${encodeURIComponent($("#sg-track").value || "Lead")}&est_ms=${latencyEstimateMs()}&gaps=${gaps}&pipe=${Sing.pipeline || "worklet"}`),
         { method: "POST", body: wavBlob(all, sr) });
       busy($("#sg-status"), "");
       this.takes.push(t);
       const s = t.score;
-      st.textContent = s.peak_db > -1 ? "That take clipped: lean back a little or turn the mic gain down." :
-        s.peak_db < -24 ? "That take is very quiet: move a little closer or turn the mic gain up." : "";
+      st.textContent = (s.peak_db > -1 ? "That take clipped: lean back a little or turn the mic gain down." :
+        s.peak_db < -24 ? "That take is very quiet: move a little closer or turn the mic gain up." : "") + dropoutNote(gaps);
       this.renderTakes();
     } catch (e) { busy($("#sg-status"), ""); st.textContent = errText(e); }
   },
@@ -707,7 +732,7 @@ for (const id of ["#sg-music", "#sg-guide"]) $(id).oninput = () => {
   for (const p of Sing.engineParts()) Eng.setGain(p.id, p.gain, p.on);
 };
 $("#sg-latr").onchange = async () => {
-  const s = await post("/api/settings", { vocal_latency_ms: +$("#sg-latr").value });
+  const s = await post("/api/settings", { vocal_latency_ms: +$("#sg-latr").value, latency_pipeline: Sing.pipeline || "worklet" });
   Sing.latency = s.vocal_latency_ms; Sing.measured = true; $("#sg-lat").textContent = Math.round(Sing.latency) + " ms";
 };
 // How late recordings arrive, as the browser sees it (sound out to the headphones plus the mic back in).
@@ -721,6 +746,35 @@ function latencyEstimateMs() {
   return Math.round(ms + inMs);
 }
 window.latencyEstimateMs = latencyEstimateMs;
+
+// The recorded blocks as one buffer, each at its own time: if the browser ever drops a block, the gap
+// becomes silence instead of pulling everything after it early. Returns {audio, start, gaps}. Only the
+// audio-thread capture has exact block times; the old fallback's are jittery, so its blocks go back to back.
+function joinChunks(chunks, sr, byTime = Sing.pipeline !== "script") {
+  const t0 = chunks[0].t;
+  if (!byTime) {
+    const audio = new Float32Array(chunks.reduce((a, c) => a + c.d.length, 0));
+    let o = 0; for (const c of chunks) { audio.set(c.d, o); o += c.d.length; }
+    return { audio, start: t0, gaps: 0 };
+  }
+  const end = chunks.reduce((m, c) => Math.max(m, Math.round((c.t - t0) * sr) + c.d.length), 0);
+  const audio = new Float32Array(end);
+  let gaps = 0, expect = 0;
+  for (const c of chunks) {
+    let at = Math.round((c.t - t0) * sr);
+    if (Math.abs(at - expect) <= 2) at = expect;  // tiny timing jitter: keep blocks back to back
+    else if (at > expect && c.t > (Sing.micStart || 0) + 0.5) gaps++;  // (the mic's own start-up pause doesn't count)
+    audio.set(c.d, Math.max(0, Math.min(at, end - c.d.length)));
+    expect = at + c.d.length;
+  }
+  return { audio, start: t0, gaps };
+}
+window.joinChunks = joinChunks;
+function dropoutNote(gaps) {
+  return gaps ? ` The recording had ${gaps} dropout${gaps > 1 ? "s" : ""} (the computer was busy or the mic paused); ` +
+    "they were filled with silence so the timing holds. If you hear gaps, close other apps and record again." : "";
+}
+window.dropoutNote = dropoutNote;
 
 // Sync test: 12 clicks; say "ta" on each one (the first four are a count-in). Your recorded "ta"s land late
 // by the round trip; the median is saved and used for every recording from then on (Make and Sing).
@@ -750,7 +804,7 @@ async function syncTest(st) {
   if (offs.length < 5 || peak < 0.01) { st.textContent = "Didn't hear enough \"ta\"s. Try again a bit louder."; return null; }
   offs.sort((a, b) => a - b);
   const med = offs[Math.floor(offs.length / 2)], spread = offs.at(-1) - offs[0];
-  const s = await post("/api/settings", { vocal_latency_ms: med });
+  const s = await post("/api/settings", { vocal_latency_ms: med, latency_pipeline: Sing.pipeline });
   Sing.latency = s.vocal_latency_ms; Sing.measured = true;
   st.textContent = `Your recordings arrive ${Math.round(med)} ms late; that's now corrected for every recording.` +
     (spread > 120 ? " Your taps were uneven, so you may want to run it once more." : "");

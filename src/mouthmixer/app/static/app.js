@@ -397,19 +397,29 @@ function updateLevel(L) {
 
 // ---- setup: calibration, mic test, upload -------------------------------------------------------
 async function record(seconds, onLevel) {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  const dev = localStorage.getItem("mm-sing-mic") || "";
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: dev ? { ideal: dev } : undefined,
+    echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(stream);
-  const proc = ctx.createScriptProcessor(4096, 1, 1);
   const chunks = [];
-  proc.onaudioprocess = (e) => {
-    const d = e.inputBuffer.getChannelData(0);
-    chunks.push(new Float32Array(d));
+  const take = (d) => {
+    chunks.push(d);
     if (onLevel) { let s = 0; for (const v of d) s += v * v; onLevel(Math.sqrt(s / d.length)); }
   };
-  src.connect(proc); proc.connect(ctx.destination);
+  let node;
+  try {  // on the audio thread, so a busy page can't drop audio (see capture-worklet.js)
+    await ctx.audioWorklet.addModule("/static/capture-worklet.js");
+    node = new AudioWorkletNode(ctx, "mm-capture", { channelCount: 1, channelCountMode: "explicit" });
+    node.port.onmessage = (e) => take(e.data.d);
+  } catch {
+    node = ctx.createScriptProcessor(4096, 1, 1);
+    node.onaudioprocess = (e) => take(new Float32Array(e.inputBuffer.getChannelData(0)));
+  }
+  const sink = ctx.createGain(); sink.gain.value = 0;
+  src.connect(node); node.connect(sink).connect(ctx.destination);
   await new Promise((r) => setTimeout(r, seconds * 1000));
-  proc.disconnect(); src.disconnect(); stream.getTracks().forEach((t) => t.stop());
+  node.disconnect(); src.disconnect(); stream.getTracks().forEach((t) => t.stop());
   const sr = ctx.sampleRate; await ctx.close();
   const n = chunks.reduce((a, c) => a + c.length, 0);
   const all = new Float32Array(n); let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }

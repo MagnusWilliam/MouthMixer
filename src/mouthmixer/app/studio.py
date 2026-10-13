@@ -70,7 +70,7 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         s = config.Settings.load()
         return {"has_claude_key": bool(s.claude_api_key or os.environ.get("ANTHROPIC_API_KEY")),
                 "claude_key_from_env": bool(os.environ.get("ANTHROPIC_API_KEY")) and not s.claude_api_key,
-                "vocal_latency_ms": s.vocal_latency_ms, "latency_measured": s.latency_measured,
+                "vocal_latency_ms": s.vocal_latency_ms, "latency_measured": s.measured_for("worklet"),
                 "background_listening": s.background_listening}
 
     @app.post("/api/settings")
@@ -84,6 +84,7 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
             except (TypeError, ValueError):
                 raise HTTPException(400, "vocal_latency_ms is a number of milliseconds")
             s.latency_measured = True
+            s.latency_pipeline = body.get("latency_pipeline") if body.get("latency_pipeline") in ("worklet", "script") else "worklet"
         if "background_listening" in body:
             on = bool(body["background_listening"])
             if on != s.background_listening:
@@ -275,7 +276,7 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         x, sr = sf.read(str(takes_path(song_id) / t["file"]), dtype="float32", always_2d=True)
         lat = t["latency_ms"]
         s = config.Settings.load()
-        if t.get("latency_estimated") and s.latency_measured:  # recorded on a guess; the sync test has run since
+        if t.get("latency_estimated") and s.measured_for(t.get("pipeline", "worklet")):  # recorded on a guess; measured since
             lat = s.vocal_latency_ms
         return vocals.Take.from_recording(x.mean(axis=1), sr, t["start_sec"], lat, t["id"])
 
@@ -300,11 +301,11 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         v = rec["versions"][version_of(song_id, None)]
         return {"takes": takes_list(song_id), "preset": PACKS[v["pack"]].get("vocal_preset", "soul"),
                 "latency_ms": config.Settings.load().vocal_latency_ms,
-                "latency_measured": config.Settings.load().latency_measured}
+                "latency_measured": config.Settings.load().measured_for("worklet")}
 
     @app.post("/api/songs/{song_id}/takes")
     async def add_take(song_id: str, request: Request, start: float = 0.0, section: str = "", v: int | None = None,
-                       track: str = "Lead", est_ms: float | None = None):
+                       track: str = "Lead", est_ms: float | None = None, gaps: int = 0, pipe: str = "worklet"):
         """A recorded take (WAV body). `start`: the song position (seconds) when recording began."""
         import soundfile as sf
 
@@ -320,10 +321,11 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         vi = version_of(song_id, v)
         tid = time.strftime("%H%M%S") + "-" + uuid.uuid4().hex[:4]
         sf.write(str(takes_path(song_id) / f"{tid}.wav"), x, sr, subtype="FLOAT")
-        t = {"id": tid, "file": f"{tid}.wav", "start_sec": start, "latency_ms": config.Settings.load().latency_ms(est_ms),
+        t = {"id": tid, "file": f"{tid}.wav", "start_sec": start, "latency_ms": config.Settings.load().latency_ms(est_ms, pipe),
              "section": section, "version": vi, "created": time.time(), "seconds": round(len(x) / sr, 2),
              "track": str(track or "Lead")[:20],
-             "latency_estimated": not config.Settings.load().latency_measured and est_ms is not None}
+             "latency_estimated": not config.Settings.load().measured_for(pipe) and est_ms is not None,
+             "pipeline": pipe, "dropouts": int(gaps)}
         v_ = record(song_id)["versions"][vi]
         notes = vocals.notes_in_seconds(lead_notes(v_), v_["bpm"], v_["sections"])
         t["score"] = vocals.score_take(load_take(song_id, t), notes)

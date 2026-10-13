@@ -35,13 +35,18 @@ class Settings:
     background_listening: bool = False
     vocal_latency_ms: float = 0.0  # measured by the sync test (Make or Sing), or set by hand
     latency_measured: bool = False  # until it is, recordings use the browser's own estimate of the delay
+    latency_pipeline: str = ""  # how the page captured the mic when it was measured ("worklet" or "script")
 
-    def latency_ms(self, estimate_ms: float | None = None) -> float:
-        """How late recordings arrive: the measured value, else the browser's estimate (sound out to your
-        ears plus the mic back in), else 0."""
-        if self.latency_measured or estimate_ms is None:
+    def latency_ms(self, estimate_ms: float | None = None, pipeline: str = "worklet") -> float:
+        """How late recordings arrive: the value measured with the same mic capture, else the browser's
+        estimate (sound out to your ears plus the mic back in), else 0. A value measured with the old
+        capture (before the audio-thread recorder) doesn't apply to the new one."""
+        if self.measured_for(pipeline) or estimate_ms is None:
             return self.vocal_latency_ms
         return float(max(0.0, min(400.0, estimate_ms)))
+
+    def measured_for(self, pipeline: str = "worklet") -> bool:
+        return self.latency_measured and (self.latency_pipeline or "script") == (pipeline or "worklet")
 
     @classmethod
     def load(cls) -> "Settings":

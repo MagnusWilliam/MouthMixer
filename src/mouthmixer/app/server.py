@@ -188,7 +188,9 @@ def create_app(start_worker: bool = True) -> FastAPI:
         p = (STATIC / name).resolve()
         if p.parent != STATIC.resolve() or not p.exists():
             raise HTTPException(404)
-        return FileResponse(p)
+        # Explicit types: Windows can map .js to text/plain, and the browser refuses a worklet served that way.
+        kind = {".js": "text/javascript", ".css": "text/css", ".html": "text/html"}.get(p.suffix)
+        return FileResponse(p, media_type=kind) if kind else FileResponse(p)
 
     @app.get("/api/ping")
     def ping():
