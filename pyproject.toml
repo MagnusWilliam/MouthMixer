@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mouthmixer"
-version = "0.1.0"
-description = "Turns hums, whistles and beatbox into clean notes and drum hits (prototype)."
+version = "0.3.0"
+description = "Turns hums, whistles, beatbox and singing into finished, original game music (prototype)."
 requires-python = ">=3.11"
 dependencies = [
   "numpy>=1.26",
@@ -18,6 +18,12 @@ dependencies = [
   "tinysoundfont>=0.3.7",  # instruments (GeneralUser GS in assets/soundfonts)
   "pedalboard>=0.9",       # effects
   "pyloudnorm>=0.1.1",     # loudness
+  # Vocals and lyrics (docs/VOCALS.md)
+  "pyworld>=0.3.4",        # WORLD vocoder: pitch and timing correction that keeps your voice's character
+  "setuptools<81",         # pyworld imports pkg_resources, which setuptools 81 removes
+  "noisereduce>=3.0",      # spectral noise reduction from the take's own room noise
+  "pronouncing>=0.2",      # CMU dictionary: syllables and stress for fitting words to notes
+  "anthropic>=1.0",        # lyric writing with Claude (only when you add an API key)
 ]
 
 [project.optional-dependencies]

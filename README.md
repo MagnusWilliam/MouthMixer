@@ -11,6 +11,21 @@ many instruments, effects and a mastered mix. MouthMixer tries many versions and
 checks each against the music rules in `docs/MUSIC_KNOWLEDGE.md`, and shows the best three. Raw clips live
 in the **Clips** tab; pick your microphone in **Setup**.
 
+**New (2026-10-13): Mix, Lyrics and Sing.** Open a song and use the tabs above it:
+- **Mix** works like Incredibox: click a part's round button to turn it on or off while the song plays,
+  pick another sound from its list, move its volume, or press **S** to hear it alone. Under **Add a part**,
+  choose the sound you're going for (funky, dreamy, battle…) and add from the ranked suggestions; each says
+  why it fits. **Save as a new version** mixes and checks it.
+- **Lyrics:** describe what the song is about and Claude writes three options that fit your melody (add a
+  Claude API key in **Setup** first), or type your own words. Each option shows how well it fits.
+- **Sing:** run the **Sync test** once (say "ta" on each click). Pick a section, press **Record**, sing after
+  the count-in, and do 3-5 takes. The lane shows your pitch against the melody (green = in tune). Then press
+  **Tune, time & mix my vocals**: it keeps the best line from each take, cleans, times and tunes it, adds
+  the effects for the song's style and mixes it in as a new version. Wear headphones while recording.
+- More sounds: 131 instruments, 10 drum kits and textures (rain, vinyl, wind, tape), and three new styles
+  (heist funk, bright pop-rock, moonlit hip-hop).
+- **After updating, run `scripts\windows\setup.cmd` again** (there are new parts to install).
+
 **Status (prototype, 2026-10-12):** Phases 1-2 of [`docs/PLAN.md`](docs/PLAN.md) are built as a first
 version: background capture, the music detector, hum and beatbox transcription, cleanup (tempo drift,
 swing, key, scale), the inbox app and the Windows shortcut. It has only been tested on generated audio so
@@ -67,7 +82,7 @@ The detector's thresholds are starting guesses. Real recordings make them right:
 
 ```
 python -m venv .venv && .venv/bin/pip install -e .[dev]     # Linux/macOS (no mic or tray needed)
-python -m pytest                                          # 42 tests on generated audio
+python -m pytest                                          # 70+ tests on generated audio
 python -m mouthmixer demo && python -m mouthmixer app     # demo clips + the app at http://127.0.0.1:8765
 python -m mouthmixer process hum.wav                      # one clip -> result.json, MIDI, preview.wav
 ```
@@ -76,6 +91,9 @@ python -m mouthmixer process hum.wav                      # one clip -> result.j
 | --- | --- |
 | [`docs/PLAN.md`](docs/PLAN.md) | The whole design, the decisions, the build phases |
 | [`docs/MUSIC_KNOWLEDGE.md`](docs/MUSIC_KNOWLEDGE.md) | The critic's rulebook (used from Phase 4) |
+| [`docs/PERSONA_STYLE.md`](docs/PERSONA_STYLE.md) | The Persona sound, broken down, and what we take from it |
+| [`docs/ARRANGING.md`](docs/ARRANGING.md) | Layers, pairings and moods behind the mixer's suggestions |
+| [`docs/VOCALS.md`](docs/VOCALS.md) | Recording, tuning, effects and lyrics for your vocals |
 | [`CLAUDE.md`](CLAUDE.md) | Rules for build sessions |
 
 Code map: `listener/` (capture, segmenter, tray, hotkey, auto-pause), `analysis/` (music gate, pitch,

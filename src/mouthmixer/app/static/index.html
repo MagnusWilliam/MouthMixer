@@ -35,8 +35,16 @@
     <div class="detail-head">
       <h2 id="s-title"></h2>
       <div id="s-chips" class="chips"></div>
-      <p id="s-parts" class="small"></p>
     </div>
+    <div class="subtabs" role="tablist">
+      <button data-sub="listen" class="sub on">Listen</button>
+      <button data-sub="mix" class="sub" title="Turn parts on and off, swap sounds, add new parts">Mix</button>
+      <button data-sub="lyrics" class="sub" title="Words that fit your melody">Lyrics</button>
+      <button data-sub="sing" class="sub" title="Record your vocals over the song">Sing</button>
+    </div>
+
+    <div id="sub-listen">
+    <p id="s-parts" class="small"></p>
     <audio id="s-audio" controls preload="none"></audio>
     <div id="s-versions" class="versions"></div>
     <div class="score-wrap"><canvas id="score"></canvas></div>
@@ -53,6 +61,98 @@
       <ul id="s-checks" class="checks"></ul>
     </details>
     <p class="muted small">Downloads: <a id="s-dl-audio" href="#">audio</a> · <a id="s-dl-midi" href="#">MIDI (every part)</a></p>
+    </div>
+
+    <!-- Mix: Incredibox-style parts -->
+    <div id="sub-mix" class="hidden">
+      <p class="hint">Turn parts on and off while it plays, swap a part's sound, or add new parts from the suggestions.
+        Nothing is changed for good until you press <b>Save as a new version</b>.</p>
+      <div class="transport">
+        <button id="mx-play" class="primary">▶ Play</button>
+        <span id="mx-pos" class="muted mono">0:00</span>
+        <div class="seek"><div id="mx-seek"></div></div>
+        <span class="spacer"></span>
+        <button id="mx-save" class="primary" disabled>Save as a new version</button>
+      </div>
+      <div id="mx-status" class="muted small"></div>
+      <div id="mx-msg" class="small"></div>
+      <div id="mx-leadmode" class="row small hidden">While you sing, your hummed melody
+        <select id="mx-lead"><option value="duck">gets much quieter (recommended)</option><option value="mute">stops</option>
+          <option value="keep">stays as it is</option></select></div>
+      <div id="mx-parts" class="tiles"></div>
+      <div class="addpanel">
+        <h3>Add a part</h3>
+        <p class="hint">What sound are you going for? Suggestions are ranked by how well they pair with what's already
+          playing and by the sound you pick. Each one says why.</p>
+        <div id="mx-vibes" class="chips choose"></div>
+        <div id="mx-cats" class="chips choose small"></div>
+        <div id="mx-sugs" class="sugs"></div>
+      </div>
+    </div>
+
+    <!-- Lyrics -->
+    <div id="sub-lyrics" class="hidden">
+      <p class="hint">Words are fitted to your melody: one syllable per note, strong syllables on strong beats, open
+        vowels ("ah", "oh") on long high notes, and a short hook you can chant.</p>
+      <div id="ly-map" class="small"></div>
+      <div class="card inner">
+        <h3>Write with Claude</h3>
+        <p class="hint">Describe what the song is about. A few words is enough; details help (a place, a feeling, a
+          moment in the game).</p>
+        <textarea id="ly-brief" rows="3" placeholder="e.g. running across neon rooftops at night after a heist, confident and a bit cheeky"></textarea>
+        <div id="ly-ideas" class="chips choose small"></div>
+        <div class="row"><button id="ly-write" class="primary">Write 3 options</button><span id="ly-keynote" class="small muted"></span></div>
+      </div>
+      <div id="ly-options"></div>
+      <details class="card inner" id="ly-own-box">
+        <summary><b>Or type your own words</b></summary>
+        <p class="hint">One line per phrase of the melody. The numbers show how many notes (syllables) each line has.</p>
+        <input id="ly-title" placeholder="Title (the hook)">
+        <div id="ly-own"></div>
+        <button id="ly-own-check">Check and use these</button>
+      </details>
+    </div>
+
+    <!-- Sing -->
+    <div id="sub-sing" class="hidden">
+      <p class="hint">Sing along with the song. Pick a section, press Record, and sing after the count-in. Do 3-5 takes;
+        MouthMixer keeps the best line from each, then tunes, times and mixes them.</p>
+      <div class="singbar">
+        <div id="sg-sections" class="chips choose"></div>
+        <span class="spacer"></span>
+        <button id="sg-rec" class="rec">● Record</button>
+        <button id="sg-listen">▶ Listen</button>
+        <button id="sg-stop" disabled>■ Stop</button>
+      </div>
+      <div id="sg-status" class="muted small"></div>
+      <canvas id="sg-lane" height="260"></canvas>
+      <div id="sg-lyrics" class="karaoke"><div class="now"></div><div class="next"></div></div>
+      <div class="singopts small">
+        <label>Music <input type="range" id="sg-music" min="0" max="100" value="80"></label>
+        <label>Guide melody <input type="range" id="sg-guide" min="0" max="100" value="45"></label>
+        <label><input type="checkbox" id="sg-click" checked> Click in quiet bits</label>
+        <label>Mic <select id="sg-mic"></select></label>
+        <span id="sg-level" class="meter inline"><span></span></span>
+      </div>
+      <div class="row small">
+        <span>Timing offset: <b id="sg-lat">0</b> ms</span>
+        <button id="sg-sync" class="ghost" title="Measures how late your recordings arrive">Sync test</button>
+        <input type="range" id="sg-latr" min="-100" max="400" value="0" title="Fine-tune: if your voice sounds late, move right">
+      </div>
+      <h3>Takes</h3>
+      <div id="sg-takes" class="takes"></div>
+      <div class="card inner">
+        <h3>Make the vocal</h3>
+        <div class="row">
+          <label>Style <select id="sg-preset"></select></label>
+          <label>Your hummed melody while you sing <select id="sg-lead">
+            <option value="duck">gets much quieter (recommended)</option><option value="mute">stops</option>
+            <option value="keep">stays</option></select></label>
+          <button id="sg-make" class="primary">Tune, time & mix my vocals</button>
+        </div>
+        <div id="sg-result"></div>
+      </div>
+    </div>
   </section>
 
   <!-- A raw clip -->
@@ -103,6 +203,14 @@
       <div id="mic-result"></div>
     </div>
     <div class="card">
+      <h3>Lyrics with Claude</h3>
+      <p class="muted">Paste a Claude API key to have lyrics written for your songs (from console.anthropic.com). It's
+        saved only on this computer. Without one you can still type your own words.</p>
+      <div class="row"><input type="password" id="key-input" placeholder="sk-ant-…" autocomplete="off">
+        <button id="key-save" class="primary">Save key</button><button id="key-clear" class="ghost">Remove</button></div>
+      <p id="key-now" class="small muted"></p>
+    </div>
+    <div class="card">
       <h3>Add a recording</h3>
       <p class="muted">A WAV file of a hum, or a long recording of your workday (only the musical parts are kept).</p>
       <input type="file" id="upload" accept=".wav,audio/wav">
@@ -111,5 +219,6 @@
   </section>
 </main>
 <script src="/static/app.js"></script>
+<script src="/static/studio.js"></script>
 </body>
 </html>

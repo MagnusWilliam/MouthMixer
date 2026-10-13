@@ -228,6 +228,127 @@ def silence(seconds: float, sr: int = SR, noise_db: float = -55.0, seed: int = 0
     return rng.normal(0, 10 ** (noise_db / 20), int(seconds * sr)).astype(np.float32)
 
 
+# --- Singing ------------------------------------------------------------------------------------
+
+VOWELS = {"ah": (730, 1090, 2440), "oh": (570, 840, 2410), "eh": (530, 1840, 2480), "ee": (270, 2290, 3010),
+          "oo": (300, 870, 2240)}
+
+
+@dataclass
+class SungNote:
+    grid: float  # where the note belongs (seconds, in song time)
+    onset: float  # where it was sung
+    duration: float
+    midi: int
+    cents: float  # how far off pitch it was sung
+
+
+def _formants(src: np.ndarray, sr: int, vowel: str) -> np.ndarray:
+    from scipy.signal import lfilter
+
+    out = np.zeros_like(src)
+    for f, gain in zip(VOWELS[vowel], (1.0, 0.6, 0.25)):
+        r = np.exp(-np.pi * 90 / sr)
+        a = [1, -2 * r * np.cos(2 * np.pi * f / sr), r * r]
+        out += gain * lfilter([1 - r], a, src)
+    return out
+
+
+def sing(
+    notes: list[tuple[float, float, int]],
+    bpm: float = 100.0,
+    sr: int = 44100,
+    *,
+    start: float = 0.0,
+    pre_roll: float = 1.0,
+    detune_cents: float = 30.0,
+    global_offset_cents: float = 0.0,
+    timing_ms: float = 30.0,
+    lateness_ms: float = 0.0,
+    vibrato_cents: float = 30.0,
+    sibilants: float = 0.3,
+    breaths: bool = True,
+    plosives: float = 0.0,
+    noise_db: float = -62.0,
+    seed: int = 0,
+    tail: float = 0.8,
+) -> tuple[np.ndarray, list[SungNote]]:
+    """A synthetic singer: a glottal-like source through vowel formants, with scoops, vibrato, detuned
+    notes, early/late onsets, "s" sounds, breaths before phrases and optional "p" pops.
+
+    `notes` are [(start_beat, length_beats, midi)] in song beats; sample 0 of the result is song time
+    `start - pre_roll` seconds (the pre-roll is room noise, for the noise profile)."""
+    rng = np.random.default_rng(seed)
+    spb = 60.0 / bpm
+    t0 = start - pre_roll
+    end = max(s + l for s, l, _ in notes) * spb + tail
+    n = int((end - t0) * sr)
+    f0 = np.zeros(n)
+    amp = np.zeros(n)
+    vowel_of = np.zeros(n, dtype=int)
+    out_noise = np.zeros(n)
+    truth: list[SungNote] = []
+    names = list(VOWELS)
+    prev_end = -1e9
+    for k, (sb, lb, m) in enumerate(sorted(notes)):
+        grid = sb * spb
+        onset = grid + rng.normal(lateness_ms, timing_ms) / 1000.0
+        dur = max(0.08, lb * spb * 0.92)
+        i0, i1 = int((onset - t0) * sr), int((onset + dur - t0) * sr)
+        i0, i1 = max(i0, 0), min(i1, n)
+        if i1 - i0 < 10:
+            continue
+        cents = rng.normal(0, detune_cents) + global_offset_cents
+        tt = np.arange(i1 - i0) / sr
+        vib = vibrato_cents * np.sin(2 * np.pi * rng.uniform(5.0, 6.0) * tt) * np.clip((tt - 0.15) / 0.3, 0, 1)
+        scoop = -70.0 * np.exp(-tt / 0.035)
+        f0[i0:i1] = midi_to_hz(m + (cents + vib + scoop) / 100.0)
+        env = np.minimum(1, tt / 0.02) * np.minimum(1, (tt[-1] - tt) / 0.03) * rng.uniform(0.6, 1.0)
+        amp[i0:i1] = env
+        vowel_of[i0:i1] = rng.integers(0, 3)  # ah / oh / eh mostly
+        if rng.random() < sibilants:  # an "s" just before the vowel
+            ls = int(0.07 * sr)
+            a = max(0, i0 - ls)
+            s_noise = rng.normal(0, 1, i0 - a) * np.hanning(i0 - a) * 0.25
+            out_noise[a:i0] += _highpass(s_noise, sr, 5000)
+        if plosives and rng.random() < plosives:  # a "p" pop: a low thump at the onset
+            lp = int(0.05 * sr)
+            seg = np.sin(2 * np.pi * 60 * np.arange(min(lp, n - i0)) / sr) * np.exp(-np.arange(min(lp, n - i0)) / (0.012 * sr))
+            out_noise[i0:i0 + len(seg)] += 0.8 * seg
+        if breaths and onset - prev_end > 0.6:  # a breath before each phrase
+            lb_ = int(0.3 * sr)
+            a = max(0, i0 - int(0.1 * sr) - lb_)
+            b = a + lb_
+            if b < i0:
+                br = _bandpass(rng.normal(0, 1, b - a), sr, 500, 3000) * np.hanning(b - a) * 0.08
+                out_noise[a:b] += br
+        prev_end = onset + dur
+        truth.append(SungNote(grid, onset, dur, m, float(cents)))
+    phase = 2 * np.pi * np.cumsum(f0) / sr
+    src = np.zeros(n)
+    for h in range(1, 40):
+        src += np.where(h * f0 < sr / 2 - 500, 1.0 / h, 0.0) * np.sin(h * phase)
+    src *= amp
+    voiced = np.zeros(n)
+    for vi in range(3):
+        voiced += _formants(src * (vowel_of == vi), sr, names[vi])
+    voiced = 0.5 * voiced / max(1e-9, np.max(np.abs(voiced)))
+    x = voiced + out_noise + rng.normal(0, 10 ** (noise_db / 20), n)
+    return x.astype(np.float32), truth
+
+
+def _highpass(x, sr, f):
+    from scipy.signal import butter, sosfilt
+
+    return sosfilt(butter(4, f, btype="high", fs=sr, output="sos"), x)
+
+
+def _bandpass(x, sr, lo, hi):
+    from scipy.signal import butter, sosfilt
+
+    return sosfilt(butter(2, [lo, hi], btype="band", fs=sr, output="sos"), x)
+
+
 # --- Preview rendering --------------------------------------------------------------------------
 
 def render_preview(notes: list[dict], drums: list[dict], bpm: float, sr: int = 22050) -> np.ndarray:

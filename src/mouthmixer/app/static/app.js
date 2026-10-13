@@ -143,6 +143,7 @@ function renderSong() {
   ];
   $("#s-checks").innerHTML = checks.map(([t, ok]) => `<li class="${ok ? "ok" : "warn"}">${esc(t)}</li>`).join("");
   drawScore();
+  if (window.onSongShown) window.onSongShown(currentSong);
 }
 const pct = (x) => Math.round(x * 100);
 
@@ -359,7 +360,7 @@ document.querySelectorAll(".tab").forEach((t) => {
     const setup = view === "setup";
     $("#setup").classList.toggle("hidden", !setup);
     $("#list-pane").classList.toggle("hidden", setup);
-    if (setup) { refreshMics(); refreshCalibration(); } else refreshList();
+    if (setup) { refreshMics(); refreshCalibration(); if (window.refreshKey) refreshKey(); } else refreshList();
   };
 });
 

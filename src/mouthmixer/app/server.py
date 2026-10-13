@@ -130,16 +130,29 @@ class Worker:
                         return None
                     self.lib.add_song(song_id, rec)
                     return song_id
+                from ..arrange.mixer import next_version_index, write_json
+                from .studio import _lock
+
                 out = self.lib.song_dir(song_id)
-                record = json.loads((out / "song.json").read_text())
-                start = max(int(v["file"][1:-4]) for v in record["versions"]) + 1
+                with _lock(song_id):  # reserve the file name, so a mix saved meanwhile can't take it
+                    start = next_version_index(out, json.loads((out / "song.json").read_text()))
+                    (out / f"v{start}.ogg").touch()
                 opts = {**self.song_options, "keep": 1}
-                rec = songwriter.write_songs(primary, others, out, exclude_pack=exclude_pack, start_index=start, **opts)
+                try:
+                    rec = songwriter.write_songs(primary, others, out, exclude_pack=exclude_pack, start_index=start, **opts)
+                except Exception:
+                    rec = None
+                    raise
+                finally:
+                    if rec is None:
+                        (out / f"v{start}.ogg").unlink(missing_ok=True)
                 if rec is None:
                     return None
-                record["versions"] += rec["versions"]
-                record["history"] = record.get("history", []) + [rec["summary"]]
-                (out / "song.json").write_text(json.dumps(record, default=float))
+                with _lock(song_id):  # merge into the record as it is now (the studio may have added versions)
+                    record = json.loads((out / "song.json").read_text())
+                    record["versions"] += rec["versions"]
+                    record["history"] = record.get("history", []) + [rec["summary"]]
+                    write_json(out / "song.json", record)
                 self.lib.update_song(song_id, record, len(record["versions"]) - 1)
                 return song_id
             finally:
@@ -403,6 +416,10 @@ def create_app(start_worker: bool = True) -> FastAPI:
     def reset_calibration():
         paths["calibration"].unlink(missing_ok=True)
         return {"ok": True}
+
+    from .studio import add_routes
+
+    add_routes(app, lib, settings)
 
     @app.exception_handler(Exception)
     async def errors(request, exc):

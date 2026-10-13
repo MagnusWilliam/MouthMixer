@@ -1,6 +1,6 @@
 # MouthMixer: the plan (hums and beatbox into game music)
 
-> **Status 2026-10-12:** plan only. Nothing is built yet.
+> **Status 2026-10-13:** prototype built through parts of Phase 6; see §14 "Build status".
 > MouthMixer is a standalone desktop tool (Windows first) that can feed any game project. Its first
 > customer is **LINE ZERO** (repo `magnuswilliam/line-0`). Where this plan says `AUDIO_PLAN`,
 > `MusicDirector`, `MusicCues.luau`, `sound_ids.csv` or motifs H / S / L0 / T / B, it means
@@ -42,6 +42,14 @@ no black-box AI song generator in the main path.
   §14 "Build status".
 - **Songs don't have to come only from your voice.** The tool may write its own parts and add sounds
   when something is missing (§7.12). Your ideas stay the centre; additions support them.
+- **Incredibox-style mixer (decided 2026-10-12, later).** On songs you like you can turn parts on and off,
+  swap a part's sound, change its volume, and add or remove parts from ranked suggestions ("what sound are
+  you going for?", sorted by pairing/synergy and by vibe, each with a reason). This relaxes "steer, don't
+  edit" for *parts*, not notes: there is still no piano roll and no mixer console, and every saved mix
+  goes through the critic. Research: [`ARRANGING.md`](ARRANGING.md), [`PERSONA_STYLE.md`](PERSONA_STYLE.md).
+- **You mostly hum the lead melody**; drums, bass and accents come as default loops and generated parts.
+- **Vocals and lyrics in the app now** (ahead of Phase 6's order, at the user's request): a Lyrics screen
+  and a Sing screen (karaoke, pitch lane, takes), with the processing system in [`VOCALS.md`](VOCALS.md).
 
 ---
 
@@ -985,6 +993,41 @@ slider, packaging as a Windows app.
   peaks at or under -1 dBFS; talking and typing never rescued.
 - Not yet: the user's taste model, direction chips, loops for the game (§11.2), stems export,
   the originality check (Phase 3).
+
+**Build status (2026-10-13): mixer, more sounds, lyrics and vocals (parts of Phases 4-6, at the user's
+request).**
+- Research written up: [`PERSONA_STYLE.md`](PERSONA_STYLE.md) (genres per game, tempos, harmony, rhythm
+  section, brass, catchiness, vocals, fingerprints vs traits), [`ARRANGING.md`](ARRANGING.md) (layers,
+  register slots, 36 instrument pairings, mood palettes, vertical layering) and [`VOCALS.md`](VOCALS.md)
+  (recording, clean-up, timing, tuning, the 13-step chain, 7 presets, the Sing screen, lyric rules,
+  quality gates).
+- Sounds: 131 instruments (all checked in the soundfont) plus 10 drum kits and 4 generated textures;
+  three new packs (heist funk, bright pop-rock, moonlit hip-hop) with a 2-bar keyboard/brass riff (the
+  hook) from A' on and a 2.5 kHz carve on chords and pads so the melody stays clear.
+- **Mix tab** (`arrange/catalog.py`, `arrange/mixer.py`): 69 part types in 11 categories, generated to fit
+  the song's chords and form; suggestions ranked by vibe (12 vibes), pairings (about 56, with reasons),
+  missing layers and crowding; parts render to cached stems so switching is instant in the browser; save
+  bakes a mastered, critic-checked new version. Swapping a chord part's sound re-checks it against the
+  melody (H1).
+- **Lyrics tab** (`arrange/lyrics.py`): syllable map of the melody (lines split where a singer breathes),
+  Claude writes 3 options from a brief (structured output, adaptive thinking), or type your own; every
+  option is checked (syllable counts, stress, closed vowels on long high notes, hook repeats, clean
+  language) and aligned to notes for karaoke.
+- **Sing tab** (`app/static/studio.js`, `arrange/vocals.py`): section loop with count-in and clicks in
+  quiet bits, guide-melody and music volume, live pitch lane (green/yellow/red at 25/50 cents), karaoke
+  wipe, mic picker, sync test for latency, takes with per-line scores; "Tune, time & mix my vocals" comps
+  the best take per line, cleans (high-pass, noise reduction from the count-in, plosives), corrects timing
+  and pitch with the WORLD vocoder (natural or hard), lowers breaths, runs the preset chain (de-esser, two
+  compressors, presence/air, saturation, riding, doubles, harmonies, plate reverb, dotted-1/8 delay with
+  throws) and sits the vocal against the music (level per preset, 1-4 kHz pocket, your hummed lead
+  ducked). The vocal becomes a "Your vocals" part in the mixer.
+- Measured on synthetic singing: onsets found within ~5 ms; average pitch error 11 → 4 cents with 97% of
+  frames in tune (bright-pop preset); the singer's lateness kept as feel within 2 ms of the truth; mixes
+  with vocals at -14 LUFS and passing the critic.
+- Not yet: the range test and key transpose, the intelligibility check (speech recognition), real doubles
+  and harmonies from separate takes, the mixer's preview of the lead ducking (it's applied on save).
+- **Next:** the user listens: songs with the new packs, the mixer, and a first sung verse (run the sync test
+  first). Rerun setup: new dependencies.
 
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.

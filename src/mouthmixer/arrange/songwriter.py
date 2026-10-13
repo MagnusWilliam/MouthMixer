@@ -102,10 +102,10 @@ def song_summary(song: arranger.Song) -> dict:
         "pack": song.pack, "style": PACKS[song.pack]["title"], "describe": PACKS[song.pack]["describe"],
         "bpm": song.bpm, "key": song.key_name, "bars": song.bars,
         "sections": [{"name": n, "start": s, "bars": b} for n, s, b in song.sections],
-        "chords": [{"start": round(s, 3), "length": round(l, 3), "name": c.name, "degree": c.degree}
-                   for s, l, c in song.chords],
+        "chords": [{"start": round(s, 3), "length": round(l, 3), "name": c.name, "degree": c.degree,
+                    "root": c.root, "quality": c.quality} for s, l, c in song.chords],
         "tracks": [{"name": t.name, "role": t.role, "instrument": t.instrument.replace("kit:", "").replace("_", " ")
-                    + (" drum kit" if t.instrument.startswith("kit:") else ""), "mine": t.mine,
+                    + (" drum kit" if t.instrument.startswith("kit:") else ""), "key": t.instrument, "mine": t.mine,
                     "notes": [[round(s, 3), round(l, 3), int(p), int(v)] for s, l, p, v in t.notes]}
                    for t in song.tracks],
         "added": song.notes_for_user,

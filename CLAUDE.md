@@ -10,8 +10,9 @@ Constraints that hold for every session:
 - **Mic:** HyperX QuadCast 2 with a pop shield; the user usually wears headphones.
 - **The cloud build sessions have no mic and no speakers.** Test with synthetic audio and the user's
   shared recordings; check numbers, and ask the user to listen at the end of each phase.
-- **The user steers, never edits.** Every feature must work from suggestions (chips, briefs, A/B picks,
-  "this bit" markers), not piano rolls or mixer controls.
+- **The user steers, never edits notes.** Every feature must work from suggestions (chips, briefs, A/B
+  picks, "this bit" markers, ranked part suggestions), not piano rolls. The one exception the user asked for
+  is the Incredibox-style Mix tab: parts on/off, sound swaps, per-part volume, add/remove parts.
 - **Free instruments and CC0/permissive samples only**, each with a licence note.
 - **LINE ZERO stays untouched** until the user approves the tool and its music.
 - Change a critic rule's value only with a line in `docs/MUSIC_KNOWLEDGE.md` §13 (tuning log).
@@ -22,4 +23,7 @@ Working in this repo:
 - Tests: `python -m pytest` (all on generated audio from `src/mouthmixer/synth.py`; add a synthetic case
   for every behaviour you change). Hardware code (`sounddevice`, `pystray`, `pynput`, `winreg`) is
   imported lazily so the tests run without it.
+- Vocals and lyrics: `docs/VOCALS.md`; style research: `docs/PERSONA_STYLE.md`, `docs/ARRANGING.md`. Test singing
+  with `synth.sing` (it knows the true onsets and pitch errors). The Claude lyric call is tested with a
+  stand-in client; never spend the user's credits in tests.
 - Try the app headless: `python -m mouthmixer demo` then `python -m mouthmixer app` (port 8765).

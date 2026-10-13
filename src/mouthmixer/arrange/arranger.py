@@ -427,6 +427,29 @@ def counter_part(chords: list, bars_range: tuple, lo: int, hi: int) -> list:
     return out
 
 
+def riff_part(chords: list, bars_range: tuple, instrument: str, rng) -> list:
+    """A catchy 2-bar riff, the hook of funk / acid-jazz / J-pop tracks (docs/PERSONA_STYLE.md §6): a
+    syncopated rhythm cell on chord tones, repeated every two bars so the ear locks on, following the chords."""
+    cells = [[(0, 0.5), (0.75, 0.25), (1.5, 0.5), (2.5, 0.5), (3.25, 0.25)],
+             [(0, 0.25), (0.5, 0.25), (1, 0.5), (2, 0.25), (2.75, 0.75)],
+             [(0.5, 0.5), (1.5, 0.25), (2, 0.5), (3, 0.25), (3.5, 0.5)]]
+    rhythm = [cells[rng.integers(len(cells))], cells[rng.integers(len(cells))]]
+    shape = rng.permutation(4)[:3].tolist() + [0]
+    i_lo, i_hi = INSTRUMENTS[instrument][2:4]
+    lo = max(i_lo, 60)
+    out = []
+    a, b = bars_range
+    for bar in range(a, b):
+        for k, (t, d) in enumerate(rhythm[bar % 2]):
+            beat = bar * 4 + t
+            c = next((c for s, l, c in chords if s <= beat + 1e-6 < s + l), None)
+            if c is None:
+                continue
+            tones = sorted(theory.voice(c, None, lo, min(i_hi, lo + 16), n=4))
+            out.append((beat, d * 0.9, tones[shape[k % len(shape)] % len(tones)], 96 if t % 1 == 0 else 84))
+    return out
+
+
 def drum_grid_from_beat(drums: list[dict]) -> dict | None:
     """Turn a transcribed beatbox take into a one-bar 16-step pattern (the bar with the most hits)."""
     if not drums:
@@ -632,6 +655,15 @@ def arrange(*, pack_name: str, seed: int, melody: list[dict] | None, clip_bpm: f
               Track("Arpeggio", "arp", pick["arp"], arp, pan=0.35),
               Track("Counter-line", "counter", pick["counter"], counter, pan=-0.35),
               Track("Drums", "drums", kit, drums, mine=bool(user_grid), pan=0.0)]
+    if "riff" in roles:
+        # The hook: from A' on, so the first A belongs to your melody (docs/ARRANGING.md R1.6).
+        r_inst = [o for o in roles["riff"] if o not in used] or roles["riff"]
+        r_pick = r_inst[rng.integers(len(r_inst))]
+        riff_notes = riff_part(chords, (intro + LA, intro + 2 * LA), r_pick, rng) + \
+            riff_part(chords, (intro + 3 * LA, intro + 4 * LA), r_pick, rng)
+        riff_notes = [n for n in riff_notes if not any(abs(n[2] - m[2]) == 1 and m[0] <= n[0] < m[0] + m[1]
+                                                       for m in lead.notes)]
+        tracks.append(Track("Riff", "riff", r_pick, riff_notes, pan=0.25))
     if pack.get("timpani"):
         tim = []
         for name, start, bars in sections[1:]:

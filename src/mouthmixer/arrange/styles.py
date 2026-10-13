@@ -40,12 +40,52 @@ INSTRUMENTS = {
     "kalimba": (0, 108, 60, 96, "mallet", 0.8), "steel_drums": (0, 114, 52, 88, "mallet", 0.7),
 }
 
+# More unique sounds (GeneralUser GS variation banks and the rest of General MIDI).
+INSTRUMENTS.update({
+    "electric_grand": (0, 2, 28, 103, "keys", 0.9), "honky_tonk": (0, 3, 28, 103, "keys", 0.8),
+    "harpsichord": (0, 6, 29, 89, "keys", 0.8), "clavinet": (0, 7, 36, 96, "keys", 0.7),
+    "tubular_bells": (0, 14, 60, 77, "mallet", 0.7), "dulcimer": (0, 15, 48, 84, "mallet", 0.8),
+    "church_organ": (0, 19, 36, 96, "keys", 0.5), "harmonica": (0, 22, 60, 84, "reed", 0.7),
+    "tremolo_strings": (0, 44, 36, 96, "strings", 0.7), "orchestra_hit": (0, 55, 48, 72, "brass", 0.6),
+    "tuba": (0, 58, 28, 58, "brass", 0.8), "oboe": (0, 68, 58, 91, "wind", 0.8), "bassoon": (0, 70, 34, 72, "wind", 0.8),
+    "piccolo": (0, 72, 74, 108, "wind", 0.6), "recorder": (0, 74, 60, 96, "wind", 0.8), "whistle": (0, 78, 60, 96, "wind", 0.6),
+    "calliope": (0, 82, 48, 96, "synth", 0.5), "voice_lead": (0, 85, 48, 84, "synth", 0.5), "fifths_lead": (0, 86, 48, 84, "synth", 0.4),
+    "ice_rain": (0, 96, 48, 96, "fxpad", 0.5), "soundtrack_pad": (0, 97, 36, 96, "fxpad", 0.5),
+    "crystal": (0, 98, 60, 96, "fxpad", 0.6), "atmosphere": (0, 99, 36, 96, "fxpad", 0.5),
+    "echo_drops": (0, 102, 48, 96, "fxpad", 0.5), "star_theme": (0, 103, 36, 96, "fxpad", 0.5),
+    "sitar": (0, 104, 48, 84, "world", 0.7), "banjo": (0, 105, 48, 84, "guitar", 0.8), "shamisen": (0, 106, 50, 84, "world", 0.8),
+    "koto": (0, 107, 48, 96, "world", 0.8), "fiddle": (0, 110, 55, 96, "strings", 0.7), "tinker_bell": (0, 112, 72, 108, "mallet", 0.5),
+    "taiko": (0, 116, 36, 60, "perc", 1.0), "reverse_cymbal": (0, 119, 48, 72, "sfx", 0.6),
+    "chorus_rhodes": (8, 4, 28, 103, "keys", 1.0), "chorus_fm_piano": (8, 5, 28, 103, "keys", 0.9),
+    "church_bells": (8, 14, 48, 84, "mallet", 0.6), "carillon": (9, 14, 48, 84, "mallet", 0.6),
+    "ukulele": (8, 24, 60, 84, "guitar", 0.9), "twelve_string": (8, 25, 40, 84, "guitar", 0.9),
+    "hawaiian_guitar": (8, 26, 40, 84, "guitar", 0.8), "chorus_guitar": (8, 27, 40, 86, "guitar", 0.9),
+    "funk_guitar": (8, 28, 40, 79, "guitar", 0.9), "mandolin": (16, 25, 55, 88, "guitar", 0.8),
+    "acid_bass": (8, 38, 24, 55, "bass", 0.6), "fm_bass": (8, 39, 24, 55, "bass", 0.7),
+    "techno_bass": (11, 38, 24, 55, "bass", 0.6), "pulse_bass": (11, 39, 24, 55, "bass", 0.6),
+    "orchestra_pad": (8, 48, 36, 96, "strings", 0.6), "full_orchestra": (12, 48, 36, 96, "strings", 0.6),
+    "woodwind_choir": (13, 48, 48, 91, "wind", 0.6), "brass_section_2": (8, 61, 40, 84, "brass", 0.6),
+    "synth_brass_3": (8, 62, 36, 84, "brass", 0.5), "sine_lead": (8, 80, 48, 96, "synth", 0.6),
+    "doctor_solo": (8, 81, 48, 96, "synth", 0.4), "saw_stab": (11, 81, 36, 84, "synth", 0.4),
+    "bright_saw_stack": (11, 100, 36, 84, "synth", 0.35), "synth_chime": (11, 98, 60, 96, "mallet", 0.6),
+    "synth_mallet": (1, 98, 48, 96, "mallet", 0.7), "mystery_pad": (11, 96, 36, 96, "fxpad", 0.5),
+    "solar_wind": (11, 89, 36, 96, "pad", 0.5), "night_vision": (13, 88, 36, 96, "pad", 0.5),
+    "bell_piano": (12, 0, 28, 103, "keys", 0.8), "bell_rhodes": (12, 4, 28, 103, "keys", 0.9),
+    "whistling": (11, 78, 60, 91, "wind", 0.6), "tin_whistle": (24, 75, 62, 96, "wind", 0.6),
+    "taisho_koto": (8, 107, 48, 96, "world", 0.7), "windchime": (5, 124, 60, 84, "sfx", 0.5),
+    "birds": (0, 123, 60, 84, "sfx", 0.4), "stream": (4, 122, 48, 72, "sfx", 0.5), "rain_sfx": (1, 122, 48, 72, "sfx", 0.5),
+    "thunder": (2, 122, 36, 60, "sfx", 0.5), "seashore": (0, 122, 48, 72, "sfx", 0.5), "train": (6, 125, 48, 72, "sfx", 0.5),
+})
+
 # Drum kits are bank 128 presets in GeneralUser GS.
-KITS = {"standard": 0, "room": 8, "power": 16, "electronic": 24, "tr808": 25, "jazz": 32, "brush": 40,
-        "orchestra": 48}
+KITS = {"standard": 0, "room": 8, "power": 16, "electronic": 24, "tr808": 25, "dance": 26, "jazz": 32, "brush": 40,
+        "orchestra": 48, "sfx": 56}
 DRUM = {"kick": 36, "snare": 38, "rim": 37, "clap": 39, "hat": 42, "pedal_hat": 44, "open_hat": 46,
         "crash": 49, "ride": 51, "tom_lo": 45, "tom_mid": 47, "tom_hi": 50, "tambourine": 54, "shaker": 70,
-        "concert_bd": 35}
+        "concert_bd": 35, "ride_bell": 53, "splash": 55, "cowbell": 56, "hi_bongo": 60, "lo_bongo": 61,
+        "mute_conga": 62, "hi_conga": 63, "lo_conga": 64, "hi_timbale": 65, "lo_timbale": 66, "hi_agogo": 67,
+        "lo_agogo": 68, "cabasa": 69, "maracas": 70, "claves": 75, "hi_wood": 76, "lo_wood": 77, "mute_triangle": 80,
+        "triangle": 81}
 
 # Drum grids: 16 steps per bar. X accent, x normal, g ghost, . rest.
 VEL = {"X": 112, "x": 88, "g": 38, "o": 80}
@@ -186,4 +226,81 @@ PACKS = {
     },
 }
 
-DEFAULT_PACKS = ["city_pop_day", "neon_night", "acid_jazz_battle"]  # decided first three (PLAN decisions)
+# Persona-informed packs (docs/PERSONA_STYLE.md): genre traits, never fingerprints.
+PACKS["heist_funk"] = {
+    "title": "Heist funk",
+    "describe": "acid-jazz / funk, Persona 5-style energy: minor key, organ and slap bass, Rhodes riff, brass hooks",
+    "bpm": (120, 134), "swing": 0.5, "ext": ["seventh", "ninth"], "tension": 0.75,
+    "borrowed": ["bVI", "bVII", "subV", "V7"], "harmonic_rhythm": [1, 2],
+    "favourites": [["i", "bVI", "bVII", "i"], ["i", "iv", "bVII", "bIII"], ["bVI", "bVII", "i", "i"]],
+    "kit": ["power", "room", "standard"],
+    "drums": [{"kick": "x..x..x...x..x..", "snare": "....X.......X...", "ghost": "..g..g.g..g..g.g",
+               "hat": "x.x.x.x.x.x.x.x.", "open_hat": "......o.......o."},
+              {"kick": "x.x.......x..x..", "snare": "....X..g....X...", "hat": "xxxxxxxxxxxxxxxx"}],
+    "bass": [[(0, 1, "R"), (2, 1, "8"), (3, 1, "R"), (6, 1, "8"), (8, 1, "R"), (10, 1, "8"), (11, 1, "5"), (14, 2, "A")],
+             [(0, 3, "R"), (3, 1, "8"), (6, 2, "R"), (8, 2, "5"), (10, 1, "8"), (12, 2, "R"), (14, 2, "A")]],
+    "comp_rhythm": [[(0, 1), (3, 1), (6, 1), (10, 2), (13, 1)], [(2, 1), (6, 1), (10, 1), (14, 1)]],
+    "roles": {
+        "lead": ["trumpet", "muted_trumpet", "chorus_guitar", "flute", "vibraphone"],
+        "comp": ["drawbar_organ", "clavinet", "funk_guitar", "rhodes"],
+        "pad": ["brass_section", "strings", "orchestra_pad"],
+        "bass": ["slap_bass", "finger_bass", "pick_bass"],
+        "arp": ["funk_guitar", "clean_guitar", "vibraphone"],
+        "counter": ["brass_section", "trombone", "flute"],
+        "riff": ["rhodes", "chorus_rhodes", "brass_section", "clavinet"],
+    },
+    "rootless": True, "spread": False, "reverb": 0.3, "delay": 0.1, "chorus": False, "drive": True,
+    "vocal_preset": "soul",
+}
+PACKS["bright_pop_rock"] = {
+    "title": "Bright pop-rock",
+    "describe": "upbeat J-pop / funk-rock, Persona 4-style: major key, funky piano, surf-ish guitar, brass stabs",
+    "bpm": (124, 150), "swing": 0.5, "ext": ["triad", "seventh"], "tension": 0.5,
+    "borrowed": ["V/V", "V/vi", "bVII", "iv"], "harmonic_rhythm": [1, 2],
+    "favourites": [["IV", "V", "iii", "vi"], ["I", "V", "vi", "IV"], ["vi", "IV", "V", "I"]],
+    "kit": ["standard", "power", "room"],
+    "drums": [{"kick": "x...x...x...x...", "snare": "....X.......X...", "hat": "x.x.x.x.x.x.x.x.", "open_hat": "..o...o...o...o."},
+              {"kick": "x.x...x.x.x.....", "snare": "....X.......X..g", "hat": "xxxxxxxxxxxxxxxx"}],
+    "bass": [[(i * 2, 1, "R" if i % 2 == 0 else "8") for i in range(8)],
+             [(0, 2, "R"), (3, 1, "R"), (6, 2, "5"), (8, 2, "R"), (11, 1, "8"), (14, 2, "A")]],
+    "comp_rhythm": [[(0, 2), (3, 1), (6, 2), (10, 2), (13, 1)], [(0, 6), (6, 4), (10, 6)]],
+    "roles": {
+        "lead": ["bright_piano", "chorus_guitar", "trumpet", "flute", "violin"],
+        "comp": ["piano", "bright_piano", "electric_grand", "steel_guitar"],
+        "pad": ["strings", "synth_strings", "polysynth"],
+        "bass": ["pick_bass", "finger_bass", "slap_bass"],
+        "arp": ["clean_guitar", "glockenspiel", "synth_mallet"],
+        "counter": ["brass_section", "strings", "flute"],
+        "riff": ["brass_section", "overdrive_guitar", "bright_piano"],
+    },
+    "rootless": False, "spread": True, "reverb": 0.35, "delay": 0.12, "chorus": True,
+    "vocal_preset": "bright_pop",
+}
+PACKS["moonlit_hiphop"] = {
+    "title": "Moonlit hip-hop",
+    "describe": "hip-hop with piano and strings, Persona 3-style night mood: minor key, boom-bap, synth touches",
+    "bpm": (84, 98), "swing": 0.57, "ext": ["seventh", "ninth"], "tension": 0.7,
+    "borrowed": ["bVI", "bVII", "iv"], "harmonic_rhythm": [1],
+    "favourites": [["i", "bVI", "bIII", "bVII"], ["i", "iv", "bVI", "V"], ["i", "bVII", "bVI", "bVII"]],
+    "kit": ["standard", "tr808", "room"],
+    "drums": [{"kick": "x......x..x.....", "snare": "....x.......x...", "hat": "x.x.x.x.x.x.x.x.", "ghost": "..g........g...."},
+              {"kick": "x.........x..x..", "clap": "....x.......x...", "hat": "x.xxx.x.xxxxx.xx"}],
+    "bass": [[(0, 6, "R"), (7, 1, "R"), (10, 4, "5"), (14, 2, "A")], [(0, 12, "R"), (12, 4, "5")]],
+    "comp_rhythm": [[(0, 8), (8, 8)], [(0, 14)]],
+    "roles": {
+        "lead": ["piano", "bell_piano", "violin", "synth_mallet", "whistling"],
+        "comp": ["piano", "electric_grand", "bell_rhodes"],
+        "pad": ["strings", "slow_strings", "night_vision", "choir_pad"],
+        "bass": ["synth_bass", "fm_bass", "finger_bass"],
+        "arp": ["synth_chime", "music_box", "celesta"],
+        "counter": ["cello", "violin", "strings"],
+        "riff": ["bell_piano", "synth_chime", "piano"],
+    },
+    "rootless": False, "spread": True, "reverb": 0.5, "delay": 0.2, "chorus": False, "vinyl": True,
+    "vocal_preset": "lofi",
+}
+for _k, _preset in {"city_pop_day": "soul", "neon_night": "soul", "acid_jazz_battle": "rock",
+                    "orchestral_adventure": "cinematic", "arcade": "arcade", "dream_ambient": "dreamy"}.items():
+    PACKS[_k]["vocal_preset"] = _preset
+
+DEFAULT_PACKS = ["city_pop_day", "neon_night", "acid_jazz_battle", "heist_funk"]  # the decided three + the Persona-informed one

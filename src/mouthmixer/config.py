@@ -29,6 +29,9 @@ class Settings:
     # Auto-pause while any of these apps is using the microphone (Windows only).
     pause_for_apps: list = field(default_factory=lambda: ["discord", "zoom", "teams", "slack", "skype", "webex"])
     keep_tossed_days: int = 7
+    # Vocals and lyrics (docs/VOCALS.md). The key stays on this computer; ANTHROPIC_API_KEY also works.
+    claude_api_key: str = ""
+    vocal_latency_ms: float = 0.0  # measured by the sync test on the Sing screen
 
     @classmethod
     def load(cls) -> "Settings":

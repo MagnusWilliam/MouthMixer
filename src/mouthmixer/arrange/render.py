@@ -109,7 +109,7 @@ def _vinyl(n: int, rng) -> np.ndarray:
 
 
 def _fx(track: Track, pack: dict, bpm: float):
-    from pedalboard import Chorus, Compressor, Distortion, Gain, HighpassFilter, LowpassFilter, Pedalboard
+    from pedalboard import Chorus, Compressor, Distortion, Gain, HighpassFilter, LowpassFilter, Pedalboard, PeakFilter
 
     role = track.role
     fx = []
@@ -123,6 +123,9 @@ def _fx(track: Track, pack: dict, bpm: float):
     else:
         hp = {"lead": 160, "comp": 140, "pad": 220, "arp": 300, "counter": 180}.get(role, 150)
         fx += [HighpassFilter(hp), Compressor(threshold_db=-18, ratio=2.5, attack_ms=12, release_ms=150)]
+        # Carve room for the melody (docs/ARRANGING.md R2.3): harmony layers dip where the ear listens.
+        if role in ("comp", "pad", "arp", "riff", "counter"):
+            fx += [PeakFilter(cutoff_frequency_hz=2500, gain_db=-3.0, q=0.7)]
         if pack.get("chorus") and role in ("comp", "pad"):
             fx += [Chorus(rate_hz=0.6, depth=0.2, mix=0.35)]
         if pack.get("drive") and role == "lead" and "guitar" in track.instrument:
@@ -130,68 +133,109 @@ def _fx(track: Track, pack: dict, bpm: float):
     return Pedalboard(fx)
 
 
-def mix(song: Song, rng=None) -> tuple[np.ndarray, dict]:
-    """Render, process and master the song. Returns (stereo mix (2, n), stems by role)."""
-    from pedalboard import Compressor, Delay, HighpassFilter, Pedalboard, Reverb
+LEVEL = {"lead": -6.0, "vocal": -5.0, "comp": -13.0, "pad": -17.0, "bass": -9.0, "arp": -17.0, "counter": -15.0,
+         "riff": -13.5, "drums": -8.0, "perc": -16.0, "timpani": -12.0, "fx": -22.0}
+SENDS = {"lead": 0.22, "comp": 0.2, "pad": 0.45, "arp": 0.35, "counter": 0.3, "riff": 0.18, "drums": 0.06,
+         "perc": 0.15, "timpani": 0.25, "bass": 0.0, "fx": 0.3}
+
+
+def song_length(song: Song) -> tuple[float, int]:
+    total_sec = song.bars * 4 * 60.0 / song.bpm + 3.0
+    return total_sec, int(total_sec * SR)
+
+
+def kick_times(song: Song) -> list[float]:
+    spb = 60.0 / song.bpm
+    return [s * spb for t in song.tracks if t.role == "drums" for s, _, p, _ in t.notes
+            if p in (DRUM["kick"], DRUM["concert_bd"])]
+
+
+def render_stem(t: Track, song: Song, rng=None, duck: np.ndarray | None = None, gain_db: float = 0.0) -> np.ndarray:
+    """One part as a finished stem (2, n): instrument, effects, level, sidechain, pan, and its own share of
+    the style's reverb and delay. Stems add up to the pre-master mix, so the mixer can switch parts on
+    and off live and the saved mix sounds the same."""
+    from pedalboard import Delay, HighpassFilter, Pedalboard, Reverb
 
     rng = rng or np.random.default_rng(song.seed)
     pack = PACKS[song.pack]
-    spb = 60.0 / song.bpm
-    total_sec = song.bars * 4 * spb + 3.0
-    n = int(total_sec * SR)
-    # Balance (dB) by role: lead first, then the rhythm section, textures underneath.
-    level = {"lead": -6.0, "comp": -13.0, "pad": -17.0, "bass": -9.0, "arp": -17.0, "counter": -15.0,
-             "drums": -8.0, "timpani": -12.0}
-    sends = {"lead": 0.22, "comp": 0.2, "pad": 0.45, "arp": 0.35, "counter": 0.3, "drums": 0.06, "timpani": 0.25,
-             "bass": 0.0}
-    kicks = [s * spb for t in song.tracks if t.role == "drums" for s, _, p, _ in t.notes
-             if p in (DRUM["kick"], DRUM["concert_bd"])]
-    duck = _sidechain(n, kicks)
-    dry = np.zeros((2, n), dtype=np.float32)
-    rev_send = np.zeros((2, n), dtype=np.float32)
-    dly_send = np.zeros((2, n), dtype=np.float32)
-    stems: dict[str, np.ndarray] = {}
-    for t in song.tracks:
+    total_sec, n = song_length(song)
+    if t.instrument.startswith("fx:"):
+        x = texture(t.instrument[3:], n, rng)
+    else:
         x = render_track(t, song.bpm, total_sec, rng)
         x = _fx(t, pack, song.bpm)(x, SR)[:, :n]
-        if x.shape[1] < n:
-            x = np.pad(x, ((0, 0), (0, n - x.shape[1])))
-        # Normalise each part to its target level (RMS over the part's active span), then pan.
-        active = np.abs(x).max(axis=0) > 1e-4
-        rms = float(np.sqrt(np.mean(x[:, active] ** 2))) if active.any() else 0.0
-        if rms > 0:
-            x *= 10 ** (level.get(t.role, -14) / 20) / rms * 0.25
-        if t.role in ("bass", "pad"):
-            x *= duck
-        x = _pan(x, t.pan)
-        dry += x
-        rev_send += x * sends.get(t.role, 0.2)
-        if t.role == "lead" and pack.get("delay"):
-            dly_send += x * pack["delay"]
-        stems[t.role] = stems.get(t.role, 0) + x
-    reverb = Pedalboard([HighpassFilter(250), Reverb(room_size=pack["reverb"], damping=0.5, wet_level=1.0,
-                                                     dry_level=0.0, width=1.0)])
-    wet = reverb(rev_send, SR)
-    if pack.get("delay"):
-        dotted_eighth = 0.75 * spb
-        wet += Pedalboard([HighpassFilter(300), Delay(delay_seconds=dotted_eighth, feedback=0.3, mix=1.0)])(dly_send, SR)
-    out = dry + 0.55 * wet
-    if pack.get("vinyl"):
-        out += _vinyl(n, rng)
-    # Lows mono (MUSIC_KNOWLEDGE X9): below ~120 Hz both sides get the same signal.
+    if x.shape[1] < n:
+        x = np.pad(x, ((0, 0), (0, n - x.shape[1])))
+    active = np.abs(x).max(axis=0) > 1e-4
+    rms = float(np.sqrt(np.mean(x[:, active] ** 2))) if active.any() else 0.0
+    if rms > 0:
+        x *= 10 ** ((LEVEL.get(t.role, -14) + gain_db) / 20) / rms * 0.25
+    if duck is not None and t.role in ("bass", "pad"):
+        x *= duck
+    x = _pan(x, t.pan)
+    send = SENDS.get(t.role, 0.2)
+    if send > 0:
+        rev = Pedalboard([HighpassFilter(250), Reverb(room_size=pack["reverb"], damping=0.5, wet_level=1.0,
+                                                      dry_level=0.0, width=1.0)])
+        x = x + 0.55 * rev(x * send, SR)
+    if t.role == "lead" and pack.get("delay"):
+        dly = Pedalboard([HighpassFilter(300), Delay(delay_seconds=0.75 * 60.0 / song.bpm, feedback=0.3, mix=1.0)])
+        x = x + 0.55 * dly(x * pack["delay"], SR)
+    return x.astype(np.float32)
+
+
+def master(x: np.ndarray, target_lufs: float = -14.0) -> np.ndarray:
+    """Mono lows, glue compression, loudness to target, peak limit, fade-out tail."""
+    from pedalboard import Compressor, Pedalboard
     from scipy.signal import butter, sosfilt
 
     sos = butter(2, 120, btype="low", fs=SR, output="sos")
-    low = sosfilt(sos, out, axis=1)
-    out = out - low + low.mean(axis=0, keepdims=True)
-    master = Pedalboard([Compressor(threshold_db=-14, ratio=2, attack_ms=15, release_ms=200)])
-    out = master(out.astype(np.float32), SR)
-    out = loudness_normalise(out, -14.0)
+    low = sosfilt(sos, x, axis=1)
+    out = x - low + low.mean(axis=0, keepdims=True)  # MUSIC_KNOWLEDGE X9
+    out = Pedalboard([Compressor(threshold_db=-14, ratio=2, attack_ms=15, release_ms=200)])(out.astype(np.float32), SR)
+    out = loudness_normalise(out, target_lufs)
     out = limit(out, ceiling_db=-1.0)
-    # Fade the tail out so the ending never clicks.
     fade = int(1.5 * SR)
     out[:, -fade:] *= np.linspace(1, 0, fade)
-    return out.astype(np.float32), stems
+    return out.astype(np.float32)
+
+
+def mix(song: Song, rng=None) -> tuple[np.ndarray, dict]:
+    """Render, process and master the song. Returns (stereo mix (2, n), stems by role)."""
+    rng = rng or np.random.default_rng(song.seed)
+    pack = PACKS[song.pack]
+    _, n = song_length(song)
+    duck = _sidechain(n, kick_times(song))
+    out = np.zeros((2, n), dtype=np.float32)
+    stems: dict[str, np.ndarray] = {}
+    for t in song.tracks:
+        x = render_stem(t, song, rng, duck)
+        out += x
+        stems[t.role] = stems.get(t.role, 0) + x
+    if pack.get("vinyl"):
+        out += _vinyl(n, rng)
+    return master(out), stems
+
+
+def texture(name: str, n: int, rng) -> np.ndarray:
+    """Generated ambience textures (no samples needed): vinyl crackle, rain, wind, tape hiss, riser."""
+    from scipy.signal import butter, sosfilt
+
+    t = np.arange(n) / SR
+    if name == "vinyl":
+        return _vinyl(n, rng) * 4
+    if name == "rain":
+        x = rng.normal(0, 1, (2, n))
+        x = sosfilt(butter(2, [800, 9000], btype="band", fs=SR, output="sos"), x, axis=1)
+        drops = (rng.random((2, n)) < 40 / SR) * rng.uniform(0.2, 1.0, (2, n))
+        return (0.05 * x + sosfilt(butter(2, 3000, btype="high", fs=SR, output="sos"), drops, axis=1)).astype(np.float32)
+    if name == "wind":
+        x = rng.normal(0, 1, (2, n))
+        lfo = 0.6 + 0.4 * np.sin(2 * np.pi * 0.07 * t + rng.uniform(0, 6))
+        return (sosfilt(butter(2, [200, 1200], btype="band", fs=SR, output="sos"), x, axis=1) * lfo * 0.3).astype(np.float32)
+    if name == "tape":
+        return (sosfilt(butter(1, 4000, btype="high", fs=SR, output="sos"), rng.normal(0, 0.01, (2, n)), axis=1)).astype(np.float32)
+    return np.zeros((2, n), dtype=np.float32)
 
 
 def limit(x: np.ndarray, ceiling_db: float = -1.0, lookahead_ms: float = 5.0, release_ms: float = 80.0) -> np.ndarray:

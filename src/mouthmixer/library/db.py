@@ -47,12 +47,45 @@ CREATE TABLE IF NOT EXISTS feedback (
 """
 
 
+class _Rows(list):
+    def fetchone(self):
+        return self[0] if self else None
+
+    def fetchall(self):
+        return list(self)
+
+
+class _SafeConnection:
+    """One SQLite connection shared by the app's threads (the web server answers requests in parallel,
+    e.g. the mixer loading every stem at once). Each statement runs and is read out under one lock."""
+
+    def __init__(self, conn: sqlite3.Connection, lock: threading.RLock):
+        self._conn, self._lock = conn, lock
+
+    def execute(self, sql, params=()):
+        with self._lock:
+            return _Rows(self._conn.execute(sql, params).fetchall())
+
+    def executescript(self, sql):
+        with self._lock:
+            self._conn.executescript(sql)
+
+    def commit(self):
+        with self._lock:
+            self._conn.commit()
+
+    def close(self):
+        with self._lock:
+            self._conn.close()
+
+
 class Library:
     def __init__(self, db_path: Path, clips_dir: Path):
         self.clips_dir = clips_dir
-        self._lock = threading.Lock()
-        self.conn = sqlite3.connect(str(db_path), check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
+        self._lock = threading.RLock()
+        raw = sqlite3.connect(str(db_path), check_same_thread=False)
+        raw.row_factory = sqlite3.Row
+        self.conn = _SafeConnection(raw, self._lock)
         self.conn.executescript(SCHEMA)
         # Columns added after the first release (old databases get them here).
         cols = {r[1] for r in self.conn.execute("PRAGMA table_info(clips)")}

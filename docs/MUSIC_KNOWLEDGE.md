@@ -330,3 +330,10 @@ to 50-85%: the user loved three options that were rejected for leaps").
 | 2026-10-12 | L1-L8, V1-V7 | added | lyrics and vocals feature |
 | 2026-10-12 | Q1-Q6 | added, thresholds from synthetic hums/talking/beatbox | the user asked for unsure clips to be checked against musical rules |
 | 2026-10-12 | H1 | the half-step check now flags only a minor 2nd, or a minor 9th with the melody on top | a melody a semitone *below* a chord note an octave down is a major 7th (consonant); the old check rejected good songs |
+| 2026-10-12 | X4, A2 | comp, pad, arp, riff and counter parts get a 3 dB cut at 2.5 kHz (Q 0.7) | a Rhodes riff under a Rhodes lead buried the melody; the carve leaves the ear's 1-4 kHz band to the melody (ARRANGING R2) |
+| 2026-10-12 | mix levels | riff role at -13.5 dB (between comp -13 and counter -15) | the hook must be heard but sit under the melody |
+| 2026-10-12 | X11 | acid bass removed from the heist-funk automatic picks (still in the mixer) | it failed the phone-speaker check (almost no energy above 150 Hz) |
+| 2026-10-12 | L2 | a "strong" note is on beat 1 or 3, or at least 1.5× the line's typical length (and ≥ 1 beat) | every quarter note counted as strong before, so the stress check could never fail |
+| 2026-10-13 | L1 | lines (lyrics and comping) split after a ¾-beat rest or a 2-beat note; lines over 12 notes split at the longest note + rest; lines under 3 notes join a neighbour | the old splitter made one-note lines that can't carry words |
+| 2026-10-13 | H1 | also applied when the user swaps a part's sound: notes moved by octaves into the new range are re-checked against the melody | swapping a comp to a higher instrument turned major 7ths into minor 9ths (12 clashes in one test) |
+| 2026-10-13 | vocal gate "sibilance" | measured as the loudest 5-10 kHz moment against the line's median level (all frequencies): ≤ 0 dB good, ≤ +4 OK | against the hiss band's own median (silent during vowels) every take read +40 dB |
