@@ -19,11 +19,24 @@ const Make = {
     if (this.proj) { this.showProject(); return; }
     this.showHome();
   },
-  leave() { this.stop(); },
+  leave() { this.resetTrackState(); },
 
   // ---- home: starters and track list ----------------------------------------------------------
-  async showHome() {
+  // Leaving a track: stop any recording (without saving it) and forget its piece, slot and selection, so
+  // nothing from one track reaches another (piece ids repeat across tracks).
+  resetTrackState() {
+    if (this.recording) {
+      clearInterval(this.passTimer);
+      Sing.recording = null;
+      this.recording = false;
+      $("#mk-rec-go").disabled = false; $("#mk-rec-stop").disabled = true;
+    }
     this.stop();
+    this.recPiece = null; this.slot = null; this.sel = null; this.selNote = null;
+    $("#mk-rec").classList.add("hidden");
+  },
+  async showHome() {
+    this.resetTrackState();
     this.proj = null;
     $("#mk-home").classList.remove("hidden"); $("#mk-project").classList.add("hidden");
     if (!this.starters) {
@@ -253,8 +266,10 @@ const Make = {
     box.querySelectorAll("[data-op]").forEach((b) => b.onclick = async () => {
       if (this.selNote == null) return;
       const op = b.dataset.op;
-      await edit({ note_op: op, index: this.selNote });
-      if (op === "delete") this.selNote = null;
+      const r = await post(this.url(`/pieces/${q.id}`), { note_op: op, index: this.selNote });
+      // the notes are re-sorted by time after a move: keep the same note selected
+      this.selNote = op === "delete" ? null : r.note_index ?? this.selNote;
+      await this.refresh(r);
     });
     box.querySelectorAll("[data-v]").forEach((b) => b.onclick = () => edit({ variation: b.dataset.v }));
     box.querySelectorAll("[data-o]").forEach((b) => b.onclick = () => edit({ octave: q.octave + +b.dataset.o }));

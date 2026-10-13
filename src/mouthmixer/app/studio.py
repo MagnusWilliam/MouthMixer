@@ -37,10 +37,15 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
     def record(song_id: str) -> dict:
         return json.loads((song_dir(song_id) / "song.json").read_text())
 
-    def version_of(song_id: str, v: int | None) -> int:
+    def version_of(song_id: str, v) -> int:
+        rec = record(song_id)  # 404 for an unknown song
         if v is None:
             return int(lib.get_song(song_id)["version"])
-        if not 0 <= v < len(record(song_id)["versions"]):
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "no such version")
+        if not 0 <= v < len(rec["versions"]):
             raise HTTPException(400, "no such version")
         return v
 
@@ -74,7 +79,10 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         if "claude_api_key" in body:
             s.claude_api_key = str(body["claude_api_key"] or "").strip()
         if "vocal_latency_ms" in body:
-            s.vocal_latency_ms = float(max(-500.0, min(1000.0, float(body["vocal_latency_ms"]))))
+            try:
+                s.vocal_latency_ms = float(max(-500.0, min(1000.0, float(body["vocal_latency_ms"]))))
+            except (TypeError, ValueError):
+                raise HTTPException(400, "vocal_latency_ms is a number of milliseconds")
             s.latency_measured = True
         if "background_listening" in body:
             on = bool(body["background_listening"])
@@ -118,6 +126,8 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
                       instrument=body.get("instrument"), pan=body.get("pan"))
             except KeyError:
                 raise HTTPException(404, "no such part")
+            except (TypeError, ValueError) as e:
+                raise HTTPException(400, f"bad value: {e}")
             if body.get("lead_mode") in ("duck", "mute", "keep"):
                 m.state["lead_mode"] = body["lead_mode"]
                 m.save_state()
@@ -219,7 +229,10 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
     def own_lyrics(song_id: str, body: dict = Body(...)):
         vi = version_of(song_id, body.get("v"))
         v = record(song_id)["versions"][vi]
-        opt = lyrics.from_text(str(body.get("title", "")), {k: str(t) for k, t in (body.get("sections") or {}).items()}, v)
+        secs = body.get("sections") or {}
+        if not isinstance(secs, dict):
+            raise HTTPException(400, "sections is {section name: words}")
+        opt = lyrics.from_text(str(body.get("title", "")), {str(k): str(t) for k, t in secs.items()}, v)
 
         def change(lyr):
             lyr["options"] = [o for o in lyr["options"] if o.get("idea") != "your own words"] + [opt]
@@ -233,7 +246,11 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
 
         def change(lyr):
             i = body.get("index")
-            if i is not None and not 0 <= int(i) < len(lyr["options"]):
+            try:
+                i = None if i is None else int(i)
+            except (TypeError, ValueError):
+                raise HTTPException(400, "no such option")
+            if i is not None and not 0 <= i < len(lyr["options"]):
                 raise HTTPException(400, "no such option")
             lyr["chosen"] = None if i is None else int(i)
 
@@ -370,7 +387,9 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         track = str(body.get("track") or "Lead")[:20]
         items = [t for t in takes_list(song_id) if t.get("track", "Lead") == track]
         if body.get("takes"):
-            items = [t for t in items if t["id"] in set(body["takes"])]
+            if not isinstance(body["takes"], list):
+                raise HTTPException(400, "takes is a list of take ids")
+            items = [t for t in items if t["id"] in {str(x) for x in body["takes"]}]
         if not items:
             raise HTTPException(400, "record a take first")
         lead_mode = body.get("lead_mode", "duck")

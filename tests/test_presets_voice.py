@@ -203,3 +203,71 @@ def test_preview_is_a_short_stereo_clip():
     assert y.shape[0] == 2 and 3.5 * V.SR <= y.shape[1] <= 4.1 * V.SR and 0.8 < np.abs(y).max() <= 0.9
     rap = V.preview(tk, 2, "minor", "soul", "male_deep", {}, seconds=3, untuned=True)
     assert rap.shape[0] == 2
+
+
+def test_booth_loops_one_off_pieces_and_build_keeps_each_volume(home):
+    p = Project.create("battle_funk")
+    for pid in ("intro_fanfare", "fill_roll"):
+        q = p.add_preset(pid)
+        name, _ = p.booth_stem(q["id"])
+        y, _ = sf.read(str(p.dir / "stems" / name))
+        assert np.sqrt(np.mean(y ** 2)) > 0.005, pid  # it plays in the booth loop
+    a, b = p.add_preset("riff_clav"), p.add_preset("riff_clav")  # same name twice
+    p.edit_piece(b["id"], gain_db=-24)
+    song, _ = p.song()
+    names = [t.name for t in song.tracks if t.name.startswith("Funky clav")]
+    assert len(names) == 2 and len(set(names)) == 2
+    assert sorted(p.track_gains[n] for n in names) == [-24.0, 0.0]
+
+
+def test_one_off_nudge_does_not_wrap_and_note_ops_report_the_new_index(home):
+    p = Project.create("battle_funk")
+    q = p.add_preset("intro_fanfare")
+    assert q["kind"] == "one" and q["notes"][0][0] == 0
+    p.variation(q["id"], "earlier")
+    assert p.piece(q["id"])["notes"][0][0] == 0.0  # the first note stays first
+    r = p.add_preset("riff_clav")
+    second = list(p.piece(r["id"])["notes"][1])
+    for _ in range(3):  # move note 1 earlier past note 0
+        p.note_op(r["id"], 1 if _ == 0 else p.last_note_index, "earlier")
+    moved = p.piece(r["id"])["notes"][p.last_note_index]
+    assert moved[2] == second[2] and moved[0] == max(0.0, second[0] - 0.75)
+
+
+def test_key_change_moves_a_vocal_chop(home):
+    p = Project.create("battle_funk")
+    q = p._new_piece("chop")
+    t = np.arange(int(0.5 * S.SR)) / S.SR
+    sf.write(str(p.dir / "takes" / "chop-a.wav"), (0.5 * np.sin(2 * np.pi * 440 * t)).astype(np.float32), S.SR)
+    q["audio"] = "chop-a.wav"
+    q["takes"] = [{"id": "a", "audio": "chop-a.wav", "notes": [], "pass": 0, "score": 1}]
+    q["take"] = "a"
+    p.save()
+    p.set_key(4)  # D -> E: two semitones up
+    q = p.piece(q["id"])
+    assert q["audio"] != "chop-a.wav" and q["takes"][0]["audio"] == q["audio"]
+    y, sr = sf.read(str(p.dir / "takes" / q["audio"]))
+    f = np.fft.rfftfreq(len(y), 1 / sr)[np.argmax(np.abs(np.fft.rfft(y)))]
+    assert abs(f - 440 * 2 ** (2 / 12)) < 6
+
+
+def test_bad_input_gets_a_clear_error_not_a_crash(home):
+    from fastapi.testclient import TestClient
+
+    from mouthmixer.app.server import create_app
+
+    c = TestClient(create_app(start_worker=False), raise_server_exceptions=False)
+    pid = c.post("/api/projects", json={"starter": "battle_funk"}).json()["id"]
+    for body in ({"tonic": "C"}, {"sections": None}, {"sections": ["a"]}, {"sections": [{"bars": "x"}]}):
+        assert c.post(f"/api/projects/{pid}", json=body).status_code == 400, body
+    r = c.post(f"/api/projects/{pid}", json={"sections": [{"feel": [1], "bars": 4}]})
+    assert r.status_code == 200 and r.json()["sections"][0]["feel"] is None  # a bad feel is ignored
+    assert c.post(f"/api/projects/{pid}/pieces/q1", json={"instrument": 5}).status_code == 400
+    assert c.delete(f"/api/projects/{pid}/pieces/nope/takes/x").status_code == 404
+    assert c.post("/api/settings", json={"vocal_latency_ms": "x"}).status_code == 400
+    for path in ("/api/songs/nope/lyrics/own", "/api/songs/nope/lyrics/choose", "/api/songs/nope/vocals"):
+        assert c.post(path, json={}).status_code == 404, path
+    r = c.post(f"/api/projects/{pid}/pieces", json={"slot": "hook"}).json()
+    q = c.post(f"/api/projects/{pid}/presets", json={"preset": "riff_clav"}).json()["added"]
+    r = c.post(f"/api/projects/{pid}/pieces/{q}", json={"note_op": "earlier", "index": 1}).json()
+    assert isinstance(r["note_index"], int)

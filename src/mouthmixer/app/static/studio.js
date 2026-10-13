@@ -415,7 +415,8 @@ const Sing = {
     const NAMES_ = new Proxy({ A: "Verse 1", "A'": "Verse 2", B: "Bridge", "A''": "Final chorus" }, { get: (o, k) => o[k] || k });
     const box = $("#sg-sections");
     box.innerHTML = "";
-    if (!this.section || !this.sections.some((s) => s.name === this.section.name)) this.section = this.sections[0];
+    // the fresh section (its start and length may have changed in a rebuild, or this is another song)
+    this.section = this.sections.find((s) => this.section && s.name === this.section.name) || this.sections[0];
     for (const s of [...this.sections, { name: "all", start: this.sections[0].start, bars: this.sections.at(-1).start + this.sections.at(-1).bars - this.sections[0].start }]) {
       const b = document.createElement("button");
       b.className = "chip" + (this.section && this.section.name === s.name ? " on" : "");

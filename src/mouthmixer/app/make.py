@@ -87,27 +87,33 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
     def update(pid: str, body: dict = Body(...)):
         with _lock(pid):
             p = proj(pid)
-            if "title" in body:
-                p.data["title"] = str(body["title"])[:60] or p.data["title"]
-                p.save()
-            if "tonic" in body:
-                p.set_key(int(body["tonic"]))
-            if body.get("combo"):
-                try:
-                    p.apply_combo(str(body["combo"]))
-                except KeyError:
-                    raise HTTPException(404, "no such combo")
-            if body.get("lyrics"):
-                try:
-                    p.apply_lyrics(str(body["lyrics"])[:20000])
-                except ValueError as e:
-                    bad(e)
-            if "sections" in body:
-                try:
-                    p.set_sections(body["sections"])
-                except ValueError as e:
-                    bad(e)
-            return p.public()
+            try:
+                return _update(p, body)
+            except (TypeError, ValueError, AttributeError) as e:
+                bad(e)
+
+    def _update(p: Project, body: dict) -> dict:
+        if "title" in body:
+            p.data["title"] = str(body["title"])[:60] or p.data["title"]
+            p.save()
+        if "tonic" in body:
+            p.set_key(int(body["tonic"]))
+        if body.get("combo"):
+            try:
+                p.apply_combo(str(body["combo"]))
+            except KeyError:
+                raise HTTPException(404, "no such combo")
+        if body.get("lyrics"):
+            try:
+                p.apply_lyrics(str(body["lyrics"])[:20000])
+            except ValueError as e:
+                bad(e)
+        if "sections" in body:
+            try:
+                p.set_sections(body["sections"])
+            except ValueError as e:
+                bad(e)
+        return p.public()
 
     @app.delete("/api/projects/{pid}")
     def delete(pid: str):
@@ -153,9 +159,11 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
     def edit_piece(pid: str, qid: str, body: dict = Body(...)):
         with _lock(pid):
             p = proj(pid)
+            extra = {}
             try:
                 if body.get("note_op"):
-                    p.note_op(qid, int(body.get("index", -1)), body["note_op"])
+                    p.note_op(qid, int(body.get("index", -1)), str(body["note_op"]))
+                    extra["note_index"] = getattr(p, "last_note_index", None)
                 elif body.get("variation"):
                     p.variation(qid, body["variation"])
                 elif body.get("take"):
@@ -166,9 +174,9 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
                     p.edit_piece(qid, **{k: body.get(k) for k in ("name", "instrument", "octave", "gain_db", "repeat")})
             except KeyError:
                 raise HTTPException(404, "no such piece or take")
-            except (ValueError, IndexError) as e:
+            except (ValueError, IndexError, TypeError) as e:
                 bad(e)
-            return p.public()
+            return p.public() | extra
 
     @app.delete("/api/projects/{pid}/pieces/{qid}")
     def remove_piece(pid: str, qid: str):
@@ -207,7 +215,10 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
     def delete_take(pid: str, qid: str, tid: str):
         with _lock(pid):
             p = proj(pid)
-            p.delete_take(qid, tid)
+            try:
+                p.delete_take(qid, tid)
+            except KeyError:
+                raise HTTPException(404, "no such piece")
             return p.public()
 
     @app.get("/api/projects/{pid}/takes/{rid}")

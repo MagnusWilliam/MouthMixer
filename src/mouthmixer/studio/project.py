@@ -287,7 +287,7 @@ class Project:
         if "name" in kw and kw["name"]:
             p["name"] = str(kw["name"])[:40]
         if kw.get("instrument") and p["source"] != "voice":
-            inst = kw["instrument"]
+            inst = str(kw["instrument"])
             if not (inst.startswith("kit:") or inst in INSTRUMENTS):
                 raise ValueError("unknown instrument")
             p["instrument"] = inst
@@ -327,8 +327,10 @@ class Project:
             return p
         else:
             raise ValueError(op)
-        notes[index] = [s, l, int(pitch), v]
+        moved = [s, l, int(pitch), v]
+        notes[index] = moved
         notes.sort(key=lambda n: n[0])
+        self.last_note_index = next(i for i, n in enumerate(notes) if n is moved)  # where it is now
         self.save()
         return p
 
@@ -352,7 +354,10 @@ class Project:
             # The whole piece a 16th earlier or later (wrapping round the loop): for takes that came out late.
             L = p["bars"] * 4
             d = -0.25 if kind == "earlier" else 0.25
-            notes = [[round((n[0] + d) % L, 4), n[1], n[2], n[3]] for n in notes]
+            if p["kind"] == "loop" or p.get("repeat"):
+                notes = [[round((n[0] + d) % L, 4), n[1], n[2], n[3]] for n in notes]
+            else:  # a one-off phrase doesn't wrap round: its first note stays first
+                notes = [[round(max(0.0, n[0] + d), 4), n[1], n[2], n[3]] for n in notes if n[0] + d < L]
         elif kind == "simpler":
             if drums:
                 notes = [n for n in notes if n[2] in (36, 38, 39, 64) or abs(n[0] - round(n[0])) < 0.01]
@@ -612,6 +617,8 @@ class Project:
 
     # --- the board -------------------------------------------------------------------------------
     def set_sections(self, sections: list[dict]) -> list[dict]:
+        if not isinstance(sections, list) or not all(isinstance(s, dict) for s in sections):
+            raise ValueError("sections is a list of {name, bars, chords, parts}")
         ids = {p["id"] for p in self.pieces}
         out = []
         for i, s in enumerate(sections):
@@ -620,9 +627,9 @@ class Project:
                 raise ValueError("a section is 1, 2, 4, 8, 12 or 16 bars")
             out.append({"id": s.get("id") or f"s{time.time_ns() % 10 ** 9}{i}", "name": str(s.get("name", "Section"))[:24],
                         "bars": bars, "chords": "B" if s.get("chords") == "B" else "A",
-                        "feel": s.get("feel") if s.get("feel") in starters.FEELS else None,
+                        "feel": s.get("feel") if isinstance(s.get("feel"), str) and s["feel"] in starters.FEELS else None,
                         "drop": int(s["drop"]) if s.get("drop") in (0, 2, 4, 8, "0", "2", "4", "8") else None,
-                        "parts": [x for x in s.get("parts", []) if x in ids]})
+                        "parts": [x for x in (s.get("parts") or []) if isinstance(x, str) and x in ids]})
         if not out:
             raise ValueError("a song needs at least one section")
         self.data["sections"] = out
@@ -750,7 +757,31 @@ class Project:
                 for t in p["takes"]:
                     t["notes"] = [[s, l, pt + d, v] for s, l, pt, v in t["notes"]]
                 p["over"] = [(r + d) % 12 for r in p["over"]]
+            if p["source"] == "voice" and d:  # a vocal chop is audio: shift the sound itself
+                for t in p["takes"]:
+                    if t.get("audio"):
+                        new = self._shift_audio(t["audio"], d)
+                        if p.get("audio") == t["audio"]:
+                            p["audio"] = new
+                        t["audio"] = new
+                if p.get("audio") and not any(t.get("audio") == p["audio"] for t in p["takes"]):
+                    p["audio"] = self._shift_audio(p["audio"], d)
         self.save()
+
+    def _shift_audio(self, name: str, semitones: int) -> str:
+        """A take's audio moved by `semitones`, saved as a new file (the old one stays for other uses)."""
+        import librosa
+        import soundfile as sf
+
+        src = self.dir / "takes" / name
+        if not src.exists():
+            return name
+        a, sr = sf.read(str(src), dtype="float32")
+        a = librosa.effects.pitch_shift(a, sr=sr, n_steps=semitones)
+        stem = name.rsplit(".", 1)[0].split("~")[0]
+        out = f"{stem}~{(self.st['tonic'])}.wav"
+        sf.write(str(self.dir / "takes" / out), a.astype(np.float32), sr, subtype="FLOAT")
+        return out
 
     # --- turning pieces into notes ---------------------------------------------------------------
     def progression(self, which: str, bars: int, start_bar: int = 0) -> list:
@@ -881,7 +912,8 @@ class Project:
         else:
             bars = 3 * cb
             chords = self.progression(which, bars)
-            notes = self.place(p, 0, bars, chords, section_name="Verse")
+            # in the booth every piece loops (a one-off intro or fill would otherwise play once, or never)
+            notes = self.place(dict(p, kind="loop"), 0, bars, chords, section_name="Verse")
             song = self._song([("A", 0, bars)], chords, [])
             t = self._track(p, notes)
             song.tracks = [t]
@@ -983,7 +1015,18 @@ class Project:
             beat = next((q for q in self.pieces if q["role"] == "drums" and q["id"] in tracks), None)
             if beat is not None:
                 tracks[beat["id"]] += [(b, 1.0, 49, 118), (b, 0.3, 36, 120)]
-        out_tracks = [self._track(self.piece(pid), sorted(n)) for pid, n in tracks.items() if n]
+        out_tracks, self.track_gains = [], {}
+        for pid, n in tracks.items():
+            if not n:
+                continue
+            q = self.piece(pid)
+            t = self._track(q, sorted(n))
+            base, k = t.name, 2
+            while t.name in self.track_gains:  # two pieces with the same name stay two parts, each at its own volume
+                t.name = f"{base} {k}"
+                k += 1
+            self.track_gains[t.name] = q["gain_db"]
+            out_tracks.append(t)
         song = self._song(secs, chords, out_tracks)
         return song, [{"piece": self.piece(pid), "where": w} for pid, w in audio.items()]
 
@@ -1022,9 +1065,8 @@ class Project:
         duck = render._sidechain(n, render.kick_times(song))
         mix = np.zeros((2, n), dtype=np.float32)
         stems: dict = {}
-        gains = {p["name"]: p["gain_db"] for p in self.pieces}
         for t in song.tracks:
-            x = render.render_stem(t, song, np.random.default_rng(len(t.notes)), duck, gains.get(t.name, 0.0))
+            x = render.render_stem(t, song, np.random.default_rng(len(t.notes)), duck, self.track_gains.get(t.name, 0.0))
             mix += x
             stems[t.role] = stems.get(t.role, 0) + x
         song_id = self.data.get("song_id")

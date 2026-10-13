@@ -1118,6 +1118,12 @@ the Make tab says so plainly if the starters can't load.
 - **Voice tweaks** (VOCALS §12): pitch in notes of the key, tone, breathiness, grit, warmth, tuning style,
   doubling, a harmony voice that follows the key, echo, space, and effects (radio, megaphone, phone, robot,
   lo-fi tape), saved per vocal track; plus an 8-second **preview** of a voice without the band.
+- **Bug fixes from a review pass:** ready-made intro motifs and fills were silent in the booth loop;
+  two pieces with the same name got the same volume in the build; a vocal chop stayed in the old key
+  after a key change; moving a note past its neighbour switched the selection to the other note; a
+  recording or selected piece could carry over to the next track opened; Sing kept old section timings
+  after a rebuild; "Whole piece earlier" wrapped a one-off melody's first note to its end; and a dozen
+  bad inputs now get a clear 400/404 instead of a server error.
 - Not yet: auditioning a ready-made part before adding it (adding plays it; delete or swap if it's wrong);
   per-section voice tweaks within one track.
 - **Next:** the user runs the sync test in Make, builds "Last Train, First Light" from a combo and a few
