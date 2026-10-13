@@ -1049,7 +1049,10 @@ def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], ton
     x = clean(raw, sung, noise, noise_db, report)
     y, f0_before, f0_after = correct(x, sung, p, report)
     y = tame_breaths(y, f0_after, noise_db, report)
-    hook = hook if hook is not None else {"A''"}
+    if hook is None:
+        from .lyrics import is_hook
+
+        hook = {sc["name"] for sc in sections if is_hook(sc["name"])}
 
     def synth_from(f0_target):
         """Resynthesise the corrected vocal on another pitch line (harmonies), passage by passage."""

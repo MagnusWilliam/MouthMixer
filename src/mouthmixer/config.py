@@ -31,6 +31,8 @@ class Settings:
     keep_tossed_days: int = 7
     # Vocals and lyrics (docs/VOCALS.md). The key stays on this computer; ANTHROPIC_API_KEY also works.
     claude_api_key: str = ""
+    # Background listening (catching hums while you work) is off: you record on purpose in the Make tab.
+    background_listening: bool = False
     vocal_latency_ms: float = 0.0  # measured by the sync test on the Sing screen
 
     @classmethod

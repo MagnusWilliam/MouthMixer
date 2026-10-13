@@ -10,9 +10,12 @@ Constraints that hold for every session:
 - **Mic:** HyperX QuadCast 2 with a pop shield; the user usually wears headphones.
 - **The cloud build sessions have no mic and no speakers.** Test with synthetic audio and the user's
   shared recordings; check numbers, and ask the user to listen at the end of each phase.
-- **The user steers, never edits notes.** Every feature must work from suggestions (chips, briefs, A/B
-  picks, "this bit" markers, ranked part suggestions), not piano rolls. The one exception the user asked for
-  is the Incredibox-style Mix tab: parts on/off, sound swaps, per-part volume, add/remove parts.
+- **The user steers; no piano rolls.** Features work from suggestions (chips, briefs, A/B picks, ranked part
+  suggestions) and simple controls. Allowed at the user's request: the Incredibox-style piece/part controls
+  (on/off, sound swap, octave, volume, add/remove, simpler/busier) and one-note fixes in Make (up/down,
+  earlier/later, longer/shorter, delete). No drawing notes from scratch.
+- **The main workflow is Make** (record on purpose over a starter beat). Background listening is off by
+  default and optional.
 - **Free instruments and CC0/permissive samples only**, each with a licence note.
 - **LINE ZERO stays untouched** until the user approves the tool and its music.
 - Change a critic rule's value only with a line in `docs/MUSIC_KNOWLEDGE.md` §13 (tuning log).

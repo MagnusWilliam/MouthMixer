@@ -417,9 +417,10 @@ def create_app(start_worker: bool = True) -> FastAPI:
         paths["calibration"].unlink(missing_ok=True)
         return {"ok": True}
 
-    from .studio import add_routes
+    from . import make, studio
 
-    add_routes(app, lib, settings)
+    studio.add_routes(app, lib, settings)
+    make.add_routes(app, lib, paths)
 
     @app.exception_handler(Exception)
     async def errors(request, exc):

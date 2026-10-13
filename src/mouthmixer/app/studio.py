@@ -65,7 +65,7 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         s = config.Settings.load()
         return {"has_claude_key": bool(s.claude_api_key or os.environ.get("ANTHROPIC_API_KEY")),
                 "claude_key_from_env": bool(os.environ.get("ANTHROPIC_API_KEY")) and not s.claude_api_key,
-                "vocal_latency_ms": s.vocal_latency_ms}
+                "vocal_latency_ms": s.vocal_latency_ms, "background_listening": s.background_listening}
 
     @app.post("/api/settings")
     def set_settings(body: dict = Body(...)):
@@ -74,8 +74,23 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
             s.claude_api_key = str(body["claude_api_key"] or "").strip()
         if "vocal_latency_ms" in body:
             s.vocal_latency_ms = float(max(-500.0, min(1000.0, float(body["vocal_latency_ms"]))))
+        if "background_listening" in body:
+            on = bool(body["background_listening"])
+            if on != s.background_listening:
+                s.background_listening = on
+                if on:
+                    try:
+                        from ..launcher import _spawn, listener_running
+
+                        if not listener_running():
+                            _spawn(["listen"])
+                    except Exception:
+                        pass
+                else:
+                    (config.paths()["control"] / f"quit-{time.time_ns()}.cmd").write_text("")
         s.save()
         settings.claude_api_key, settings.vocal_latency_ms = s.claude_api_key, s.vocal_latency_ms
+        settings.background_listening = s.background_listening
         return get_settings()
 
     # --- mixer ---------------------------------------------------------------------------------------

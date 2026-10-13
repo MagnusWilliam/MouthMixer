@@ -304,3 +304,54 @@ for _k, _preset in {"city_pop_day": "soul", "neon_night": "soul", "acid_jazz_bat
     PACKS[_k]["vocal_preset"] = _preset
 
 DEFAULT_PACKS = ["city_pop_day", "neon_night", "acid_jazz_battle", "heist_funk"]  # the decided three + the Persona-informed one
+
+# Two more Persona-informed moods for the starter beats (docs/PERSONA_STYLE.md §2, §8).
+INSTRUMENTS["distortion_guitar"] = (0, 30, 40, 86, "guitar", 0.55)
+PACKS["tense_dungeon"] = {
+    "title": "Tense dungeon",
+    "describe": "dungeon / tension: minor key with a dark flat-2 colour, pulsing synth bass, sparse drums, bells",
+    "bpm": (100, 112), "swing": 0.5, "ext": ["triad", "seventh"], "tension": 0.8,
+    "borrowed": ["bII", "bVI", "iv"], "harmonic_rhythm": [1],
+    "favourites": [["i", "bVI", "i", "bVII"], ["i", "iv", "i", "bVI"], ["i", "bII", "i", "bVII"]],
+    "kit": ["electronic", "room", "standard"],
+    "drums": [{"kick": "x.......x.......", "snare": "........x.......", "hat": "..x...x...x...x.", "rim": "......x.......x."},
+              {"kick": "x..x....x..x....", "clap": "....x.......x...", "hat": "x.x.x.x.x.x.x.x."}],
+    "bass": [[(i * 2, 1, "R") for i in range(8)], [(0, 1, "R"), (2, 1, "R"), (3, 1, "8"), (6, 2, "R"), (8, 1, "R"),
+                                                    (10, 1, "R"), (11, 1, "8"), (14, 2, "5")]],
+    "comp_rhythm": [[(0, 16)], [(0, 8), (8, 8)]],
+    "roles": {
+        "lead": ["music_box", "celesta", "synth_chime", "oboe", "mystery_pad"],
+        "comp": ["mystery_pad", "night_vision", "piano"],
+        "pad": ["mystery_pad", "atmosphere", "bowed_pad", "tremolo_strings"],
+        "bass": ["synth_bass", "pulse_bass", "fm_bass"],
+        "arp": ["music_box", "celesta", "synth_chime"],
+        "counter": ["cello", "tremolo_strings", "oboe"],
+        "riff": ["synth_chime", "music_box", "pizzicato"],
+    },
+    "rootless": False, "spread": True, "reverb": 0.6, "delay": 0.2, "chorus": False,
+    "vocal_preset": "dreamy",
+}
+PACKS["boss_rock"] = {
+    "title": "Boss rock",
+    "describe": "boss / rock battle, Persona 4-style energy: minor key, driving 8th-note bass, distorted guitar, brass",
+    "bpm": (146, 160), "swing": 0.5, "ext": ["triad"], "tension": 0.6,
+    "borrowed": ["bVI", "bVII", "V7"], "harmonic_rhythm": [1, 2],
+    "favourites": [["i", "bVI", "bVII", "i"], ["i", "bVII", "bVI", "V"], ["bVI", "bVII", "i", "i"]],
+    "kit": ["power", "standard", "room"],
+    "drums": [{"kick": "x.x...x.x.x...x.", "snare": "....X.......X...", "hat": "x.x.x.x.x.x.x.x.", "open_hat": "......o.......o."},
+              {"kick": "x...x...x...x...", "snare": "....X.......X..X", "hat": "xxxxxxxxxxxxxxxx"}],
+    "bass": [[(i * 2, 2, "R") for i in range(8)], [(0, 2, "R"), (2, 2, "R"), (4, 2, "8"), (6, 2, "R"), (8, 2, "R"),
+                                                    (10, 2, "5"), (12, 2, "R"), (14, 2, "A")]],
+    "comp_rhythm": [[(0, 2), (2, 2), (4, 2), (6, 2), (8, 2), (10, 2), (12, 2), (14, 2)], [(0, 3), (3, 3), (6, 2), (8, 8)]],
+    "roles": {
+        "lead": ["distortion_guitar", "overdrive_guitar", "trumpet", "saw_lead", "brass_section"],
+        "comp": ["distortion_guitar", "overdrive_guitar", "rock_organ"],
+        "pad": ["strings", "synth_strings", "brass_section"],
+        "bass": ["pick_bass", "finger_bass", "synth_bass"],
+        "arp": ["clean_guitar", "rock_organ", "synth_mallet"],
+        "counter": ["brass_section", "strings", "synth_brass"],
+        "riff": ["brass_section", "distortion_guitar", "synth_brass"],
+    },
+    "rootless": False, "spread": False, "reverb": 0.3, "delay": 0.08, "chorus": False, "drive": True,
+    "vocal_preset": "rock",
+}

@@ -10,6 +10,7 @@
 <header>
   <div class="brand"><span class="logo"></span>MouthMixer</div>
   <nav>
+    <button data-view="make" class="tab">Make</button>
     <button data-view="songs" class="tab active">Songs <span id="count-songs" class="badge"></span></button>
     <button data-view="kept" class="tab">Kept</button>
     <button data-view="clips" class="tab">Clips</button>
@@ -180,6 +181,70 @@
     <p class="muted small">Downloads: <a id="m-clean" href="#">cleaned MIDI</a> · <a id="m-raw" href="#">raw MIDI</a></p>
   </section>
 
+  <!-- Make: record pieces on purpose over a starter beat, then build the song -->
+  <section id="make" class="hidden">
+    <div id="mk-home">
+      <h2>Make a track</h2>
+      <p class="hint">Pick a starter beat. Then record pieces on purpose over it (a beat, a bassline, a hook, a
+        vocal chop…). Each recording becomes a piece you can switch on and off, give another instrument, and
+        place in the song.</p>
+      <div id="mk-moods"></div>
+      <h3>Your tracks</h3>
+      <div id="mk-projects" class="mk-list"></div>
+    </div>
+
+    <div id="mk-project" class="hidden">
+      <div class="row"><a href="#" id="mk-back">← All tracks</a></div>
+      <div class="mk-title row">
+        <input id="mk-name" class="title-input" aria-label="Track name">
+        <span id="mk-chips" class="chips"></span>
+        <label class="small">Key <select id="mk-key"></select></label>
+      </div>
+      <p id="mk-chords" class="small muted"></p>
+
+      <div class="transport">
+        <button id="mk-play" class="primary">▶ Play loop</button>
+        <span class="chips choose small"><button class="chip on" data-ch="A">Main chords</button><button class="chip" data-ch="B">Bridge chords</button></span>
+        <span id="mk-bar" class="muted mono"></span>
+        <label class="small"><input type="checkbox" id="mk-click"> Click</label>
+        <span id="mk-status" class="muted small"></span>
+      </div>
+
+      <h3>Pieces <span class="hint">(click the round button to switch a piece on or off)</span></h3>
+      <div id="mk-pieces" class="tiles"></div>
+      <div id="mk-detail" class="card inner hidden"></div>
+
+      <h3>Record a piece</h3>
+      <div class="mk-slots">
+        <div><div class="small muted">Loops (they repeat)</div><div id="mk-slots-loop" class="chips choose"></div></div>
+        <div><div class="small muted">One-off parts (they play once per section)</div><div id="mk-slots-one" class="chips choose"></div></div>
+      </div>
+      <div id="mk-rec" class="card inner hidden">
+        <p id="mk-rec-hint" class="hint"></p>
+        <div class="row">
+          <label class="small">Length <select id="mk-rec-bars"><option>1</option><option>2</option><option>4</option><option>8</option></select> bars</label>
+          <button id="mk-rec-go" class="rec">● Record</button>
+          <button id="mk-rec-stop" disabled>■ Stop</button>
+          <span id="mk-rec-pass" class="mono"></span>
+          <span class="meter inline" id="mk-level"><span></span></span>
+        </div>
+        <p class="small muted">One bar of clicks, then it loops. Do it as many times as you like: every time round is a
+          take, and the best one is picked for you. Press Stop when you're happy.</p>
+      </div>
+
+      <h3>Song board</h3>
+      <p class="hint">Left to right is the song. Switch pieces on in the sections where they should play. Bridge
+        sections use the bridge chords; your pieces follow them.</p>
+      <div class="board-wrap"><table id="mk-board" class="board"></table></div>
+      <div class="row">
+        <button id="mk-add-sec" class="ghost">+ Add a section</button>
+        <span class="spacer"></span>
+        <button id="mk-build" class="primary">Build the song</button>
+      </div>
+      <div id="mk-built" class="small"></div>
+    </div>
+  </section>
+
   <section id="setup" class="hidden">
     <div class="card">
       <h3>Microphone</h3>
@@ -203,6 +268,12 @@
       <div id="mic-result"></div>
     </div>
     <div class="card">
+      <h3>Background listening</h3>
+      <p class="muted">Off by default: you record on purpose in <b>Make</b>. Turn it on to have MouthMixer catch
+        hums and beatbox while you work (and the Ctrl+Alt+M hotkey).</p>
+      <label><input type="checkbox" id="bg-listen"> Listen in the background</label>
+    </div>
+    <div class="card">
       <h3>Lyrics with Claude</h3>
       <p class="muted">Paste a Claude API key to have lyrics written for your songs (from console.anthropic.com). It's
         saved only on this computer. Without one you can still type your own words.</p>
@@ -220,5 +291,6 @@
 </main>
 <script src="/static/app.js"></script>
 <script src="/static/studio.js"></script>
+<script src="/static/make.js"></script>
 </body>
 </html>

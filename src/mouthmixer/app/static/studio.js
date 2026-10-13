@@ -367,6 +367,7 @@ $("#ly-own-check").onclick = async () => {
 // ---- Setup: Claude key --------------------------------------------------------------------------
 window.refreshKey = async () => {
   const s = await api("/api/settings");
+  $("#bg-listen").checked = !!s.background_listening;
   $("#key-now").textContent = s.has_claude_key ? (s.claude_key_from_env ? "Using the key from ANTHROPIC_API_KEY." : "A key is saved.") : "No key yet.";
 };
 $("#key-save").onclick = async () => { await post("/api/settings", { claude_api_key: $("#key-input").value }); $("#key-input").value = ""; refreshKey(); };
@@ -405,9 +406,9 @@ const Sing = {
     busy(st, "");
     const v = currentSong.record.versions[curV()];
     this.bpm = v.bpm;
-    this.sections = v.sections.filter((s) => ["A", "A'", "B", "A''"].includes(s.name));
+    this.sections = v.sections.filter((s) => !/^(intro|outro|ending)/i.test(s.name));
     if (!this.sections.length) { st.textContent = "This song has no sections to sing."; return; }
-    const NAMES_ = { A: "Verse 1", "A'": "Verse 2", B: "Bridge", "A''": "Final chorus" };
+    const NAMES_ = new Proxy({ A: "Verse 1", "A'": "Verse 2", B: "Bridge", "A''": "Final chorus" }, { get: (o, k) => o[k] || k });
     const box = $("#sg-sections");
     box.innerHTML = "";
     if (!this.section || !this.sections.some((s) => s.name === this.section.name)) this.section = this.sections[0];
@@ -473,6 +474,7 @@ const Sing = {
       let pk = 0; for (const x of d) pk = Math.max(pk, Math.abs(x));
       $("#sg-level span").style.width = Math.min(100, Math.max(0, (20 * Math.log10(pk + 1e-9) + 60) * 1.67)) + "%";
       $("#sg-level").classList.toggle("hot", pk > 0.7);
+      if (window.mkLevel) window.mkLevel(pk);
       if (Eng.playing && this.mode) {
         const f = detectPitch(hist, Eng.ctx.sampleRate);
         this.trail.push({ s: this.songPosAt(t + d.length / Eng.ctx.sampleRate) * this.bpm / 60, m: f ? hzToMidi(f) : null });
@@ -697,3 +699,5 @@ $("#sg-make").onclick = async () => {
   } catch (e) { busy($("#sg-status"), ""); st.textContent = errText(e); }
   $("#sg-make").disabled = false;
 };
+
+$("#bg-listen").onchange = async () => { await post("/api/settings", { background_listening: $("#bg-listen").checked }); setTimeout(refreshStatus, 1500); };

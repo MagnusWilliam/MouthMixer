@@ -33,7 +33,7 @@ async function refreshStatus() {
     const st = L.state || "not running";
     $("#dot").className = "dot " + st;
     let text = { listening: "Listening", capturing: "Capturing…", paused: "Paused", muted: "Mic muted",
-      "no mic": "Mic not found (pick one in Setup)", "not running": "Listener not running" }[st] || st;
+      "no mic": "Mic not found (pick one in Setup)", "not running": "Background listening off" }[st] || st;
     if (L.auto_pause_reason) text += ` (${L.auto_pause_reason})`;
     if (L.device && st !== "not running") text += ` · ${L.device}`;
     if (st !== "not running") text += ` · kept ${L.kept_today || 0}, ignored ${L.dropped_today || 0} today`;
@@ -58,7 +58,7 @@ $("#save-last").onclick = async () => { await post("/api/listener/save_last"); s
 
 // ---- list ---------------------------------------------------------------------------------------
 async function refreshList() {
-  if (view === "setup") return;
+  if (view === "setup" || view === "make") return;
   const list = $("#list");
   let items;
   if (view === "clips") items = await api("/api/clips?view=all");
@@ -359,10 +359,14 @@ document.querySelectorAll(".tab").forEach((t) => {
     view = t.dataset.view;
     selected = null; currentSong = null; currentClip = null;
     showPane(null);
-    const setup = view === "setup";
+    const setup = view === "setup", make = view === "make";
     $("#setup").classList.toggle("hidden", !setup);
-    $("#list-pane").classList.toggle("hidden", setup);
-    if (setup) { refreshMics(); refreshCalibration(); if (window.refreshKey) refreshKey(); } else refreshList();
+    $("#make").classList.toggle("hidden", !make);
+    $("#list-pane").classList.toggle("hidden", setup || make);
+    if (!make && window.Make) Make.leave();
+    if (setup) { refreshMics(); refreshCalibration(); if (window.refreshKey) refreshKey(); }
+    else if (make) Make.open();
+    else refreshList();
   };
 });
 
@@ -475,4 +479,4 @@ $("#upload").onchange = async (e) => {
 refreshStatus();
 refreshList();
 setInterval(refreshStatus, 1000);
-setInterval(() => { if (view !== "setup") refreshList(); }, 5000);
+setInterval(() => { if (view !== "setup" && view !== "make") refreshList(); }, 5000);

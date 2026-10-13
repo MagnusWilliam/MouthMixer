@@ -263,17 +263,40 @@ def harmonise(mel: list[tuple], bars: int, pack: dict, tonic: int, mode: str, ex
     return [(i * slot_len, slot_len, c) for i, c in enumerate(best)]
 
 
-def progression_from_favourite(pack: dict, tonic: int, mode: str, ext: str, bars: int, rng) -> list:
-    chords = chord_set(pack, tonic, mode, ext)
-    by_degree = {}
-    for c in chords:
-        key = c.degree.rstrip("0123456789").replace("maj", "").replace("m7b5", "").replace("sus", "")
-        by_degree.setdefault(key.lower(), c)
-    fav = pack["favourites"][rng.integers(len(pack["favourites"]))]
-    seq = []
-    for d in fav:
-        c = by_degree.get(d.lower()) or chords[0]
-        seq.append(c)
+_NUMERALS = {"I": 0, "II": 2, "III": 4, "IV": 5, "V": 7, "VI": 9, "VII": 11}
+
+
+def resolve_degree(name: str, tonic: int, ext: str) -> theory.Chord:
+    """A roman numeral as written in a style's favourite loops ("i", "bVI", "IV", "V", "bII") -> a chord.
+    Case gives major/minor, b/# move the root, offsets count from the major scale (so "bVI" in a minor key
+    is the usual C chord in E minor). Sevenths follow the style's extension: V and bVII get dominant
+    7ths, other major chords major 7ths, minor chords minor 7ths."""
+    acc = 0
+    n = name
+    while n and n[0] in "b#":
+        acc += -1 if n[0] == "b" else 1
+        n = n[1:]
+    core = n.rstrip("0123456789")
+    upper = core.upper()
+    off = (_NUMERALS.get(upper, 0) + acc) % 12
+    minor = core != upper
+    if ext == "triad":
+        q = "min" if minor else "maj"
+    elif minor:
+        q = "min9" if ext == "ninth" else "min7"
+    elif off in (7, 10):
+        q = "dom9" if ext == "ninth" else "dom7"
+    else:
+        q = "maj9" if ext == "ninth" else "maj7"
+    fn = "T" if off in (0, 3, 4, 8, 9) else "D" if off in (7, 11) else "PD"
+    return theory.Chord((tonic + off) % 12, q, name, fn)
+
+
+def progression_from_favourite(pack: dict, tonic: int, mode: str, ext: str, bars: int, rng,
+                               fav: list[str] | None = None) -> list:
+    """One of the style's favourite loops (or `fav`), one chord per bar, repeated to fill `bars`."""
+    fav = fav or pack["favourites"][rng.integers(len(pack["favourites"]))]
+    seq = [resolve_degree(d, tonic, ext) for d in fav]
     return [(i * 4, 4, seq[i % len(seq)]) for i in range(bars)]
 
 

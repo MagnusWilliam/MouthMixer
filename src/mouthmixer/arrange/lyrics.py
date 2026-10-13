@@ -12,6 +12,19 @@ from dataclasses import dataclass
 import numpy as np
 
 SECTION_ROLES = {"A": "Verse 1", "A'": "Verse 2", "B": "Bridge", "A''": "Final chorus (the hook)"}
+NO_WORDS = ("intro", "outro", "ending")
+
+
+def section_role(name: str) -> str | None:
+    """What a section is for in the lyrics, or None for sections without words (intro, outro, ending).
+    Generated songs use A/A'/B/A''; songs from the Make tab use names like "Verse", "Hook 2"."""
+    if name in SECTION_ROLES:
+        return SECTION_ROLES[name]
+    return None if name.lower().startswith(NO_WORDS) else name
+
+
+def is_hook(name: str) -> bool:
+    return name == "A''" or name.lower().startswith(("hook", "chorus"))
 CLOSED_VOWELS = {"IY", "UW", "IH", "UH"}  # "ee", "oo", "ih", "uh": hard to hold on long, high notes
 
 
@@ -67,14 +80,14 @@ def syllable_map(version: dict) -> list[dict]:
     high_cut = np.percentile(pitches, 75)
     out = []
     for sec in version["sections"]:
-        if sec["name"] not in SECTION_ROLES:
+        if section_role(sec["name"]) is None:
             continue
         a, b = sec["start"] * 4, (sec["start"] + sec["bars"]) * 4
         lines = phrases([n for n in notes if a <= n[0] < b])
         if not lines:
             continue
         out.append({
-            "section": sec["name"], "role": SECTION_ROLES[sec["name"]],
+            "section": sec["name"], "role": section_role(sec["name"]),
             "lines": [{
                 "notes": [[round(s, 3), round(l, 3), int(p)] for s, l, p, *_ in ln],
                 "count": len(ln),

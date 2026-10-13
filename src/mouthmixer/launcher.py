@@ -144,7 +144,7 @@ def launch() -> None:
 
     log = setup("launcher")
     settings = config.Settings.load()
-    if not listener_running():
+    if settings.background_listening and not listener_running():
         _spawn(["listen"])
     if not app_running(settings.port):
         _spawn(["app"])

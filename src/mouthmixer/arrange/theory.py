@@ -129,6 +129,7 @@ def borrowed(tonic: int, mode: str, names: list[str], ext: str) -> list[Chord]:
         "IV7": (5, "dom7", "IV7", "PD"),  # dorian's major IV
         "Vsus": (7, "dom7sus4", "V7sus4", "D"),
         "ii7b5": (2, "min7b5", "iim7b5", "PD"),
+        "bII": (1, "maj7" if seventh else "maj", "bII", "PD"),  # Neapolitan / Phrygian colour (tense, dark)
     }
     out = []
     for n in names:

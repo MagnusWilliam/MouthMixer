@@ -162,3 +162,35 @@ button.rec { background: var(--red); border-color: var(--red); color: #fff; font
 .lchip { font-size: 11px; border-radius: 8px; padding: 0 6px; color: #fff; }
 .lchip.g { background: var(--green); } .lchip.y { background: var(--amber); } .lchip.r { background: var(--red); }
 #sg-result .checks { margin: 6px 0; }
+
+/* v0.4: Make (starters, booth, pieces, song board) */
+#make { grid-column: 1 / -1; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+#make h2 { margin: 0 0 4px; font-size: 18px; }
+#make h3 { margin: 18px 0 6px; font-size: 15px; }
+#make h3 .hint { font-weight: 400; }
+.mood { margin: 12px 0; }
+.mood-head { margin-bottom: 6px; }
+.starter-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.starter { text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 10px; }
+.starter:hover { border-color: var(--accent); }
+.mk-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
+.mk-title { gap: 10px; margin: 6px 0; }
+.title-input { font-size: 17px; font-weight: 600; width: auto !important; flex: 1; min-width: 180px; max-width: 420px; }
+.mk-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) { .mk-slots { grid-template-columns: 1fr; } }
+.tag { white-space: nowrap; }
+#mk-detail canvas.notes { height: 140px; margin: 8px 0; cursor: pointer; }
+.noteops button { padding: 3px 10px; min-width: 34px; }
+.take.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.board-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table.board { border-collapse: collapse; font-size: 12.5px; min-width: 100%; }
+.board th, .board td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: center; }
+.board thead th { vertical-align: top; min-width: 96px; background: var(--bg); }
+.board .rowname { text-align: left; white-space: nowrap; font-weight: 500; position: sticky; left: 0; background: var(--panel); }
+.board .secname { width: 92px; padding: 3px 5px; font-size: 12.5px; font-weight: 600; }
+.secctl { display: flex; gap: 2px; margin-top: 3px; justify-content: center; }
+.secctl select { padding: 2px; font-size: 11.5px; }
+.secctl button { padding: 1px 6px; }
+.cell { width: 30px; height: 22px; padding: 0; border-radius: 6px; background: var(--bg); }
+.cell.on { background: var(--accent); border-color: var(--accent); }
+#mk-built { margin-top: 8px; }

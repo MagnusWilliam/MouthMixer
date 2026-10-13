@@ -11,7 +11,16 @@ many instruments, effects and a mastered mix. MouthMixer tries many versions and
 checks each against the music rules in `docs/MUSIC_KNOWLEDGE.md`, and shows the best three. Raw clips live
 in the **Clips** tab; pick your microphone in **Setup**.
 
-**New (2026-10-13): Mix, Lyrics and Sing.** Open a song and use the tabs above it:
+**New: Make (start here).** Open the **Make** tab and pick a starter beat (battle, daily life, night,
+dungeon or boss). Then record pieces on purpose over the loop: choose a slot (Beat, Bassline, Hook…),
+press **Record**, and after one bar of clicks hum or beatbox it as many times round as you like; every time
+round is a take and the best is picked. Each piece is a character you can switch on and off, give another
+instrument, move up or down an octave, make simpler or busier, and fix note by note. The **song board**
+says which pieces play in which section; **Build the song** puts the finished song in **Songs**, where
+Mix, Lyrics and Sing work on it. Background listening is now off (turn it on in Setup if you want it).
+Tips for a Persona feel: [`docs/PERSONA_STYLE.md`](docs/PERSONA_STYLE.md) §10.
+
+**Also new (2026-10-13): Mix, Lyrics and Sing.** Open a song and use the tabs above it:
 - **Mix** works like Incredibox: click a part's round button to turn it on or off while the song plays,
   pick another sound from its list, move its volume, or press **S** to hear it alone. Under **Add a part**,
   choose the sound you're going for (funky, dreamy, battle…) and add from the ranked suggestions; each says

@@ -78,6 +78,10 @@ def _parts_from_version(v: dict) -> list[dict]:
         parts.append({"id": f"p{i}", "name": t["name"], "role": t["role"], "instrument": inst,
                       "kind": f"orig:{t['role']}", "mine": t.get("mine", False), "muted": False, "gain_db": 0.0,
                       "pan": ROLE_PAN.get(t["role"], 0.0), "notes": t["notes"]})
+    for a in v.get("audio_parts", []):  # recorded audio pieces (vocal chops from the Make tab)
+        parts.append({"id": a["id"], "name": a["name"], "role": a.get("role", "chop"), "instrument": "your voice",
+                      "kind": "audio", "mine": True, "muted": False, "gain_db": 0.0, "pan": 0.0, "notes": [],
+                      "file": a["file"]})
     if v.get("vocal_stem"):
         parts.append(_vocal_part(v["vocal_stem"]))
     return parts
@@ -272,10 +276,12 @@ class Mixer:
         new = {**self.v, **summary, "file": f"v{idx}.ogg", "midi": f"v{idx}.mid", "critic": verdict,
                "score": verdict["score"], "title": self.v["title"].split(" · ")[0] + " · " + suffix,
                "mixed_from": self.version, "mixed_at": time.time()}
-        voc = next((p for p in self.parts if p.get("file") and not p.get("muted")), None)
+        voc = next((p for p in self.parts if p.get("file") and p["role"] == "vocal" and not p.get("muted")), None)
         new.pop("vocal_stem", None)
         if voc:
             new["vocal_stem"] = voc["file"]
+        new["audio_parts"] = [{"id": p["id"], "name": p["name"], "role": p["role"], "file": p["file"]}
+                              for p in self.parts if p.get("file") and p["role"] != "vocal" and not p.get("muted")]
         new.update(extra or {})
         self.record = json.loads((self.dir / "song.json").read_text())  # as it is now
         self.record["versions"].append(new)
@@ -306,7 +312,7 @@ class Mixer:
         h = hashlib.sha1(voc[:, ::97].tobytes()).hexdigest()[:12]
         stem = f"vocal-{h}.ogg"
         render.write_audio(voc, self.stem_dir / stem)
-        self.state["parts"] = [p for p in self.parts if not p.get("file")] + [_vocal_part(stem)]
+        self.state["parts"] = [p for p in self.parts if p["role"] != "vocal"] + [_vocal_part(stem)]
         self.state["lead_mode"] = lead_mode
         self.save_state()
         extra = {"vocals": res.report | {"lead_mode": lead_mode}}

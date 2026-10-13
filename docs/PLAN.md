@@ -48,6 +48,16 @@ no black-box AI song generator in the main path.
   edit" for *parts*, not notes: there is still no piano roll and no mixer console, and every saved mix
   goes through the critic. Research: [`ARRANGING.md`](ARRANGING.md), [`PERSONA_STYLE.md`](PERSONA_STYLE.md).
 - **You mostly hum the lead melody**; drums, bass and accents come as default loops and generated parts.
+- **New main workflow: Make (decided 2026-10-13).** You record on purpose instead of being listened to in the
+  background. Pick a **starter beat** (5 moods: battle, daily life, night, dungeon, boss; Persona genre
+  traits, no copied songs), then record **pieces** in a booth over the loop: loops that repeat (beat,
+  bassline, riff, accent stabs, vocal chop, extra percussion) and one-off parts (hook, verse melody,
+  bridge, answer line, intro motif, drum fill). Each pass round the loop is a take. Pieces work like
+  Incredibox characters (on/off, swap sound, octave, volume, simpler/busier) and you may **nudge single
+  notes** (up/down, earlier/later, longer/shorter, delete): this relaxes "never edit notes" at the user's
+  request. A **song board** places pieces in sections; **Build** makes a song that the Mix, Lyrics and
+  Sing tabs then work on. Vocal chops stay your voice (tuned, cut on the beat).
+- **Background listening is off by default** (a switch in Setup); the hotkey only works when it's on.
 - **Vocals and lyrics in the app now** (ahead of Phase 6's order, at the user's request): a Lyrics screen
   and a Sing screen (karaoke, pitch lane, takes), with the processing system in [`VOCALS.md`](VOCALS.md).
 
@@ -1035,6 +1045,25 @@ the 30 s memory froze. Now: a watchdog reopens the mic after 3 s without audio; 
 audio is refused (and reopens the mic); two identical hotkey clips are never both written; a crash in
 the audio thread is logged and skipped; the status bar says when the mic has gone quiet or was
 reconnected.
+
+**Build status (2026-10-13, later): Make, the purposeful workflow.**
+- `studio/starters.py`: 10 starter beats in 5 moods, each with a main loop (A) and bridge loop (B) and
+  generated beat, bass, chords and pad; two new styles (tense dungeon, boss rock).
+- `studio/transcribe.py`: booth recordings read straight onto the known grid (tempo, key, bar 1 and the
+  piece's length are known): hums to notes (snapped to the key), beatbox to drums or percussion; every
+  pass round the loop is a scored take.
+- `studio/project.py`: pieces, takes, one-note fixes, simpler/busier, octave, key change; pitched pieces
+  remember the chords they were sung over and follow other chords by scale steps (a bassline follows
+  the bridge); accent stabs become 3-note chord hits; booth loops render seamlessly per piece; the song
+  board builds a full song into the Songs list (rebuilds add versions), with vocal chops as audio parts.
+- `app/make.py`, `app/static/make.js`: the Make tab (starters, Incredibox-style piece row with instant
+  on/off, recorder with count-in and pass counter, notes strip with fix buttons, song board, build).
+- Measured on synthetic audio: hooks hummed over a loop come back note-perfect (also with 90 ms latency
+  removed); every starter builds a song with no clashes or range problems; the full browser flow
+  (record a hook through a fake mic, build, open in Mix) works.
+- Not yet: a range check before recording, chords from hummed roots (the starter's loops are used),
+  more starters per mood, arrangement suggestions on the board.
+- **Next:** the user tries Make with the QuadCast: one starter, a beat, a bassline and a hook.
 
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.

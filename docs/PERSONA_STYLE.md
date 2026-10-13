@@ -124,3 +124,45 @@ cues per game state; simple chant choruses over richer verse harmony.
 No verified BPM/key for "Mass Destruction", "It's Going Down Now" or "Rivers in the Desert"; the "Beneath the
 Mask" tempo is disputed (75 vs 90); nothing source-backed on mixing, reverb, loudness, loop points or exact
 progressions (Hooktheory's full charts were blocked).
+
+## 10. Making yours sound more like Persona (for the person humming)
+
+What you do in the booth matters more than any setting. These follow from §2-§7; none of them copy a song.
+
+**The hook**
+- Keep it short: 2 bars, sung 2-4 times. If you can't chant it after hearing it twice, it's too long.
+- Start it off the beat (on the "and" just before beat 1) and give it one jump of a 4th or more: pushed
+  rhythms and a leap make funk and J-pop hooks stick.
+- In the battle and night starters, land phrase ends on the 9th or 7th of the chord instead of the root:
+  hum a step above or below where it "wants" to end. That jazzy, unresolved landing is the acid-jazz
+  sound (§3: melody on extensions over rich chords).
+- Leave gaps. The space between hook phrases is where the answer line or a brass stab goes (call and
+  response, §7).
+
+**Rhythm**
+- Battle starters: think in 16ths. Bassline: short notes, octave jumps ("dum, dum-DUM"), a push on the
+  "and" of 4 into the next bar (§4). Beatbox: busy hats, ghost snares (soft "k" between the loud ones).
+- Night starters: lay back. Sing a hair behind the beat; the timing correction keeps your average lateness
+  as feel.
+- Accent stabs: put them on the "and" of 2 and the "and" of 4, or just before bar 1. Short and loud.
+
+**Sounds to pick for your pieces**
+- Hook: trumpet or muted trumpet (brass identity, §5), Rhodes, organ, clean or chorus guitar. Avoid
+  saxophone as the battle lead (it's a fingerprint, §8).
+- Riff under everything: Rhodes, clavinet or organ, 2 bars, repeating.
+- Bass: slap bass for battle, finger or synth bass at night.
+- Stabs: brass section. Vocal chops: one or two syllables ("hey", "ah", "go").
+
+**Structure**
+- No long intros in battle tracks: 4 bars at most, then the groove (§6).
+- Make the last hook the densest: switch on extra percussion, the stabs and the chop only in the final
+  hook sections on the song board.
+- Bridge: drop the beat to half (switch the beat off and keep percussion), then bring everything back.
+- Make one track per game state with the same pieces: a calm version (no drums, pad and riff), the
+  normal version, and a boss version (boss starter, same hook). That's how one identity runs through a
+  game (§1, §6).
+
+**Vocals**
+- Short English hook lines, sung, with simpler verses. Doubles on the hook (bright-pop preset) for the P4
+  sound; the soul preset with natural tuning for the P5 sound.
+- Don't imitate a specific singer's voice (§8); sing it your way.
