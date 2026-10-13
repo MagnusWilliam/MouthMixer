@@ -1,0 +1,34 @@
+title: Wrong Side of Midnight
+slot: City night theme / hideout
+starter: night_jazz
+voices: Whisper = the verses | Lead = Breathy on the chorus | hum a tenor-sax line as a Riff or Answer-line piece
+hits: no
+notes: Quiet and close. Whispered verses, a breathy two-line chorus. The title is the chorus's last words, held on the open "-night" vowel. Leave gaps: the sax answers each line (record an Answer line piece).
+---
+[Intro]
+
+[Verse 1, whispered]
+Neon on the wet stone,
+Every window's someone's secret.
+I walk the long way home,
+Just to hear the city breathing.
+
+[Chorus]
+Stay, stay, we're not done yet,
+On the wrong side of midnight.
+Stay, stay, don't let go yet,
+On the wrong side of midnight.
+
+[Verse 2, whispered]
+Last bus sighing at the stop,
+Somebody laughing two floors up.
+Streetlights humming out of key,
+Nobody here is watching me.
+
+[Chorus]
+Stay, stay, we're not done yet,
+On the wrong side of midnight.
+Stay, stay, don't let go yet,
+On the wrong side of midnight.
+
+[Outro]

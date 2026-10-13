@@ -150,3 +150,59 @@ piecewise-linear time map from the onset corrections, `pitch_curve`, WORLD synth
 the time-mapped original for consonants and breaths) → `tame_breaths` → `chain` → `sit_in_song`
 (the vocal's loudness set against the music's while you sing) → `quality`. The Mix tab then treats the
 result as a stem ("Your vocals"), so it can be turned up, down or off and re-saved.
+
+## 11. Voice characters and vocal tracks (2026-10-13)
+
+One singer (you) plays every part. Research (web search, 2026-10-13):
+- **What makes a voice read as female or male is mostly the formants, not the pitch** [V]: Praat's "change
+  gender" uses a formant ratio of about 1.1 (and 1/1.1 back) [S]; patents and vendors use 15-20% [S].
+  https://www.fon.hum.uva.nl/praat/manual/Sound__Change_gender___.html ·
+  https://voxbooster.com/blog/male-to-female-voice-changer-tutorial/ ·
+  https://unison.audio/formant-shifting/
+- **Plain pitch shifting moves the formants too** (the chipmunk sound), so shift formants separately and
+  start small [V]. https://www.sageaudio.com/articles/top-7-vocal-formant-and-pitch-techniques ·
+  https://emastered.com/blog/formant-shifting
+- **WORLD separates pitch, envelope and aperiodicity**, so each can be changed alone; whisper = the envelope
+  driven by noise instead of a pitched source; breathiness = more aperiodicity (can sound like added
+  noise if overdone); re-running WORLD on processed audio adds artifacts [V/S].
+  https://arxiv.org/pdf/2208.07282 · https://assets.amazon.science/05/f9/42b2258b4e16ae4d5c1866e7209f/voice-conversion-for-whispered-speech-synthesis.pdf ·
+  https://dev.to/orca_forge/learning-from-failure-why-couldnt-breathiness-be-an-independent-parameter-1i64
+- **Width comes from separate real takes**, not copies (copies just get louder or phase); 2-4 unison takes,
+  doubles panned out, the lead in the centre, octave layers for size; high-pass gang and backing vocals
+  [V]. https://violetrecording.com/how-to-double-track-vocals/ · https://www.sageaudio.com/articles/how-to-stack-vocals ·
+  https://blog.soundtrap.com/vocal-layering/ · https://violetrecording.com/how-to-layer-vocals/
+- **Phone / PA voice**: 300-3400 Hz band-pass (24 dB/octave), a lift near 1 kHz, light distortion after the
+  EQ, level-matched [V]. https://voxbooster.com/blog/telephone-voice-effect ·
+  https://www.pastpaperhero.com/resources/edexcel-a-level-music-technology-9mt0-effects-processing-telephone-effect
+- **Vocal chops**: formant-shift rather than pitch-shift to avoid the chipmunk sound; hard consonants work
+  as percussion [S]. https://blog.native-instruments.com/vocal-chops/
+
+What `vocals.CHARACTERS` does (all values [U] starting points, tune by ear):
+
+| Character | How |
+|---|---|
+| Female lead | an octave up (stays in key) + formants ×1.17 + a little breath |
+| Female, same octave (alto) | formants ×1.15 |
+| Deeper male | formants ×0.88 |
+| Male, an octave down | octave down + formants ×0.92 |
+| Younger / brighter | formants ×1.08 |
+| Raspy | aperiodicity bursts above 600 Hz, slight pitch jitter, saturation |
+| Breathy | aperiodicity raised above 1 kHz, +2 dB air |
+| Whisper | no pitch at all (noise-driven envelope), formants ×1.05, +3 dB above 4 kHz |
+| Gang shout | 5 extra voices: formants 0.90-1.09, ±6 cents, 0-27 ms late, panned wide, -7 dB, saturated, high-passed |
+| Choir | 4 extra voices including an octave above and below, panned, high-passed |
+| Station announcer | 300-3400 Hz at 24 dB/oct, +4 dB at 1.1 kHz, distortion |
+
+Pitch shifts are whole octaves only, so the melody stays in key with the music. In free singing the
+character is applied in the same WORLD pass as the tuning (one pass, fewer artifacts).
+
+**Vocal tracks**: each take belongs to a track (Lead, Rap, Gang, Backing, Harmony, Ad-libs, Announcer,
+Whisper). Each track is processed on its own (its own voice and style) and becomes its own part in the
+mixer, set against the music at the style's level plus a track offset (Lead/Rap 0, Gang -2, Announcer and
+Whisper -4, Backing/Harmony -6, Ad-libs -8 dB). **Gang, Backing and Harmony stack every take**: the newest
+take of each section is the centre voice and the others are tuned, high-passed and panned around it.
+
+**Free singing** (no hummed melody): comped per section (newest take), tuned to the *key* (nearest scale
+note, natural strength and retune time from the style, ±10 cents left alone); rap, spoken and whispered
+sections are not tuned. **Band hits on vocal accents**: the mixer finds the hardest-hit syllables (louder
+than the phrase around them and on the 16th grid) and adds drum hits and brass stabs there.

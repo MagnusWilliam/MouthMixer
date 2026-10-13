@@ -1,0 +1,35 @@
+title: Rain Delay
+slot: Rainy-day city theme
+starter: rain_bossa
+voices: Lead = Female lead with the Soul style (or Breathy) | Backing = Female, same octave, soft "ba-da-ba" in the chorus
+hits: no
+notes: Gentle and slow-moving words over a busy little bossa groove. The hook is the title plus a sigh ("rain delay, rain delay"). Short lines, lots of open vowels (stay, grey, way, away) for long, floating notes.
+---
+[Intro]
+
+[Verse 1]
+Trains are late and I don't mind,
+Umbrellas bloom like they're out of time.
+Puddles hold a sky of grey,
+Little rivers on their way.
+
+[Chorus]
+Rain delay, rain delay,
+Stay a while, the sky's still grey.
+Rain delay, rain delay,
+Some days are made to lose your way.
+
+[Verse 2]
+Steam is rising off my cup,
+Nobody's in a hurry, nothing's up.
+Watch the windows fog and clear,
+Everybody that I need is here.
+
+[Chorus]
+Rain delay, rain delay,
+Stay a while, the sky's still grey.
+Rain delay, rain delay,
+Some days are made to lose your way.
+
+[Outro]
+(ba-da-ba, ba-da-ba)

@@ -1,0 +1,40 @@
+title: Return to Sender
+slot: Ending theme (plays after Ren's goodbye)
+starter: ending_ballad
+voices: Lead = Your voice (Soul or Cinematic style) | Backing = Choir in the final chorus only
+hits: no
+notes: Quotes the main theme: record an Intro motif piece by humming the "Ride, ride, ride on the last train" melody slowly; it opens and closes the song on piano. The chorus answers the main theme's "ticket" and "train" images. The last chorus moves from "your voice" to "my voice" (the change players feel).
+---
+[Intro]
+
+[Verse 1]
+You held the door so I could leave,
+Gave me a ticket with no return.
+Now every train that passes me
+Sounds like your voice, still learning to burn.
+
+[Pre-Chorus]
+And I know, I know,
+You'd tell me to go.
+
+[Chorus]
+Return to sender, the light you gave,
+I'll carry it home, I'll keep it safe.
+Every platform, every door,
+I'll ride for you, and a little more.
+
+[Verse 2]
+Your coat's still hanging by the stairs,
+The clock you fixed still runs too fast.
+I stop at stations no one shares,
+And save a seat until the last.
+
+[Pre-Chorus]
+And I know, I know,
+You'd tell me to go.
+
+[Final Chorus]
+Return to sender, the light you gave,
+I'll carry it home, I'll keep it safe.
+Every platform, every door,
+Now it's my voice you're riding for.

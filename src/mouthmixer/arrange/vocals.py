@@ -65,6 +65,18 @@ def preset(name: str | None) -> dict:
     return DEFAULT | PRESETS.get(name or "soul", PRESETS["soul"]) | {"name": name or "soul"}
 
 
+
+def _movavg(x: np.ndarray, k: int) -> np.ndarray:
+    """Centred moving average (same length), O(n) with a running sum: np.convolve with a long box is
+    O(n*k) and took most of the processing time on whole-song tracks."""
+    k = max(1, int(k))
+    x = np.asarray(x, dtype=np.float64)
+    if k == 1 or len(x) == 0:
+        return x.copy()
+    c = np.cumsum(np.pad(x, (k // 2 + 1, k - k // 2 - 1), mode="constant"))
+    return (c[k:] - c[:-k])[: len(x)] / k
+
+
 # --------------------------------------------------------------------------------------------------
 # Takes and notes
 # --------------------------------------------------------------------------------------------------
@@ -134,21 +146,57 @@ def lines_of(notes: list[Note]) -> list[tuple[float, float, list[int]]]:
 # Pitch tracking (fast) for scoring takes
 # --------------------------------------------------------------------------------------------------
 
+def _active_regions(y: np.ndarray, sr: int, floor_db: float = -55.0, gap: float = 0.4, pad: float = 0.2):
+    """(start, end) samples of the parts with sound in them: a whole song's vocal track is mostly silence,
+    and pitch tracking silence is wasted time."""
+    w = max(1, int(0.05 * sr))
+    n = len(y) // w
+    if n == 0:
+        return [(0, len(y))]
+    e = 10 * np.log10(np.mean(y[: n * w].reshape(n, w).astype(np.float64) ** 2, axis=1) + 1e-12)
+    on = np.flatnonzero(e > floor_db)
+    if not len(on):
+        return []
+    out = []
+    a = prev = on[0]
+    for k in on[1:]:
+        if (k - prev) * w > gap * sr:
+            out.append((a, prev + 1))
+            a = k
+        prev = k
+    out.append((a, prev + 1))
+    p = int(pad * sr)
+    return [(max(0, s0 * w - p), min(len(y), e0 * w + p)) for s0, e0 in out]
+
+
 def track_f0(x: np.ndarray, sr: int = SR, fast: bool = True) -> tuple[np.ndarray, np.ndarray]:
-    """f0 (Hz, 0 = unvoiced) every 5 ms, analysed at 16 kHz. Voicing (and so note onsets) always comes
-    from DIO + StoneMask: Harvest smears voicing 20-150 ms into the consonants before a note (measured
-    on synthetic singing). With fast=False the pitch values come from Harvest where both agree a frame
-    is voiced (Harvest has fewer octave slips, which WORLD resynthesis would turn into glitches)."""
+    """f0 (Hz, 0 = unvoiced) every 5 ms, analysed at 16 kHz, only where there is sound. Voicing (and so
+    note onsets) always comes from DIO + StoneMask: Harvest smears voicing 20-150 ms into the consonants
+    before a note (measured on synthetic singing). With fast=False the pitch values come from Harvest
+    where both agree a frame is voiced (Harvest has fewer octave slips, which WORLD resynthesis would
+    turn into glitches)."""
     import librosa
     import pyworld as pw
 
     y = librosa.resample(np.asarray(x, dtype=np.float32), orig_sr=sr, target_sr=16000).astype(np.float64)
-    f0, t = pw.dio(y, 16000, f0_floor=70, f0_ceil=1100, frame_period=FRAME_MS)
-    f0 = pw.stonemask(y, f0, t, 16000)
-    if not fast:
-        fh, _ = pw.harvest(y, 16000, f0_floor=70, f0_ceil=1100, frame_period=FRAME_MS)
-        m = min(len(fh), len(f0))
-        f0[:m] = np.where((f0[:m] > 0) & (fh[:m] > 0), fh[:m], f0[:m])
+    hop = int(16000 * FRAME_MS / 1000)
+    n_frames = len(y) // hop + 1
+    t = np.arange(n_frames) * FRAME_MS / 1000
+    f0 = np.zeros(n_frames)
+    for a, b in _active_regions(y, 16000):
+        a = (a // hop) * hop
+        seg = y[a:b]
+        if len(seg) < hop * 4:
+            continue
+        fs, ts = pw.dio(seg, 16000, f0_floor=70, f0_ceil=1100, frame_period=FRAME_MS)
+        fs = pw.stonemask(seg, fs, ts, 16000)
+        if not fast:
+            fh, _ = pw.harvest(seg, 16000, f0_floor=70, f0_ceil=1100, frame_period=FRAME_MS)
+            m = min(len(fh), len(fs))
+            fs[:m] = np.where((fs[:m] > 0) & (fh[:m] > 0), fh[:m], fs[:m])
+        k = a // hop
+        m = min(len(fs), n_frames - k)
+        f0[k:k + m] = fs[:m]
     # Drop single-frame voicing blips.
     v = f0 > 0
     for i in range(1, len(v) - 1):
@@ -216,8 +264,10 @@ def note_errors(f0: np.ndarray, t: np.ndarray, t0: float, notes: list[Note], ons
 def score_take(take: Take, notes: list[Note]) -> dict:
     """How good a take is, per line and overall (for the take list and for comping)."""
     covered = [i for i, n in enumerate(notes) if n.start >= take.t0 + 0.05 and n.end <= take.end]
-    if not covered:
-        return {"lines": {}, "score": 0.0, "notes": 0}
+    if not covered:  # no melody to score against (your own tune, rap): just the levels
+        pre = take.audio[: max(1, int(0.5 * SR))]
+        return {"lines": {}, "score": 0.0, "notes": 0, "peak_db": round(_db(np.abs(take.audio).max()), 1),
+                "noise_db": round(_db(np.sqrt(np.mean(pre.astype(np.float64) ** 2))), 1)}
     sub = [notes[i] for i in covered]
     f0, t = track_f0(take.audio)
     onsets = find_onsets(f0, t, take.t0, sub)
@@ -286,8 +336,16 @@ def comp(takes: list[Take], notes: list[Note], scores: list[dict] | None = None,
         hi = min(nxt - 0.25, takes[j].end)
         hi = _quiet_point(takes[j], max(b, hi - 0.25), max(b + 0.01, hi)) if hi > b else b
         owner[max(0, int(lo * SR)):min(n, int(hi * SR))] = j
-    # Fill each run from its take, crossfading 5 ms at every change of owner.
-    fade = int(0.005 * SR)
+    out = _fill(takes, owner, n)
+    # Room noise for the profile: the first take's lead-in before its first note.
+    first = min(takes, key=lambda tk: tk.t0)
+    return out, picks, first.t0
+
+
+def _fill(takes: list[Take], owner: np.ndarray, n: int, fade_s: float = 0.005) -> np.ndarray:
+    """Audio from each sample's owning take (-1 = silence), crossfading at every change of owner."""
+    out = np.zeros(n, dtype=np.float32)
+    fade = int(fade_s * SR)
     i = 0
     while i < n:
         j = owner[i]
@@ -311,9 +369,7 @@ def comp(takes: list[Take], notes: list[Note], scores: list[dict] | None = None,
                 env[-m:] = np.minimum(env[-m:], np.linspace(1, 0, m))
             out[a:b] += seg * env
         i = k
-    # Room noise for the profile: the first take's lead-in before its first note.
-    first = min(takes, key=lambda tk: tk.t0)
-    return out, picks, first.t0
+    return out
 
 
 def _quiet_point(tk: Take, a: float, b: float) -> float:
@@ -353,7 +409,8 @@ def take_noise(takes: list[Take], notes: list[Note]) -> tuple[np.ndarray, float]
     if len(best) < SR // 10:  # no lead-in: the quietest 250 ms of the first take
         x = takes[0].audio
         w = SR // 4
-        e = np.convolve(x.astype(np.float64) ** 2, np.ones(w) / w, mode="valid")
+        c = np.cumsum(np.r_[0.0, x.astype(np.float64) ** 2])
+        e = (c[w:] - c[:-w]) / w
         i = int(np.argmin(e)) if len(e) else 0
         best = x[i:i + w]
     return best, _db(np.sqrt(np.mean(best.astype(np.float64) ** 2)) + 1e-12)
@@ -384,7 +441,7 @@ def fix_plosives(x: np.ndarray, notes: list[Note]) -> tuple[np.ndarray, int]:
     60 ms high-pass at 120 Hz with 10 ms fades."""
     low = _filt(x, _sos("low", 150, 2))
     w = int(0.01 * SR)
-    env = np.sqrt(np.convolve(low.astype(np.float64) ** 2, np.ones(w) / w, mode="same"))
+    env = np.sqrt(_movavg(low.astype(np.float64) ** 2, w))
     hp = _filt(x, _sos("high", 120, 4))
     y = x.copy()
     count = 0
@@ -558,7 +615,7 @@ def correct(x: np.ndarray, notes: list[Note], p: dict, report: dict) -> tuple[np
         orig = np.interp(src_samples, np.arange(len(seg)), seg)
         vmask = np.interp(samp_t, t, (f0_new > 0).astype(float))
         k = int(0.01 * SR)
-        vmask = np.convolve(vmask, np.ones(k) / k, mode="same")
+        vmask = _movavg(vmask, k)
         # Match WORLD's level to the original's in voiced parts.
         vv = vmask > 0.9
         if vv.sum() > SR // 20:
@@ -646,7 +703,7 @@ def tame_breaths(x: np.ndarray, f0: np.ndarray, noise_db: float, report: dict) -
 
 def _env(x: np.ndarray, ms: float) -> np.ndarray:
     w = max(1, int(ms / 1000 * SR))
-    return np.sqrt(np.convolve(x.astype(np.float64) ** 2, np.ones(w) / w, mode="same"))
+    return np.sqrt(_movavg(x.astype(np.float64) ** 2, w))
 
 
 def resonance(x: np.ndarray, voiced: np.ndarray) -> tuple[float, float]:
@@ -674,7 +731,7 @@ def deess(x: np.ndarray, max_db: float, top: float = 0.15) -> tuple[np.ndarray, 
     thr = np.quantile(env[sib], 1 - top)
     over = np.where(sib & (env > thr), 20 * np.log10(np.maximum(env, 1e-9) / thr), 0.0)
     gr = np.minimum(over, max_db)
-    gr = np.convolve(gr, np.ones(int(0.003 * SR)) / int(0.003 * SR), mode="same")
+    gr = _movavg(gr, int(0.003 * SR))
     g = 10 ** (-gr / 20)
     return (x - band + band * g).astype(np.float32), float(gr.max())
 
@@ -707,7 +764,7 @@ def ride(x: np.ndarray, notes: list[Note], report: dict) -> np.ndarray:
         ia, ib = max(0, int((a - 0.05) * SR)), min(len(x), int((b + 0.1) * SR))
         gain_db[ia:ib] = g
     k = int(0.08 * SR)
-    gain_db = np.convolve(np.pad(gain_db, (k // 2, k - k // 2 - 1), mode="edge"), np.ones(k) / k, mode="valid")
+    gain_db = _movavg(gain_db, k)
     report["riding_db"] = moves
     return (x * 10 ** (gain_db / 20)).astype(np.float32)
 
@@ -744,7 +801,7 @@ def _mask(x: np.ndarray, notes: list[Note], sections: set | None) -> np.ndarray:
         if sections is None or n.section in sections:
             m[max(0, int((n.start - 0.1) * SR)):min(len(x), int((n.end + 0.15) * SR))] = 1
     k = int(0.02 * SR)
-    return np.convolve(m, np.ones(k) / k, mode="same").astype(np.float32)
+    return _movavg(m, k).astype(np.float32)
 
 
 def harmony_line(f0_after: np.ndarray, notes: list[Note], tonic: int, mode: str) -> np.ndarray:
@@ -908,9 +965,9 @@ def envelope_from_audio(vocal: np.ndarray) -> np.ndarray:
         return np.zeros(len(mono), dtype=np.float32)
     v = (e > np.quantile(e[e > -80], 0.95) - 30).astype(np.float32) if (e > -80).any() else np.zeros(len(mono))
     k = int(0.4 * SR)
-    v = (np.convolve(v, np.ones(k) / k, mode="same") > 0.05).astype(np.float32)
+    v = (_movavg(v, k) > 0.05).astype(np.float32)
     k = int(0.15 * SR)
-    return np.convolve(v, np.ones(k) / k, mode="same").astype(np.float32)
+    return _movavg(v, k).astype(np.float32)
 
 
 def voice_envelope(f0_after: np.ndarray, n: int) -> np.ndarray:
@@ -919,9 +976,9 @@ def voice_envelope(f0_after: np.ndarray, n: int) -> np.ndarray:
     v = np.repeat((f0_after > 0).astype(np.float32), hop)[:n]
     v = np.pad(v, (0, max(0, n - len(v))))
     k = int(0.4 * SR)
-    v = (np.convolve(v, np.ones(k) / k, mode="same") > 0.05).astype(np.float32)
+    v = (_movavg(v, k) > 0.05).astype(np.float32)
     k = int(0.15 * SR)
-    return np.convolve(v, np.ones(k) / k, mode="same").astype(np.float32)
+    return _movavg(v, k).astype(np.float32)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -1029,7 +1086,8 @@ class Result:
 
 
 def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], tonic: int, mode: str,
-            preset_name: str | None, length: float, choice: dict | None = None, hook: set | None = None) -> Result:
+            preset_name: str | None, length: float, choice: dict | None = None, hook: set | None = None,
+            character: str = "natural") -> Result:
     """Takes in, a processed vocal out (song time, `length` seconds)."""
     p = preset(preset_name)
     notes = notes_in_seconds(lead, bpm, sections)
@@ -1049,6 +1107,10 @@ def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], ton
     x = clean(raw, sung, noise, noise_db, report)
     y, f0_before, f0_after = correct(x, sung, p, report)
     y = tame_breaths(y, f0_after, noise_db, report)
+    y, stack = apply_character(y, f0_after, character, report)
+    ch = CHARACTERS.get(character or "natural", {})
+    if ch.get("octave") or ch.get("stack") or ch.get("whisper") or ch.get("pa"):
+        p = dict(p, harmony=None)  # the harmony voice follows the plain pitch line; skip it for changed voices
     if hook is None:
         from .lyrics import is_hook
 
@@ -1076,7 +1138,425 @@ def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], ton
         return out
 
     layers = chain(y, sung, f0_after, p, bpm, tonic, mode, hook, report, synth_from)
+    if stack is not None:
+        layers["stack"] = stack
     report["quality"] = quality(raw, layers["lead"][0] * np.sqrt(2), f0_before, f0_after, sung, report, noise_db)
     for k in ("onsets", "corrections"):
         report[k] = [None if v is None else round(float(v), 4) for v in report[k]]
     return Result(layers, y, f0_after, report)
+
+
+# --------------------------------------------------------------------------------------------------
+# Free singing and rap: vocals without a hummed melody to follow
+# --------------------------------------------------------------------------------------------------
+# When you sing your own tune over the song (or rap, or speak), there are no target notes. Then:
+# - comping is per section: the most recent take that covers the whole section wins (re-record a
+#   section to replace it), with a 30 ms crossfade at a quiet moment near the section change;
+# - sung sections are tuned to the KEY: each moment's pitch is pulled toward the nearest note of the
+#   scale (natural mode keeps vibrato and slides, eased over the preset's retune time; ±10 cents is left
+#   alone), like a key-based tuner;
+# - rap and spoken sections are not tuned at all, only cleaned and processed;
+# - no timing correction (there's no grid of notes to correct against).
+
+def comp_sections(takes: list[Take], spans: list[tuple[str, float, float]], length: float,
+                  choice: dict[str, str] | None = None) -> tuple[np.ndarray, dict[str, str]]:
+    n = int(length * SR)
+    owner = np.full(n, -1)
+    picks: dict[str, str] = {}
+    for name, a, b in spans:
+        cands = [j for j, tk in enumerate(takes) if tk.t0 <= a + 0.1 and tk.end >= b - 0.1]
+        if choice and name in choice:
+            cands = [j for j, tk in enumerate(takes) if tk.id == choice[name]] or cands
+        if not cands:  # partly covered: the take covering the most of it
+            cov = [(min(b, tk.end) - max(a, tk.t0), j) for j, tk in enumerate(takes)]
+            cov = [c for c in cov if c[0] > 0.5 * (b - a)]
+            if not cov:
+                continue
+            cands = [max(cov)[1]]
+        j = cands[-1]  # the newest
+        picks[name] = takes[j].id
+        lo = _quiet_point(takes[j], a - 0.25, a + 0.05) if a > 0.3 else max(a, takes[j].t0)
+        hi = _quiet_point(takes[j], b - 0.05, b + 0.25)
+        owner[max(0, int(lo * SR)):min(n, int(hi * SR))] = j
+    return _fill(takes, owner, n, fade_s=0.03), picks
+
+
+def _scale_target(midi: np.ndarray, tonic: int, mode: str) -> np.ndarray:
+    from . import theory
+
+    pcs = np.array(sorted({(tonic + i) % 12 for i in theory.MODES.get(mode, theory.MODES["major"])}))
+    base = np.floor(midi)
+    cands = []
+    for o in (-12, 0, 12):
+        for pc in pcs:
+            cands.append(base - (base % 12) + pc + o)
+    cands = np.stack(cands)
+    idx = np.argmin(np.abs(cands - midi[None, :]), axis=0)
+    return cands[idx, np.arange(len(midi))]
+
+
+def tune_to_key(x: np.ndarray, tonic: int, mode: str, p: dict, keep: list[tuple[float, float]],
+                report: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Key-based pitch correction with WORLD, passage by passage; `keep` = (start, end) song times left
+    untouched (rap, spoken). Returns (audio, f0 before, f0 after) on the 5 ms grid."""
+    import pyworld as pw
+
+    f0_all, t_all = track_f0(x, fast=False)
+    f0_after = f0_all.copy()
+    y = x.copy()
+    hop = FRAME_MS / 1000
+    moved = []
+    for a, b in _passages(f0_all, t_all):
+        mid = (a + b) / 2
+        if any(k0 <= mid < k1 for k0, k1 in keep):
+            continue
+        ia, ib = int(a * SR), min(len(x), int(b * SR))
+        seg = x[ia:ib].astype(np.float64)
+        if len(seg) < SR // 10:
+            continue
+        t = np.arange(int(len(seg) / SR / hop) + 1) * hop
+        f0 = np.interp(t + a, t_all, f0_all)
+        f0[np.interp(t + a, t_all, (f0_all > 0).astype(float)) < 0.5] = 0
+        v = f0 > 0
+        if v.sum() < 5:
+            continue
+        m = np.full(len(f0), np.nan)
+        m[v] = 69 + 12 * np.log2(f0[v] / 440)
+        # The note being aimed at: a 150 ms running median of the contour, snapped to the scale.
+        smooth = _run_median(m, v, int(0.15 / hop))
+        target = m.copy()
+        target[v] = _scale_target(smooth[v], tonic, mode)
+        dev = np.zeros(len(f0))
+        dev[v] = target[v] - smooth[v]
+        dev[np.abs(dev) * 100 <= 10] = 0.0
+        corr = dev * (1.0 if p["tune"] == "hard" else p["strength"])
+        k = max(1, int(max(p["retune_ms"], 5) / 1000 / hop))
+        corr = _movavg(corr, k)
+        new = np.where(v, 440 * 2 ** ((np.nan_to_num(m) + corr - 69) / 12), 0.0)
+        if p["tune"] == "hard":
+            new = np.where(v, 440 * 2 ** ((target - 69) / 12), 0.0)
+        moved += list(np.abs(corr[v]) * 100)
+        sp = pw.cheaptrick(seg, f0, t, SR)
+        ap = pw.d4c(seg, f0, t, SR)
+        world = pw.synthesize(np.ascontiguousarray(new), sp, ap, SR, FRAME_MS)[: len(seg)]
+        if len(world) < len(seg):
+            world = np.pad(world, (0, len(seg) - len(world)))
+        vmask = np.interp(np.arange(len(seg)) / SR, t, v.astype(float))
+        kk = int(0.01 * SR)
+        vmask = _movavg(vmask, kk)
+        vv = vmask > 0.9
+        if vv.sum() > SR // 20:
+            world *= np.sqrt(np.mean(seg[vv] ** 2) / max(np.mean(world[vv] ** 2), 1e-12))
+        y[ia:ib] = (vmask * world + (1 - vmask) * seg).astype(np.float32)
+        fa, fb = np.searchsorted(t_all, [a, b])
+        f0_after[fa:fb] = np.interp(t_all[fa:fb], t + a, new)
+        f0_after[fa:fb][np.interp(t_all[fa:fb], t + a, v.astype(float)) < 0.5] = 0
+    report["tuned_frames_moved_cents"] = round(float(np.median(moved)), 1) if moved else 0.0
+    return y, f0_all, f0_after
+
+
+def _run_median(m: np.ndarray, v: np.ndarray, w: int) -> np.ndarray:
+    """Running median of a pitch contour inside each voiced run (never across silences)."""
+    from scipy.ndimage import median_filter
+
+    out = m.copy()
+    idx = np.flatnonzero(v)
+    if not len(idx):
+        return out
+    starts = np.r_[idx[0], idx[1:][np.diff(idx) > 1]]
+    ends = np.r_[idx[:-1][np.diff(idx) > 1], idx[-1]] + 1
+    for a, b in zip(starts, ends):
+        out[a:b] = median_filter(m[a:b], size=max(1, min(w, b - a)), mode="nearest")
+    return out
+
+
+def phrase_notes(f0: np.ndarray, spans: list[tuple[str, float, float]]) -> list[Note]:
+    """Stand-in "notes" for the processing chain (riding per phrase, doubles on the hook, delay throws
+    on phrase ends): one per sung phrase, at its median pitch."""
+    t = np.arange(len(f0)) * FRAME_MS / 1000
+    out = []
+    for i, (a, b) in enumerate(_passages(f0, t, gap=0.25, pad=0.0)):
+        i0, i1 = np.searchsorted(t, [a, b])
+        seg = f0[i0:i1]
+        seg = seg[seg > 0]
+        if len(seg) < 5:
+            continue
+        midi = int(round(69 + 12 * np.log2(np.median(seg) / 440)))
+        name = next((nm for nm, s0, s1 in spans if s0 <= (a + b) / 2 < s1), "")
+        out.append(Note(a, b, midi, i, name))
+    return out
+
+
+def produce_free(takes: list[Take], bpm: float, sections: list[dict], tonic: int, mode: str,
+                 preset_name: str | None, length: float, section_modes: dict[str, str] | None = None,
+                 choice: dict | None = None, hook: set | None = None, character: str = "natural",
+                 stack_all: bool = False) -> Result:
+    """Takes in, a processed vocal out, for singing without a melody to follow (and for rap)."""
+    from .lyrics import is_hook
+
+    p = dict(preset(preset_name))
+    p["harmony"] = None  # harmonies need real notes
+    section_modes = section_modes or {}
+    spb = 60.0 / bpm
+    spans = [(sc["name"], sc["start"] * 4 * spb, (sc["start"] + sc["bars"]) * 4 * spb) for sc in sections]
+    report: dict = {"preset": p["name"], "preset_label": p["label"], "mode": "free"}
+    raw, picks = comp_sections(takes, spans, length, choice)
+    # Gang and backing tracks: every other take is sung alongside the chosen one (real takes make width;
+    # copies of one take don't).
+    extra_takes = [tk for tk in takes if tk.id not in set(picks.values())] if stack_all else []
+    if not picks:
+        raise ValueError("none of the takes covers a whole section: record from the count-in to the end of the section")
+    report["picks"] = picks
+    noise, noise_db = take_noise(takes, [Note(a, b, 60) for _, a, b in spans])  # the count-in before a section
+    report["noise_db"] = round(noise_db, 1)
+    x = _filt(raw, _sos("high", 100))
+    if noise_db > -65 and len(noise) > SR // 10:
+        import noisereduce as nr
+
+        x = nr.reduce_noise(y=x, sr=SR, y_noise=_filt(noise, _sos("high", 100)), stationary=True,
+                            prop_decrease=0.6, n_fft=2048).astype(np.float32)
+    untuned = ("rap", "spoken", "whisper")
+    keep = [(a, b) for nm, a, b in spans if section_modes.get(nm) in untuned]
+    report["untuned_sections"] = [nm for nm, a, b in spans if section_modes.get(nm) in untuned]
+    y, f0_before, f0_after = tune_to_key(x, tonic, mode, p, keep, report)
+    y = tame_breaths(y, f0_after, noise_db, report)
+    if (character or "natural") != "natural":
+        # rap/spoken parts keep their own pitch line; the character still applies to them
+        y, stack = apply_character(y, f0_after, character, report, source=tame_breaths(x, f0_after, noise_db, {}))
+    else:
+        stack = None
+        report["character"] = "natural"
+    if extra_takes:
+        st2 = stack_takes(extra_takes, spans, length, tonic, mode, p, keep)
+        stack = st2 if stack is None else stack + st2
+        report["stacked_takes"] = len(extra_takes)
+    notes = phrase_notes(f0_after, spans)
+    if not notes:
+        raise ValueError("no singing found in the takes: check that the right mic is picked")
+    hook = hook if hook is not None else {nm for nm, _, _ in spans if is_hook(nm)}
+    layers = chain(y, notes, f0_after, p, bpm, tonic, mode, hook, report, None)
+    if stack is not None:
+        layers["stack"] = stack
+    report["quality"] = quality_free(raw, layers["lead"][0] * np.sqrt(2), f0_after, notes, keep, tonic, mode, noise_db)
+    return Result(layers, y, f0_after, report)
+
+
+def quality_free(raw, processed, f0_after, notes, keep, tonic, mode, noise_db) -> dict:
+    """The quality gates that make sense without target notes: in key (sung parts), 's' sounds, phrase
+    levels, noise, clipping."""
+    hop = FRAME_MS / 1000
+    t = np.arange(len(f0_after)) * hop
+    v = (f0_after > 0) & ~np.array([any(a <= x < b for a, b in keep) for x in t])
+    in_key = None
+    if v.sum() > 20:
+        # Each moment's pitch with vibrato averaged out (200 ms median inside the sung run), skipping the
+        # first 80 ms of each run (the scoop into a note), against the nearest note of the key.
+        m = np.where(v, 69 + 12 * np.log2(np.maximum(f0_after, 1e-6) / 440), np.nan)
+        sm = _run_median(m, v, int(0.2 / hop))
+        settled = v.copy()
+        run_start = np.flatnonzero(v & ~np.r_[False, v[:-1]])
+        for a in run_start:
+            settled[a:a + int(0.08 / hop)] = False
+        if settled.sum() > 10:
+            x = sm[settled]
+            in_key = float(np.mean(np.abs(x - _scale_target(x, tonic, mode)) * 100 <= 25))
+    band = _env(_filt(processed, _sos("band", [5000, 10000], 2)), 10)
+    full = _env(processed, 10)
+    sib, lines_db = [], []
+    for a, b, _ in lines_of(notes):
+        ia, ib = max(0, int(a * SR)), min(len(band), int(b * SR))
+        if ib - ia > SR // 10:
+            loud = full[ia:ib][full[ia:ib] > full[ia:ib].max() * 0.05]
+            sib.append(float(20 * np.log10(np.quantile(band[ia:ib], 0.995) + 1e-9) - 20 * np.log10(np.median(loud) + 1e-9)))
+            lines_db.append(_db(np.sqrt(np.mean(processed[ia:ib].astype(np.float64) ** 2))))
+    g = {"in_key_frames": round(in_key, 3) if in_key is not None else None,
+         "sibilance_db": round(max(sib), 1) if sib else None,
+         "line_spread_db": round(float(np.percentile(lines_db, 90) - np.percentile(lines_db, 10)), 1) if len(lines_db) > 1 else 0.0,
+         "noise_raw_db": round(noise_db, 1), "clipped": bool(np.abs(raw).max() >= 10 ** (-0.1 / 20))}
+    checks = []
+
+    def add(ok, warn, text):
+        checks.append({"level": "ok" if ok else ("warn" if warn else "bad"), "text": text})
+
+    if in_key is not None:
+        add(in_key >= 0.85, in_key >= 0.7, f"Sung parts in key: {in_key * 100:.0f}% of the time")
+    if g["sibilance_db"] is not None:
+        add(g["sibilance_db"] <= 0, g["sibilance_db"] <= 4, f"'S' sounds: loudest {g['sibilance_db']:+.0f} dB against the singing")
+    add(g["line_spread_db"] <= 3, g["line_spread_db"] <= 5, f"Phrases within {g['line_spread_db']:.1f} dB of each other")
+    add(noise_db < -60, noise_db < -50, f"Room noise {noise_db:.0f} dBFS")
+    add(not g["clipped"], False, "No clipping in the recording" if not g["clipped"] else "The recording clipped: sing a bit further from the mic")
+    g["checks"] = checks
+    g["ok"] = all(c["level"] != "bad" for c in checks)
+    return g
+
+
+# --------------------------------------------------------------------------------------------------
+# Voice characters: one singer, many voices
+# --------------------------------------------------------------------------------------------------
+# WORLD splits a voice into pitch (f0), the spectral envelope (the shape of the mouth and throat: what
+# makes a voice sound female, male, young or big) and aperiodicity (breath and noise). Changing them
+# separately turns your takes into other characters while keeping your timing, words and tuning:
+# - formant ratio: >1 moves the envelope up (smaller, brighter, more "female/young"), <1 down (bigger,
+#   darker, more "male"); about 1.15-1.2 is the average adult female/male difference [S, U];
+# - pitch: whole octaves only, so the melody stays in key with the music;
+# - breath: more aperiodicity above 1 kHz; rasp: aperiodicity bursts plus pitch jitter; whisper: no
+#   pitch at all (every frame unvoiced), which is what a whisper is;
+# - stacks (gang, choir): several copies with different formants, tiny pitch and timing offsets, panned.
+# Values are [U] engineering defaults; tune them by ear.
+
+CHARACTERS = {
+    "natural": {"label": "Your voice", "formant": 1.0},
+    "female": {"label": "Female lead (an octave up, lighter tone)", "octave": 1, "formant": 1.17, "breath": 0.15},
+    "female_low": {"label": "Female, same octave (alto)", "formant": 1.15, "breath": 0.1},
+    "male_deep": {"label": "Deeper male (bigger, darker tone)", "formant": 0.88},
+    "male_low": {"label": "Male, an octave down", "octave": -1, "formant": 0.92},
+    "young": {"label": "Younger / brighter", "formant": 1.08},
+    "raspy": {"label": "Raspy / gritty", "rasp": 0.45, "drive": 0.35},
+    "breathy": {"label": "Breathy / soft", "breath": 0.45, "air_db": 2.0},
+    "whisper": {"label": "Whisper", "whisper": True, "breath": 1.0, "formant": 1.05},
+    "gang": {"label": "Gang shout (a crowd of you)", "drive": 0.3,
+             "stack": [(0.92, -6, 0, -0.7), (0.97, 4, 11, -0.35), (1.04, -3, 19, 0.35), (1.09, 6, 27, 0.7),
+                       (0.9, 0, 15, 0.0)]},
+    "choir": {"label": "Choir (stacked voices, octave above and below)", "breath": 0.15,
+              "stack": [(0.95, -5, 9, -0.6), (1.06, 5, 17, 0.6), (1.12, 0, 13, -0.3, 12), (0.9, 0, 21, 0.3, -12)]},
+    "announcer": {"label": "Station announcer (PA speaker)", "pa": True},
+}
+
+
+def _warp_envelope(sp: np.ndarray, ratio: float) -> np.ndarray:
+    if abs(ratio - 1.0) < 1e-3:
+        return sp
+    n = sp.shape[1]
+    src = np.arange(n) / ratio
+    out = np.empty_like(sp)
+    for i in range(sp.shape[0]):
+        out[i] = np.interp(src, np.arange(n), sp[i], right=sp[i, -1])
+    return out
+
+
+def world_passages(y: np.ndarray, f0: np.ndarray) -> list[tuple]:
+    """WORLD analysis (envelope and aperiodicity) of each sung passage, done once and shared by every
+    voice made from it: (start, end samples, frame times, f0, sp, ap, audio)."""
+    import pyworld as pw
+
+    hop = FRAME_MS / 1000
+    t_all = np.arange(len(f0)) * hop
+    out = []
+    for a, b in _passages(f0, t_all, gap=0.3, pad=0.15):
+        ia, ib = int(a * SR), min(len(y), int(b * SR))
+        seg = y[ia:ib].astype(np.float64)
+        if len(seg) < SR // 10:
+            continue
+        t = np.arange(int(len(seg) / SR / hop) + 1) * hop
+        f = np.interp(t + a, t_all, f0)
+        f[np.interp(t + a, t_all, (f0 > 0).astype(float)) < 0.5] = 0
+        out.append((ia, ib, t, f, pw.cheaptrick(seg, f, t, SR), pw.d4c(seg, f, t, SR), seg))
+    return out
+
+
+def voice_variant(y: np.ndarray, f0: np.ndarray, *, formant: float = 1.0, octave: int = 0, cents: float = 0.0,
+                  breath: float = 0.0, rasp: float = 0.0, whisper: bool = False, seed: int = 0,
+                  analysis: list | None = None) -> np.ndarray:
+    """One re-voiced copy of the vocal, passage by passage with WORLD. `f0` is the 5 ms pitch track to
+    sing (already tuned), in the time base of `y`."""
+    import pyworld as pw
+
+    rng = np.random.default_rng(seed)
+    out = np.zeros(len(y), dtype=np.float32)
+    shift = 2 ** (octave + cents / 1200)
+    for ia, ib, t, f, sp, ap, seg in (analysis if analysis is not None else world_passages(y, f0)):
+        f = f.copy()
+        sp = _warp_envelope(sp, formant)
+        freqs = np.linspace(0, SR / 2, sp.shape[1])
+        if breath or whisper:
+            k = np.clip((freqs - 1000) / 2000, 0, 1)[None, :] * min(1.0, breath)
+            ap = 1 - (1 - ap) * (1 - k)
+        if rasp:
+            # Rough, uneven bursts of noise in the voice, and a little pitch jitter.
+            burst = np.clip(rng.normal(0, 1, (len(t), 1)) * 0.5 + 0.5, 0, 1) * rasp
+            ap = 1 - (1 - ap) * (1 - burst * np.clip((freqs - 600) / 1500, 0, 1)[None, :])
+            f = f * (1 + rasp * 0.012 * rng.normal(0, 1, len(f)))
+        f_new = np.zeros_like(f) if whisper else f * shift
+        if whisper:
+            ap = np.ones_like(ap)
+        z = pw.synthesize(np.ascontiguousarray(f_new), np.ascontiguousarray(sp), np.ascontiguousarray(ap), SR, FRAME_MS)
+        z = z[: len(seg)]
+        if len(z) < len(seg):
+            z = np.pad(z, (0, len(seg) - len(z)))
+        g = np.sqrt(np.mean(seg ** 2) / max(np.mean(z ** 2), 1e-12))
+        fade = np.ones(len(seg))
+        fl = min(int(0.01 * SR), len(seg) // 4)
+        fade[:fl] = np.linspace(0, 1, fl)
+        fade[-fl:] = np.linspace(1, 0, fl)
+        out[ia:ib] += (z * g * fade).astype(np.float32)
+    return out
+
+
+def apply_character(y: np.ndarray, f0: np.ndarray, name: str, report: dict,
+                    source: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray | None]:
+    """(the main voice as the character, extra stacked voices as a stereo layer or None).
+    `source`: the untuned audio, when it lines up with `f0` (free singing). Then pitch correction and the
+    character happen in one WORLD pass: running WORLD twice adds artifacts."""
+    c = CHARACTERS.get(name or "natural", CHARACTERS["natural"])
+    report["character"] = name or "natural"
+    report["character_label"] = c["label"]
+    main = y
+    src = source if source is not None else y
+    needs = (c.get("formant", 1.0) != 1.0 or c.get("octave") or c.get("breath") or c.get("rasp")
+             or c.get("whisper") or c.get("stack"))
+    analysis = world_passages(src, f0) if needs and not c.get("pa") else None
+    if c.get("pa"):
+        # A phone / PA speaker: 300-3400 Hz at 24 dB/octave, a lift near 1 kHz, then light distortion
+        # after the EQ, level-matched.
+        from pedalboard import Distortion, PeakFilter, Pedalboard
+
+        band = _filt(_filt(y, _sos("high", 300, 4)), _sos("low", 3400, 4))
+        main = Pedalboard([PeakFilter(cutoff_frequency_hz=1100, gain_db=4.0, q=0.7), Distortion(drive_db=10)])(
+            band[None].astype(np.float32), SR)[0]
+        main = (main * np.sqrt(np.mean(y ** 2) / max(np.mean(main ** 2), 1e-12))).astype(np.float32)
+    elif any(k in c for k in ("formant", "octave", "breath", "rasp", "whisper")) and \
+            (c.get("formant", 1.0) != 1.0 or c.get("octave") or c.get("breath") or c.get("rasp") or c.get("whisper")):
+        main = voice_variant(src, f0, formant=c.get("formant", 1.0), octave=c.get("octave", 0),
+                             breath=c.get("breath", 0.0), rasp=c.get("rasp", 0.0), whisper=c.get("whisper", False),
+                             analysis=analysis)
+        if c.get("whisper"):
+            from pedalboard import HighShelfFilter, Pedalboard
+
+            main = Pedalboard([HighShelfFilter(cutoff_frequency_hz=4000, gain_db=3.0)])(main[None], SR)[0]
+    if c.get("drive"):
+        main = _saturate(main, c["drive"])
+    layer = None
+    if c.get("stack"):
+        layer = np.zeros((2, len(y)), dtype=np.float32)
+        for i, v in enumerate(c["stack"]):
+            ratio, cents_, ms, pan = v[:4]
+            octv = (v[4] // 12) if len(v) > 4 else c.get("octave", 0)
+            z = voice_variant(src, f0, formant=ratio * c.get("formant", 1.0), octave=octv, cents=cents_,
+                              breath=c.get("breath", 0.0), rasp=c.get("rasp", 0.0), seed=i + 1, analysis=analysis)
+            z = _filt(z, _sos("high", 180, 2))  # backing layers keep out of the low end
+            if c.get("drive"):
+                z = _saturate(z, c["drive"])
+            layer += _pan(_shift(z, ms), pan) * 10 ** (-7 / 20)
+        report["stack_voices"] = len(c["stack"])
+    return main.astype(np.float32), layer
+
+
+def stack_takes(takes: list[Take], spans: list, length: float, tonic: int, mode: str, p: dict,
+                keep: list) -> np.ndarray:
+    """The other takes of a gang / backing track as a wide stack: each tuned to the key (unless rap or
+    spoken), high-passed, compressed, panned alternately left and right, a few dB under the lead."""
+    from pedalboard import Compressor, Pedalboard
+
+    n = int(length * SR)
+    out = np.zeros((2, n), dtype=np.float32)
+    pans = [-0.75, 0.75, -0.45, 0.45, -0.9, 0.9]
+    for i, tk in enumerate(takes):
+        raw, picks = comp_sections([tk], spans, length)
+        if not picks:
+            continue
+        x = _filt(raw, _sos("high", 180, 2))
+        y, _, _ = tune_to_key(x, tonic, mode, p, keep, {})
+        y = Pedalboard([Compressor(threshold_db=-24, ratio=4, attack_ms=5, release_ms=100)])(y[None].astype(np.float32), SR)[0]
+        y = y * 10 ** (-5 / 20)
+        out += _pan(y[:n], pans[i % len(pans)])
+    return out

@@ -1,0 +1,24 @@
+title: Mind the Gap
+slot: Line 0 / labyrinth theme (mostly instrumental)
+starter: dungeon_pulse
+voices: no singing: record these as Vocal chop pieces in Make, with the Announcer or Whisper voice
+hits: no
+notes: Make this one in Make, not Sing. Record each phrase as a 2-bar Vocal chop (whispered or announced), then switch them on in different sections so they drift in and out. A heartbeat-like bassline: hum "dum... dum-dum" low, one per beat and a half.
+---
+[Intro]
+…please remain seated…
+
+[Verse, chopped and looped]
+…remain… remain…
+…this is not your stop…
+…mind the gap…
+
+[Break]
+
+[Verse, chopped and looped]
+…doors are closing…
+…remain… remain…
+…next stop… (silence)
+
+[Outro]
+…please remain seated…

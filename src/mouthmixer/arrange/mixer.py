@@ -85,12 +85,20 @@ def _parts_from_version(v: dict) -> list[dict]:
                       "file": a["file"]})
     if v.get("vocal_stem"):
         parts.append(_vocal_part(v["vocal_stem"]))
+    for t in v.get("vocal_stems", []):
+        parts.append(_vocal_part(t["file"], t.get("track", "Lead")))
     return parts
 
 
-def _vocal_part(stem: str) -> dict:
-    """Your processed vocals: a finished stem (no notes to re-render)."""
-    return {"id": "vocal", "name": "Your vocals", "role": "vocal", "instrument": "your voice", "kind": "vocal",
+# Vocal tracks and how loud each sits against the music, relative to the style's level (dB).
+VOCAL_TRACKS = {"Lead": 0.0, "Verse lead": 0.0, "Chorus lead": 0.5, "Rap": 0.0, "Gang": -2.0, "Backing": -6.0, "Harmony": -6.0, "Ad-libs": -8.0,
+                "Announcer": -4.0, "Whisper": -4.0}
+
+
+def _vocal_part(stem: str, track: str = "Lead") -> dict:
+    """A processed vocal track: a finished stem (no notes to re-render). Lead keeps the id "vocal"."""
+    vid = "vocal" if track == "Lead" else "vocal-" + "".join(ch for ch in track.lower() if ch.isalnum())
+    return {"id": vid, "name": f"{track} vocals", "track": track, "role": "vocal", "instrument": "your voice", "kind": "vocal",
             "mine": True, "muted": False, "gain_db": 0.0, "pan": 0.0, "notes": [], "file": stem}
 
 
@@ -211,6 +219,46 @@ class Mixer:
         self.save_state()
         return part
 
+    def vocal_hits(self, amount: str = "some") -> list[dict]:
+        """Band hits on your vocal accents (the Persona move: the drums and brass hit together with a
+        shouted word). Adds two parts you can switch off: drum hits (kick + crash on the strongest,
+        kick + snare on the rest) and short chord stabs (brass), both on the accents' 16th notes."""
+        from . import theory
+
+        self.render_stems()
+        song = self.song(False)
+        _, n = render.song_length(song)
+        _, _, vocal, _ = self._stems(n)
+        if vocal is None:
+            raise ValueError("make a vocal track first (Sing tab), then add hits on its accents")
+        hits = accent_times(vocal, self.v["bpm"], amount)
+        if not hits:
+            raise ValueError("no hard accents found in the vocal: shout or punch a few words harder")
+        drums, stabs = [], []
+        for beat, st in hits:
+            drums.append([beat, 0.3, 36, 118])
+            drums.append([beat, 1.0, 49, 100] if st >= 0.66 else [beat, 0.2, 38, 104])
+            c = song.chord_at(beat + 1e-6)
+            if c is not None:
+                for p in theory.voice(c, None, 60, 82, n=3):
+                    stabs.append([beat, 0.3, p, 112])
+        for p in [p for p in self.parts if p["kind"] in ("vocal_hits_drums", "vocal_hits_stabs")]:
+            self.parts.remove(p)
+        kit = next((p["instrument"] for p in self.parts if p["role"] == "drums"), "kit:power")
+        added = []
+        for kind, name, role, inst, notes in (("vocal_hits_drums", "Hits on your vocal accents", "drums", kit, drums),
+                                              ("vocal_hits_stabs", "Stabs on your vocal accents", "riff", "brass_section", stabs)):
+            if not notes:
+                continue
+            pid = f"p{self.state['next_id']}"
+            self.state["next_id"] += 1
+            part = {"id": pid, "name": name, "role": role, "instrument": inst, "kind": kind, "mine": False,
+                    "muted": False, "gain_db": 0.0, "pan": 0.0, "notes": notes}
+            self.parts.append(part)
+            added.append(part)
+        self.save_state()
+        return added
+
     def remove(self, pid: str) -> None:
         p = self.part(pid)
         if p.get("mine"):
@@ -239,7 +287,7 @@ class Mixer:
                 continue
             x = self._load(p, n)
             if p["role"] == "vocal":
-                vocal = x
+                vocal = x if vocal is None else vocal + x
                 continue
             if p["role"] == "lead":
                 lead += x
@@ -264,6 +312,10 @@ class Mixer:
             out, vocal, lead = vocals.sit_in_song(music, vocal, env, p, lead, self.state.get("lead_mode", "duck"),
                                                   match_level=False)
             stems["lead"] = (lead if lead is not None else 0) + vocal
+            # Is the voice heard? Judge it where you sing (an instrumental intro says nothing about that).
+            sung = env > 0.5
+            if sung.sum() > render.SR:
+                stems = {k: (v[:, sung] if isinstance(v, np.ndarray) else v) for k, v in stems.items()}
         else:
             out = music + lead
         mix = render.master(out)
@@ -277,10 +329,9 @@ class Mixer:
         new = {**self.v, **summary, "file": f"v{idx}.ogg", "midi": f"v{idx}.mid", "critic": verdict,
                "score": verdict["score"], "title": self.v["title"].split(" · ")[0] + " · " + suffix,
                "mixed_from": self.version, "mixed_at": time.time()}
-        voc = next((p for p in self.parts if p.get("file") and p["role"] == "vocal" and not p.get("muted")), None)
         new.pop("vocal_stem", None)
-        if voc:
-            new["vocal_stem"] = voc["file"]
+        new["vocal_stems"] = [{"track": p.get("track", "Lead"), "file": p["file"]} for p in self.parts
+                              if p.get("file") and p["role"] == "vocal" and not p.get("muted")]
         new["audio_parts"] = [{"id": p["id"], "name": p["name"], "role": p["role"], "file": p["file"]}
                               for p in self.parts if p.get("file") and p["role"] != "vocal" and not p.get("muted")]
         new.update(extra or {})
@@ -291,7 +342,8 @@ class Mixer:
 
     # --- vocals ---------------------------------------------------------------------------------
     def with_vocals(self, takes: list, preset_name: str | None = None, lead_mode: str = "duck",
-                    choice: dict | None = None, lyrics: dict | None = None) -> dict:
+                    choice: dict | None = None, lyrics: dict | None = None, tune: str = "auto",
+                    track: str = "Lead", character: str = "natural") -> dict:
         """Process your takes (vocals.produce), set them against this mix and save a new version with a
         "Your vocals" part you can mute or turn up in the mixer like any other."""
         from . import vocals
@@ -302,24 +354,92 @@ class Mixer:
         # Every melody part you can hear (your hummed lead and the bridge melody written for it).
         lead_notes = [x for p in self.parts if p["role"] == "lead" and not p.get("muted") for x in p["notes"]]
         name = preset_name or PACKS[self.v["pack"]].get("vocal_preset", "soul")
-        res = vocals.produce(takes, lead_notes, self.v["bpm"], self.v["sections"], song.tonic, song.mode, name,
-                             total, choice)
+        # Follow the hummed melody when there is one and you asked for it; otherwise (your own tune, rap,
+        # spoken parts) tune to the key, section by section.
+        free = tune == "key" or not lead_notes or (tune == "auto" and bool(self.v.get("lyric_sheet")))
+        if free:
+            modes = {x["section"]: x.get("mode", "sung") for x in self.v.get("lyric_sheet", [])}
+            for sec, feel in zip(self.v["sections"], self.v.get("section_feels", [])):
+                if feel == "rap":
+                    modes.setdefault(sec["name"], "rap")
+            res = vocals.produce_free(takes, self.v["bpm"], self.v["sections"], song.tonic, song.mode, name, total,
+                                      modes, choice, character=character,
+                                      stack_all=track in ("Gang", "Backing", "Harmony"))
+        else:
+            res = vocals.produce(takes, lead_notes, self.v["bpm"], self.v["sections"], song.tonic, song.mode, name,
+                                 total, choice, character=character)
         music, lead, _, _ = self._stems(n)
         voc = res.stereo[:, :n]
         if voc.shape[1] < n:
             voc = np.pad(voc, ((0, 0), (0, n - voc.shape[1])))
         env = vocals.voice_envelope(res.f0_after, n)
-        _, voc, _ = vocals.sit_in_song(music, voc, env, vocals.preset(name), lead, lead_mode, res.report)
+        pr = vocals.preset(name)
+        pr = dict(pr, level_lu=pr["level_lu"] + VOCAL_TRACKS.get(track, -4.0))
+        _, voc, _ = vocals.sit_in_song(music, voc, env, pr, lead, lead_mode, res.report)
         h = hashlib.sha1(voc[:, ::97].tobytes()).hexdigest()[:12]
         stem = f"vocal-{h}.ogg"
         render.write_audio(voc, self.stem_dir / stem)
-        self.state["parts"] = [p for p in self.parts if p["role"] != "vocal"] + [_vocal_part(stem)]
+        part = _vocal_part(stem, track)
+        self.state["parts"] = [p for p in self.parts if p["id"] != part["id"]] + [part]
         self.state["lead_mode"] = lead_mode
         self.save_state()
-        extra = {"vocals": res.report | {"lead_mode": lead_mode}}
+        report = res.report | {"lead_mode": lead_mode, "track": track}
+        extra = {"vocals": report, "vocal_tracks": {**self.v.get("vocal_tracks", {}), track: report}}
         if lyrics:
             extra["lyrics"] = lyrics
         return self.bake(extra, suffix="with vocals")
+
+
+def accent_times(vocal: np.ndarray, bpm: float, amount: str = "some") -> list[tuple[float, float]]:
+    """The hard accents in a vocal: syllables hit clearly louder than the phrase around them (shouts, the
+    "Hey!" in a gang chorus, the punch words of a rap line) that land close to the 16th-note grid.
+    Returns [(beat, strength 0..1)], at most one every half beat."""
+    import librosa
+
+    mono = vocal.mean(axis=0) if vocal.ndim == 2 else vocal
+    y = librosa.resample(np.asarray(mono, dtype=np.float32), orig_sr=render.SR, target_sr=22050)
+    sr, hop = 22050, 256
+    env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=hop)
+    on = librosa.onset.onset_detect(onset_envelope=env, sr=sr, hop_length=hop, units="frames", backtrack=False)
+    if not len(on):
+        return []
+    rms = librosa.feature.rms(y=y, frame_length=1024, hop_length=hop)[0]
+    db = 20 * np.log10(rms + 1e-9)
+    fps = sr / hop
+    cands = []
+    for f in on:
+        a, b = f, min(len(db), f + int(0.12 * fps))
+        loud = float(db[a:b].max()) if b > a else -120
+        ctx = db[max(0, f - int(2 * fps)):min(len(db), f + int(2 * fps))]
+        ctx = ctx[ctx > ctx.max() - 30] if len(ctx) else ctx
+        rel = loud - float(np.median(ctx)) if len(ctx) else 0.0
+        if loud < -45:
+            continue
+        cands.append((f / fps, rel, float(env[f])))
+    if not cands:
+        return []
+    rels = np.array([c[1] for c in cands])
+    strs = np.array([c[2] for c in cands])
+    score = (rels - rels.mean()) / (rels.std() + 1e-9) + (strs - strs.mean()) / (strs.std() + 1e-9)
+    keep_frac = {"few": 0.15, "some": 0.3, "lots": 0.5}.get(amount, 0.3)
+    cut = np.quantile(score, 1 - keep_frac)
+    spb = 60.0 / bpm
+    out: list[tuple[float, float]] = []
+    top = score.max() if len(score) else 1
+    for (t, rel, st), sc in sorted(zip(cands, score), key=lambda x: x[0][0]):
+        if sc < cut:
+            continue
+        beat = t / spb
+        q = round(beat * 4) / 4
+        if abs(beat - q) * spb > 0.05:  # not on the grid: a sung word, not a band hit
+            continue
+        if out and q - out[-1][0] < 0.5:
+            if sc > out[-1][1]:
+                out[-1] = (q, float(sc))
+            continue
+        out.append((q, float(sc)))
+    lo = min((x[1] for x in out), default=0)
+    return [(q, float((sc - lo) / max(1e-9, top - lo))) for q, sc in out]
 
 
 def clear_of_melody(notes: list[tuple], melody: list[tuple], instrument: str) -> list[tuple]:

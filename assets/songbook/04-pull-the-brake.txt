@@ -1,0 +1,36 @@
+title: Pull the Brake!
+slot: Regular battle theme (must hit in the first 2 seconds)
+starter: battle_rush
+voices: Rap = Deeper male (low and fast) | Chorus lead = Female lead on the chorus | Gang = Gang shout on every "Hey!" | Ad-libs = "Go!", "Ayy!"
+hits: yes (lots): the band hits with every "Hey!", "Brake!", "Shake!"
+notes: Starts on the hook, no intro build: the first sound is the gang "Hey!" with a band hit. Chorus = chant, 4 short lines, title first. Rap verse is the only long text; the chorus comes back twice so a fight never waits long for it.
+---
+[Intro, gang shout]
+Hey!
+
+[Chorus]
+Hey! Pull the brake! Make the whole line shake!
+You took a heart, now we're taking it back!
+Hey! Off the rails, every Hollow fails,
+Mask on, lights out, here comes the attack!
+
+[Rap Verse]
+Third car down and the air goes cold,
+Ticket in my teeth and a story untold.
+You ran this line like you owned the track,
+Now every signal's red and it's flashing back.
+Count it in, two, three, no brakes, no fear,
+Crew in formation, yeah, the gang's all here.
+You can run, you can hide in the in-between,
+But we're the loudest thing that you've ever seen.
+
+[Pre-Chorus]
+One more stop,
+One more shot,
+Doors fly open, give it all you've got!
+
+[Chorus]
+Hey! Pull the brake! Make the whole line shake!
+You took a heart, now we're taking it back!
+Hey! Off the rails, every Hollow fails,
+Mask on, lights out, here comes the attack!

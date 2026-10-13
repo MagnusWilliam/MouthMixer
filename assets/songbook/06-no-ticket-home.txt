@@ -1,0 +1,41 @@
+title: No Ticket Home
+slot: Final / major boss theme
+starter: boss_choir
+voices: Announcer = the intro line | Verse lead = your voice, low | Chorus lead = your voice with Raspy, or Female lead | Backing = Choir on the chorus | Gang = Gang shout on "Not yours!"
+hits: yes (some): on "Not yours!" and the last words of each chorus line
+notes: Big, slow-to-say words over a fast orchestra: one syllable per beat in the chorus, so it feels huge. The choir sings the title on long open vowels ("no-o ti-cket ho-ome").
+---
+[Intro, spoken by the announcer]
+This train does not stop here.
+
+[Verse 1]
+You sold the city a perfect sleep,
+Wrote our names where the dark runs deep.
+But every passenger knows the rule:
+The last stop's ours, not yours to rule.
+
+[Pre-Chorus]
+Wake up, wake up,
+The lights are coming on.
+Stand up, stand up,
+The long night's almost gone.
+
+[Chorus]
+No ticket home, no way back,
+We tear the dark from the end of the track.
+No ticket home, no one runs,
+We are the many, you are the one!
+(Not yours!)
+
+[Bridge, slow, then building]
+Every stop we lost,
+Every name you stole,
+Every door you closed,
+We take it back, we take it all.
+
+[Final Chorus]
+No ticket home, no way back,
+We tear the dark from the end of the track.
+No ticket home, no one runs,
+We are the many, you are the one!
+(Not yours!)

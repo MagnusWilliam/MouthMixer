@@ -54,6 +54,19 @@ const Make = {
       row.appendChild(cards);
       box.appendChild(row);
     }
+    const sb = $("#mk-songbook");
+    sb.innerHTML = "";
+    for (const song of await api("/api/songbook")) {
+      const c = document.createElement("button");
+      c.className = "starter";
+      c.innerHTML = `<b>${esc(song.title)}</b><span class="small">${esc(song.slot || "")}</span>
+        <span class="small muted">${esc(song.style)} · ${esc(song.key)} · ${song.bpm} BPM</span>`;
+      c.onclick = async () => {
+        c.disabled = true;
+        this.proj = await post("/api/projects", { songbook: song.id }); this.on = {}; this.showProject();
+      };
+      sb.appendChild(c);
+    }
     const list = await api("/api/projects");
     const pl = $("#mk-projects");
     pl.innerHTML = list.length ? "" : `<p class="muted small">None yet: pick a starter beat above.</p>`;
@@ -75,12 +88,17 @@ const Make = {
     $("#mk-home").classList.add("hidden"); $("#mk-project").classList.remove("hidden");
     const p = this.proj;
     $("#mk-name").value = p.title;
+    $("#mk-lyrics").value = (p.lyrics && p.lyrics.text) || "";
     $("#mk-chips").innerHTML = [p.style, p.starter.bpm + " BPM"].map((c) => `<span class="chip">${esc(c)}</span>`).join("");
     const ks = $("#mk-key");
     ks.innerHTML = NAMES.map((n, i) => `<option value="${i}"${i === p.starter.tonic ? " selected" : ""}>${n} ${p.starter.mode}</option>`).join("");
     $("#mk-chords").textContent = `Main loop: ${p.chords_a.join(" → ")}   ·   Bridge: ${p.chords_b.join(" → ")}`;
+    const sbk = p.songbook;
+    $("#mk-plan").classList.toggle("hidden", !sbk);
+    if (sbk) $("#mk-plan").innerHTML = `<b>Songbook plan</b> (${esc(sbk.slot)})<br><b>Voices:</b> ${esc(sbk.voices)}<br>
+      <b>Band hits on vocal accents:</b> ${esc(sbk.hits || "no")}<br><span class="muted">${esc(sbk.notes)}</span>`;
     for (const q of p.pieces) if (!(q.id in this.on)) this.on[q.id] = true;
-    this.renderSlots(); this.renderPieces(); this.renderDetail(); this.renderBoard();
+    this.renderSlots(); this.renderPieces(); this.renderDetail(); this.renderBoard(); this.renderFavs();
     $("#mk-built").innerHTML = p.song_id ? `Built before. <a href="#" id="mk-open">Open it in Songs</a> (Mix, Lyrics, Sing).` : "";
     const o = $("#mk-open"); if (o) o.onclick = (e) => { e.preventDefault(); this.openSong(p.song_id); };
     await this.loadLoops();
@@ -206,6 +224,7 @@ const Make = {
         ${q.kind === "one" && !this.proj.slots[q.slot].at_end ? `<label><input type="checkbox" data-a="repeat"${q.repeat ? " checked" : ""}> Repeat to fill the section</label>` : ""}
         <span class="spacer"></span>
         ${q.source !== "starter" ? `<button data-a="again">● Record more takes</button>` : ""}
+        ${q.source !== "starter" && (q.notes.length || q.audio) ? `<button data-a="fav">★ Save to favourites</button>` : ""}
         <button data-a="delete" class="ghost">Delete piece</button>
       </div>
       ${takes.length ? `<div class="small"><b>Takes</b> (best first; the best is used unless you pick another)</div>
@@ -230,6 +249,13 @@ const Make = {
       this.refresh(await api(this.url(`/pieces/${q.id}/takes/${b.dataset.del}`), { method: "DELETE" })));
     const rep = box.querySelector('[data-a="repeat"]'); if (rep) rep.onchange = () => edit({ repeat: rep.checked });
     const ag = box.querySelector('[data-a="again"]'); if (ag) ag.onclick = () => this.pickSlot(q.slot, q.id);
+    const fv = box.querySelector('[data-a="fav"]');
+    if (fv) fv.onclick = async () => {
+      const name = prompt("Name this favourite:", q.name);
+      if (name === null) return;
+      try { await post(this.url(`/pieces/${q.id}/favourite`), { name }); fv.textContent = "★ Saved"; this.renderFavs(); }
+      catch (e) { $("#mk-status").textContent = errText(e); }
+    };
     box.querySelector('[data-a="delete"]').onclick = async () => {
       if (!confirm(`Delete "${q.name}"?`)) return;
       this.sel = null;
@@ -269,6 +295,28 @@ const Make = {
       this.selNote = bd < 30 ? best : null;
       this.drawNotes(cv, q);
     };
+  },
+
+  async renderFavs() {
+    const box = $("#mk-favs");
+    const favs = await api("/api/favourites");
+    box.innerHTML = favs.length ? "" : `<span class="small muted">None yet. Open a piece's ⋯ and press "Save to favourites".</span>`;
+    for (const f of favs) {
+      const el = document.createElement("span");
+      el.className = "chip fav";
+      el.innerHTML = `${SLOT_ICON[f.slot] || "♪"} <b>${esc(f.name)}</b> <span class="small muted">${esc(f.label)} · ${esc(f.key)} · ${Math.round(f.bpm)} BPM</span>
+        <button class="ghost" data-u title="Add to this track">Use</button><button class="ghost" data-x title="Delete this favourite">✕</button>`;
+      el.querySelector("[data-u]").onclick = async () => {
+        const r = await post(this.url(`/favourites/${f.id}`));
+        this.on[r.added] = true; this.sel = r.added;
+        await this.refresh(r);
+      };
+      el.querySelector("[data-x]").onclick = async () => {
+        if (!confirm(`Delete the favourite "${f.name}"?`)) return;
+        await api(`/api/favourites/${f.id}`, { method: "DELETE" }); this.renderFavs();
+      };
+      box.appendChild(el);
+    }
   },
 
   // ---- recording ------------------------------------------------------------------------------
@@ -384,7 +432,13 @@ const Make = {
         <input class="secname" value="${esc(s.name)}">
         <div class="secctl"><select class="secbars">${[2, 4, 8, 12, 16].map((b) => `<option${b === s.bars ? " selected" : ""}>${b}</option>`).join("")}</select>
         <select class="secch"><option value="A"${s.chords === "A" ? " selected" : ""}>main</option><option value="B"${s.chords === "B" ? " selected" : ""}>bridge</option></select>
-        <button class="ghost secx" title="Remove section">✕</button></div></th>`).join("")}</tr></thead><tbody>`;
+        <button class="ghost secx" title="Remove section">✕</button></div>
+        <select class="secfeel" title="How the starter parts play here">${Object.entries(p.feels).map(([k, v]) =>
+          `<option value="${k}"${k === p.section_feels[i] ? " selected" : ""} title="${esc(v)}">${esc(v.split(" (")[0])}</option>`).join("")}</select>
+        <select class="secdrop" title="Freeze at the start: the band stops for the first words, then drops back in">
+          ${[[0, "no freeze"], [2, "freeze 2 beats"], [4, "freeze 1 bar"], [8, "freeze 2 bars"]].map(([v, l]) =>
+            `<option value="${v}"${v === (p.section_drops || [])[i] ? " selected" : ""}>${l}</option>`).join("")}</select>
+        ${this.lyricCount(s)}</th>`).join("")}</tr></thead><tbody>`;
     for (const q of p.pieces) {
       html += `<tr><th class="rowname"><span>${SLOT_ICON[q.slot] || "♪"}</span> ${esc(q.name)}</th>` +
         secs.map((s, i) => `<td><button class="cell${s.parts.includes(q.id) ? " on" : ""}" data-s="${i}" data-q="${q.id}"></button></td>`).join("") + "</tr>";
@@ -402,10 +456,17 @@ const Make = {
       th.querySelector(".secname").onchange = (e) => { s.name = e.target.value; save(); };
       th.querySelector(".secbars").onchange = (e) => { s.bars = +e.target.value; save(); };
       th.querySelector(".secch").onchange = (e) => { s.chords = e.target.value; save(); };
+      th.querySelector(".secfeel").onchange = (e) => { s.feel = e.target.value; save(); };
+      th.querySelector(".secdrop").onchange = (e) => { s.drop = +e.target.value; save(); };
       th.querySelector(".secx").onclick = () => { if (secs.length > 1) { secs.splice(+th.dataset.i, 1); save(); } };
     });
   },
 
+  lyricCount(s) {
+    const sheet = (this.proj.lyrics && this.proj.lyrics.sheet) || [];
+    const x = sheet.find((l) => l.section === s.id);
+    return x && x.lines.length ? `<div class="small muted">${x.lines.length} line${x.lines.length > 1 ? "s" : ""}${x.mode !== "sung" ? " · " + x.mode : ""}</div>` : "";
+  },
   async build() {
     const out = $("#mk-built"), btn = $("#mk-build");
     btn.disabled = true;
@@ -441,6 +502,15 @@ $("#mk-add-sec").onclick = async () => {
   Make.proj = await post(Make.url(""), { sections: Make.proj.sections }); Make.renderBoard();
 };
 $("#mk-build").onclick = () => Make.build();
+$("#mk-lyrics-go").onclick = async () => {
+  const msg = $("#mk-lyrics-msg");
+  try {
+    Make.proj = await post(Make.url(""), { lyrics: $("#mk-lyrics").value });
+    msg.textContent = `Done: ${Make.proj.sections.length} sections. Check the board below, then build the song.`;
+    $("#mk-name").value = Make.proj.title;
+    Make.renderBoard();
+  } catch (e) { msg.textContent = errText(e); }
+};
 window.mkLevel = (pk) => {
   const m = $("#mk-level span"); if (!m) return;
   m.style.width = Math.min(100, Math.max(0, (20 * Math.log10(pk + 1e-9) + 60) * 1.67)) + "%";

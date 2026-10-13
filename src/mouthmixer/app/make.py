@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from .. import config
 from ..analysis import beatbox
 from ..studio import starters
-from ..studio.project import Project, list_projects
+from ..studio.project import Project, delete_favourite, list_favourites, list_projects
 
 _locks: dict[str, threading.Lock] = {}
 
@@ -38,8 +38,26 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
     def projects():
         return list_projects()
 
+    @app.get("/api/songbook")
+    def get_songbook():
+        from ..studio import songbook
+
+        return songbook.songs()
+
     @app.post("/api/projects")
     def create(body: dict = Body(...)):
+        if body.get("songbook"):
+            from ..studio import songbook
+
+            try:
+                song = songbook.get(body["songbook"])
+            except KeyError:
+                raise HTTPException(404, "no such song in the songbook")
+            p = Project.create(song["starter"], song["title"])
+            p.apply_lyrics(song["lyrics"])
+            p.data["songbook"] = {k: song.get(k, "") for k in ("id", "slot", "voices", "hits", "notes")}
+            p.save()
+            return p.public()
         if body.get("starter") not in starters.STARTERS:
             raise HTTPException(400, "pick a starter beat")
         p = Project.create(body["starter"], str(body.get("title", ""))[:60])
@@ -58,6 +76,11 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
                 p.save()
             if "tonic" in body:
                 p.set_key(int(body["tonic"]))
+            if body.get("lyrics"):
+                try:
+                    p.apply_lyrics(str(body["lyrics"])[:20000])
+                except ValueError as e:
+                    bad(e)
             if "sections" in body:
                 try:
                     p.set_sections(body["sections"])
@@ -80,8 +103,8 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
             p = proj(pid)
             out = []
             for q in p.pieces:
-                if not q["notes"] and not q.get("gen") and not q.get("audio"):
-                    continue
+                if (not q["notes"] and not q.get("gen") and not q.get("audio")) or q.get("gen") in ("fx", "chime", "keys"):
+                    continue  # risers and the chime only happen at section changes, not in the loop
                 name, secs = p.booth_stem(q["id"], "B" if chords == "B" else "A")
                 out.append({"id": q["id"], "stem": name, "seconds": secs})
             return {"loops": out, "bar_seconds": 4 * p.spb, "bpm": p.st["bpm"]}
@@ -170,6 +193,38 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
         if f.parent != (p.dir / "takes").resolve() or not f.exists():
             raise HTTPException(404)
         return FileResponse(f, media_type="audio/wav")
+
+    @app.get("/api/favourites")
+    def favourites():
+        return list_favourites()
+
+    @app.delete("/api/favourites/{fid}")
+    def remove_favourite(fid: str):
+        try:
+            delete_favourite(fid)
+        except KeyError:
+            raise HTTPException(404)
+        return {"ok": True}
+
+    @app.post("/api/projects/{pid}/pieces/{qid}/favourite")
+    def save_favourite(pid: str, qid: str, body: dict = Body(default={})):
+        p = proj(pid)
+        try:
+            return p.favourite(qid, str(body.get("name", "")))
+        except KeyError:
+            raise HTTPException(404)
+        except ValueError as e:
+            bad(e)
+
+    @app.post("/api/projects/{pid}/favourites/{fid}")
+    def use_favourite(pid: str, fid: str):
+        with _lock(pid):
+            p = proj(pid)
+            try:
+                q = p.use_favourite(fid)
+            except KeyError:
+                raise HTTPException(404, "no such favourite")
+            return p.public() | {"added": q["id"]}
 
     @app.post("/api/projects/{pid}/build")
     def build(pid: str):

@@ -80,6 +80,11 @@
       <div id="mx-leadmode" class="row small hidden">While you sing, your hummed melody
         <select id="mx-lead"><option value="duck">gets much quieter (recommended)</option><option value="mute">stops</option>
           <option value="keep">stays as it is</option></select></div>
+      <div id="mx-hits" class="row small hidden">
+        <span>Band hits on your vocal accents (drums and brass hit together with your hardest words):</span>
+        <select id="mx-hits-amount"><option value="few">a few</option><option value="some" selected>some</option><option value="lots">lots</option></select>
+        <button id="mx-hits-go">Add hits</button>
+      </div>
       <div id="mx-parts" class="tiles"></div>
       <div class="addpanel">
         <h3>Add a part</h3>
@@ -116,11 +121,13 @@
 
     <!-- Sing -->
     <div id="sub-sing" class="hidden">
-      <p class="hint">Sing along with the song. Pick a section, press Record, and sing after the count-in. Do 3-5 takes;
-        MouthMixer keeps the best line from each, then tunes, times and mixes them.</p>
+      <p class="hint">Pick a <b>Track</b> (Verse lead, Chorus lead, Rap, Gang…) and a section, press Record, and sing after
+        the count-in. Redo a section to replace it. Then, for each track, pick a <b>Voice</b> (female, deeper, raspy, gang
+        shout, choir…) and press <b>Make this vocal track</b>. Gang and backing tracks use every take at once.</p>
       <div class="singbar">
         <div id="sg-sections" class="chips choose"></div>
         <span class="spacer"></span>
+        <label class="small" title="Which vocal track these takes go to">Track <select id="sg-track"></select></label>
         <button id="sg-rec" class="rec">● Record</button>
         <button id="sg-listen">▶ Listen</button>
         <button id="sg-stop" disabled>■ Stop</button>
@@ -145,11 +152,15 @@
       <div class="card inner">
         <h3>Make the vocal</h3>
         <div class="row">
+          <label>Track <select id="sg-mk-track"></select></label>
+          <label title="Change how your voice sounds: another character, a crowd, a whisper">Voice <select id="sg-character"></select></label>
+          <label title="Sung parts: follow your hummed melody, or snap to the key (singing your own tune). Rap and spoken parts are never tuned.">Tune to
+            <select id="sg-tune"><option value="auto">automatic</option><option value="key">the key (my own tune)</option><option value="melody">my hummed melody</option></select></label>
           <label>Style <select id="sg-preset"></select></label>
           <label>Your hummed melody while you sing <select id="sg-lead">
             <option value="duck">gets much quieter (recommended)</option><option value="mute">stops</option>
             <option value="keep">stays</option></select></label>
-          <button id="sg-make" class="primary">Tune, time & mix my vocals</button>
+          <button id="sg-make" class="primary">Make this vocal track</button>
         </div>
         <div id="sg-result"></div>
       </div>
@@ -188,6 +199,10 @@
       <p class="hint">Pick a starter beat. Then record pieces on purpose over it (a beat, a bassline, a hook, a
         vocal chop…). Each recording becomes a piece you can switch on and off, give another instrument, and
         place in the song.</p>
+      <h3>Start from the songbook</h3>
+      <p class="hint">Songs ready to make: the lyrics, the right starter beat, the sections and a plan for your voices.</p>
+      <div id="mk-songbook" class="starter-cards"></div>
+      <h3>Or pick a starter beat</h3>
       <div id="mk-moods"></div>
       <h3>Your tracks</h3>
       <div id="mk-projects" class="mk-list"></div>
@@ -201,6 +216,7 @@
         <label class="small">Key <select id="mk-key"></select></label>
       </div>
       <p id="mk-chords" class="small muted"></p>
+      <div id="mk-plan" class="card inner hidden small"></div>
 
       <div class="transport">
         <button id="mk-play" class="primary">▶ Play loop</button>
@@ -213,6 +229,9 @@
       <h3>Pieces <span class="hint">(click the round button to switch a piece on or off)</span></h3>
       <div id="mk-pieces" class="tiles"></div>
       <div id="mk-detail" class="card inner hidden"></div>
+
+      <h3>Your favourites <span class="hint">(pieces you saved from any track: they move to this key and tempo)</span></h3>
+      <div id="mk-favs" class="chips"></div>
 
       <h3>Record a piece</h3>
       <div class="mk-slots">
@@ -231,6 +250,18 @@
         <p class="small muted">One bar of clicks, then it loops. Do it as many times as you like: every time round is a
           take, and the best one is picked for you. Press Stop when you're happy.</p>
       </div>
+
+      <details id="mk-lyrics-box" class="card inner">
+        <summary><b>Have lyrics? Set the song up from them</b></summary>
+        <p class="hint">Paste your lyrics with a header for each part, like <code>[Verse 1]</code>, <code>[Pre-Chorus]</code>,
+          <code>[Chorus]</code>, <code>[Rap Verse]</code>, <code>[Bridge, slow, then building]</code>. Each header becomes a section
+          with the right length and feel (the chorus lifts, the rap drops into a half-time pocket, the intro gets the
+          flashy treatment). This replaces the song board below; your pieces stay. The words go with the song to the
+          Sing screen.</p>
+        <textarea id="mk-lyrics" rows="10" placeholder="[Verse 1]&#10;First line&#10;Second line&#10;&#10;[Chorus]&#10;..."></textarea>
+        <button id="mk-lyrics-go" class="primary">Set up the song from my lyrics</button>
+        <span id="mk-lyrics-msg" class="small muted"></span>
+      </details>
 
       <h3>Song board</h3>
       <p class="hint">Left to right is the song. Switch pieces on in the sections where they should play. Bridge

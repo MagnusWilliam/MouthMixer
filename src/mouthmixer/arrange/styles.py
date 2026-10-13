@@ -355,3 +355,80 @@ PACKS["boss_rock"] = {
     "rootless": False, "spread": False, "reverb": 0.3, "delay": 0.08, "chorus": False, "drive": True,
     "vocal_preset": "rock",
 }
+
+# Saxophones (GM 64-67), for night jazz (not as a battle lead: PERSONA_STYLE §8).
+INSTRUMENTS["soprano_sax"] = (0, 64, 56, 87, "reed", 0.7)
+INSTRUMENTS["alto_sax"] = (0, 65, 49, 81, "reed", 0.7)
+INSTRUMENTS["tenor_sax"] = (0, 66, 44, 76, "reed", 0.7)
+INSTRUMENTS["baritone_sax"] = (0, 67, 36, 69, "reed", 0.7)
+
+# More styles for LINE ZERO's song list (docs/SONGBOOK.md).
+PACKS["rain_bossa"] = {
+    "title": "Rainy bossa",
+    "describe": "soft bossa nova: nylon guitar, brushes and rim-click clave, upright bass, major 7ths",
+    "bpm": (128, 140), "swing": 0.5, "ext": ["seventh", "ninth"], "tension": 0.75,
+    "borrowed": ["V/ii", "iv", "subV"], "harmonic_rhythm": [1, 2],
+    "favourites": [["IV", "iii", "ii", "V"], ["I", "vi", "ii", "V"], ["ii", "V", "I", "I"]],
+    "kit": ["brush", "jazz", "standard"],
+    "drums": [{"kick": "x..x....x..x....", "rim": "x..x..x...x..x..", "hat": "x.x.x.x.x.x.x.x."},
+              {"kick": "x.......x.......", "rim": "..x..x....x..x..", "shaker": "xxxxxxxxxxxxxxxx"}],
+    "bass": [[(0, 6, "R"), (6, 2, "5"), (8, 6, "5"), (14, 2, "R")], [(0, 4, "R"), (6, 2, "5"), (8, 4, "5"), (14, 2, "A")]],
+    "comp_rhythm": [[(0, 2), (3, 2), (6, 2), (8, 2), (10, 2), (13, 2)], [(0, 3), (3, 3), (6, 4), (10, 3), (13, 3)]],
+    "roles": {
+        "lead": ["flute", "nylon_guitar", "vibraphone", "clarinet", "alto_sax"],
+        "comp": ["nylon_guitar", "rhodes", "jazz_guitar"],
+        "pad": ["slow_strings", "warm_pad", "strings"],
+        "bass": ["acoustic_bass", "fretless_bass", "finger_bass"],
+        "arp": ["vibraphone", "celesta", "harp"],
+        "counter": ["flute", "clarinet", "strings"],
+        "riff": ["rhodes", "vibraphone", "nylon_guitar"],
+    },
+    "rootless": True, "spread": True, "reverb": 0.5, "delay": 0.14, "chorus": True,
+    "vocal_preset": "soul",
+}
+PACKS["piano_ballad"] = {
+    "title": "Piano ballad",
+    "describe": "slow ballad: piano, strings that build, soft drums coming in later, big final chorus",
+    "bpm": (66, 78), "swing": 0.5, "ext": ["triad", "seventh"], "tension": 0.5,
+    "borrowed": ["iv", "bVII", "V/vi"], "harmonic_rhythm": [1, 2],
+    "favourites": [["I", "V", "vi", "IV"], ["vi", "IV", "I", "V"], ["IV", "V", "iii", "vi"]],
+    "kit": ["standard", "room", "brush"],
+    "drums": [{"kick": "x.......x.x.....", "snare": "....x.......x...", "hat": "x.x.x.x.x.x.x.x."},
+              {"kick": "x...............", "rim": "....x.......x...", "hat": "x...x...x...x..."}],
+    "bass": [[(0, 8, "R"), (8, 8, "5")], [(0, 12, "R"), (12, 4, "A")]],
+    "comp_rhythm": [[(0, 4), (4, 4), (8, 4), (12, 4)], [(0, 8), (8, 8)]],
+    "roles": {
+        "lead": ["piano", "violin", "flute", "cello", "bright_piano"],
+        "comp": ["piano", "electric_grand", "bright_piano"],
+        "pad": ["slow_strings", "strings", "choir_pad"],
+        "bass": ["fretless_bass", "finger_bass", "cello"],
+        "arp": ["piano", "harp", "celesta"],
+        "counter": ["cello", "violin", "french_horn"],
+        "riff": ["piano", "celesta", "harp"],
+    },
+    "rootless": False, "spread": True, "reverb": 0.7, "delay": 0.15, "chorus": False,
+    "vocal_preset": "cinematic",
+}
+PACKS["boss_choir"] = {
+    "title": "Choir boss",
+    "describe": "big story-boss theme: choir, staccato strings, brass, timpani and heavy drums, minor key",
+    "bpm": (138, 150), "swing": 0.5, "ext": ["triad"], "tension": 0.6,
+    "borrowed": ["bVI", "bVII", "V7", "bII"], "harmonic_rhythm": [1, 2],
+    "favourites": [["i", "bVI", "bVII", "V"], ["i", "bII", "i", "V"], ["bVI", "bVII", "i", "i"]],
+    "kit": ["power", "orchestra", "room"],
+    "drums": [{"kick": "x.x...x.x.x...x.", "snare": "....X.......X...", "hat": "x.x.x.x.x.x.x.x.", "tom_lo": "..............x."},
+              {"kick": "x...x...x...x...", "snare": "....X.......X..X", "ride": "x.x.x.x.x.x.x.x."}],
+    "bass": [[(i * 2, 2, "R") for i in range(8)], [(0, 3, "R"), (3, 3, "R"), (6, 2, "8"), (8, 3, "R"), (11, 3, "R"), (14, 2, "5")]],
+    "comp_rhythm": [[(i * 2, 1) for i in range(8)], [(0, 3), (3, 3), (6, 2), (8, 3), (11, 3), (14, 2)]],
+    "roles": {
+        "lead": ["brass_section", "french_horn", "strings", "trumpet", "choir"],
+        "comp": ["strings", "brass_section", "tremolo_strings"],
+        "pad": ["choir", "choir_pad", "slow_strings"],
+        "bass": ["contrabass", "synth_bass", "pick_bass"],
+        "arp": ["pizzicato", "harp", "tubular_bells"],
+        "counter": ["french_horn", "cello", "brass_section"],
+        "riff": ["brass_section", "strings", "orchestra_hit"],
+    },
+    "rootless": False, "spread": False, "reverb": 0.6, "delay": 0.08, "chorus": False, "drive": False,
+    "vocal_preset": "cinematic",
+}

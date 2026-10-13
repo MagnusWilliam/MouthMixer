@@ -11,6 +11,13 @@ many instruments, effects and a mastered mix. MouthMixer tries many versions and
 checks each against the music rules in `docs/MUSIC_KNOWLEDGE.md`, and shows the best three. Raw clips live
 in the **Clips** tab; pick your microphone in **Setup**.
 
+**Newest: the songbook, voices and song structure.** In **Make**, start one of the 8 LINE ZERO songs from the
+songbook (lyrics, beat and voice plan ready), or paste your own lyrics with [Verse]/[Chorus]/[Rap Verse]
+headers. Choruses lift, rap verses drop into a hip-hop pocket, intros get hits and the station chime. On
+the **Sing** screen pick a **Track** (Lead, Rap, Gang…) and a **Voice** (female, deeper, raspy, whisper,
+gang shout, choir, announcer…) for each part you record. **Mix** can add band hits on your hardest-sung
+words. Save any piece as a **favourite** to reuse it in other songs.
+
 **New: Make (start here).** Open the **Make** tab and pick a starter beat (battle, daily life, night,
 dungeon or boss). Then record pieces on purpose over the loop: choose a slot (Beat, Bassline, Hook…),
 press **Record**, and after one bar of clicks hum or beatbox it as many times round as you like; every time

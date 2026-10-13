@@ -155,7 +155,7 @@ def test_api_flow_record_board_build(home):
     app = create_app(start_worker=False)
     c = TestClient(app)
     st = c.get("/api/starters").json()
-    assert len(st["moods"]) == 5 and len(st["starters"]) == 10
+    assert len(st["moods"]) == len(starters.MOODS) and len(st["starters"]) == len(starters.STARTERS) >= 10
     p = c.post("/api/projects", json={"starter": "battle_funk", "title": "Test"}).json()
     pid = p["id"]
     booth = c.get(f"/api/projects/{pid}/booth").json()

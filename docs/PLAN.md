@@ -1074,6 +1074,28 @@ and listener now report a code fingerprint; the launcher replaces an out-of-date
 holds the port if it's too old to understand), setup stops a running MouthMixer before installing, and
 the Make tab says so plainly if the starters can't load.
 
+**Build status (2026-10-13, evening): songs with real structure, voices, songbook.**
+- Section **feels** on the song board (flashy intro, verse, build-up, chorus lift, rap pocket, breakdown,
+  final chorus, outro): the starter parts change per section (open hats and crashes in a chorus, half-time
+  boom-bap under a rap, drums out in a breakdown, a snare roll into a build, intro hits), plus risers into
+  big sections and a three-note **station chime** (LINE ZERO's motif) in intros and outros.
+- **Paste lyrics with [Section] headers** in Make and the board is laid out from them (lengths from line
+  counts, feels from names, the bridge on the bridge chords); the words go to the Sing teleprompter.
+- **Vocals without a hummed melody**: comped per section, tuned to the key (rap, spoken and whispered
+  sections untuned). **Vocal tracks** (Lead, Rap, Gang, Backing, Harmony, Ad-libs, Announcer, Whisper) and
+  **voice characters** (female, alto, deeper male, octave down, younger, raspy, breathy, whisper, gang
+  shout, choir, PA announcer); research in VOCALS §11. Gang/backing tracks stack every take.
+- **Band hits on vocal accents** (Mix): drum hits and brass stabs on the hardest-hit words.
+- **Favourites**: save any recorded piece (a beat, a vocal chop...) and reuse it in other tracks, moved
+  to the new key and tempo.
+- **Starters for the LINE ZERO song list**: fast jazz-rock battle, night jazz (brushes, tenor sax), rainy
+  bossa, piano ballad, choir boss (+ saxophones), and the **songbook** (`assets/songbook/`, docs/LYRIC_CRAFT.md):
+  8 songs with lyrics, base beat and voice plan, startable from Make.
+- Speed: vocal processing ~3x faster (pitch tracking only where there's sound, O(n) smoothing, one WORLD
+  analysis shared by every character voice).
+- Not yet: hearing a character before processing (preview), per-section characters within one track.
+- **Next:** the user records "Last Train, First Light" from the songbook.
+
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.
 

@@ -142,6 +142,17 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
                 raise HTTPException(400, str(e))
             return state(m, render=False)
 
+    @app.post("/api/songs/{song_id}/mixer/vocal_hits")
+    def mixer_vocal_hits(song_id: str, body: dict = Body(default={})):
+        with _lock(song_id):
+            m = mx(song_id, body.get("v"))
+            try:
+                added = m.vocal_hits(body.get("amount", "some"))
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+            hits = len({n[0] for n in added[0]["notes"]}) if added else 0
+            return state(m) | {"added": [p["id"] for p in added], "hits": hits}
+
     @app.get("/api/songs/{song_id}/mixer/suggest")
     def mixer_suggest(song_id: str, v: int | None = None, vibe: str | None = None):
         m = mx(song_id, v)
@@ -252,6 +263,14 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
     def vocal_presets():
         return [{"id": k, "label": p["label"]} for k, p in vocals.PRESETS.items()]
 
+    @app.get("/api/vocal_options")
+    def vocal_options():
+        from ..arrange.mixer import VOCAL_TRACKS
+
+        return {"presets": [{"id": k, "label": p["label"]} for k, p in vocals.PRESETS.items()],
+                "characters": [{"id": k, "label": c["label"]} for k, c in vocals.CHARACTERS.items()],
+                "tracks": list(VOCAL_TRACKS)}
+
     @app.get("/api/songs/{song_id}/takes")
     def get_takes(song_id: str):
         rec = record(song_id)
@@ -260,7 +279,8 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
                 "latency_ms": config.Settings.load().vocal_latency_ms}
 
     @app.post("/api/songs/{song_id}/takes")
-    async def add_take(song_id: str, request: Request, start: float = 0.0, section: str = "", v: int | None = None):
+    async def add_take(song_id: str, request: Request, start: float = 0.0, section: str = "", v: int | None = None,
+                       track: str = "Lead"):
         """A recorded take (WAV body). `start`: the song position (seconds) when recording began."""
         import soundfile as sf
 
@@ -277,7 +297,8 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         tid = time.strftime("%H%M%S") + "-" + uuid.uuid4().hex[:4]
         sf.write(str(takes_path(song_id) / f"{tid}.wav"), x, sr, subtype="FLOAT")
         t = {"id": tid, "file": f"{tid}.wav", "start_sec": start, "latency_ms": config.Settings.load().vocal_latency_ms,
-             "section": section, "version": vi, "created": time.time(), "seconds": round(len(x) / sr, 2)}
+             "section": section, "version": vi, "created": time.time(), "seconds": round(len(x) / sr, 2),
+             "track": str(track or "Lead")[:20]}
         v_ = record(song_id)["versions"][vi]
         notes = vocals.notes_in_seconds(lead_notes(v_), v_["bpm"], v_["sections"])
         t["score"] = vocals.score_take(load_take(song_id, t), notes)
@@ -307,7 +328,8 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
     @app.post("/api/songs/{song_id}/vocals")
     def make_vocals(song_id: str, body: dict = Body(default={})):
         """Comp, clean, tune, time, process and mix the takes into a new version of the song."""
-        items = takes_list(song_id)
+        track = str(body.get("track") or "Lead")[:20]
+        items = [t for t in takes_list(song_id) if t.get("track", "Lead") == track]
         if body.get("takes"):
             items = [t for t in items if t["id"] in set(body["takes"])]
         if not items:
@@ -323,7 +345,9 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
             takes = [load_take(song_id, t) for t in items]
             lyr = m.v.get("lyrics")
             try:
-                new = m.with_vocals(takes, preset, lead_mode, lyrics=lyr)
+                tune = body.get("tune", "auto") if body.get("tune") in ("auto", "melody", "key") else "auto"
+                character = body.get("character") if body.get("character") in vocals.CHARACTERS else "natural"
+                new = m.with_vocals(takes, preset, lead_mode, lyrics=lyr, tune=tune, track=track, character=character)
             except ValueError as e:
                 raise HTTPException(400, str(e))
         return new_version(song_id, new)

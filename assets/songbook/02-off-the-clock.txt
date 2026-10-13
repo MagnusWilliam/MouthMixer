@@ -1,0 +1,30 @@
+title: Off the Clock
+slot: City daytime theme (heard hundreds of times: few words, lots of groove)
+starter: daily_citypop
+voices: Lead = Female lead (light) or Your voice with Breathy | Backing = Female, same octave, on the "ooh"s
+hits: no
+notes: Built to survive endless listening: one short verse, a chorus with a 3-word hook, then the board should run long instrumental sections (switch the vocal off in Verse 2). The hook "off the clock" sits on the first beat and comes back 4 times.
+---
+[Intro]
+
+[Verse 1]
+Coffee's cold and the bell just rang,
+Got nowhere to be but the street I'm on.
+Sun's a little lazy, so am I,
+Let the city keep its time.
+
+[Chorus]
+Off the clock, off the clock,
+Window shopping, stop and talk.
+Nothing due until tomorrow,
+Off the clock, off the clock. (ooh)
+
+[Verse 2]
+
+[Chorus]
+Off the clock, off the clock,
+Window shopping, stop and talk.
+Nothing due until tomorrow,
+Off the clock, off the clock. (ooh)
+
+[Outro]

@@ -166,6 +166,7 @@ const Mix = {
     }
     const hasVocal = this.state.parts.some((p) => p.role === "vocal");
     $("#mx-leadmode").classList.toggle("hidden", !hasVocal);
+    $("#mx-hits").classList.toggle("hidden", !hasVocal);
     $("#mx-lead").value = this.state.lead_mode || "duck";
     $("#mx-save").disabled = !this.dirty;
   },
@@ -324,8 +325,8 @@ const Lyr = {
         }).join("");
         return `<div class="lysec"><div class="small muted">${esc(m ? m.role : s.name)}</div>${lines}</div>`;
       }).join("");
-      const ch = o.check || { score: 0, issues: [] };
-      const fit = ch.score >= 0.9 ? "fits the melody well" : ch.score >= 0.7 ? "mostly fits" : "needs work";
+      const ch = o.check || { score: null, issues: [] };
+      const fit = ch.score == null ? "your words" : ch.score >= 0.9 ? "fits the melody well" : ch.score >= 0.7 ? "mostly fits" : "needs work";
       el.innerHTML = `<div class="row"><b>${esc(o.title)}</b><span class="tag">${fit}</span><span class="small muted">${esc(o.idea || "")}</span>
           <span class="spacer"></span><button class="${i === this.data.chosen ? "" : "primary"}">${i === this.data.chosen ? "In use" : "Use these words"}</button></div>
         ${secs}${ch.issues.length ? `<ul class="checks small">${ch.issues.map((x) => `<li class="warn">${esc(x)}</li>`).join("")}</ul>` : ""}`;
@@ -406,7 +407,10 @@ const Sing = {
     busy(st, "");
     const v = currentSong.record.versions[curV()];
     this.bpm = v.bpm;
-    this.sections = v.sections.filter((s) => !/^(intro|outro|ending)/i.test(s.name));
+    this.sheet = v.lyric_sheet || [];
+    const worded = new Set(this.sheet.map((x) => x.section));
+    this.sections = v.sections.filter((s) => worded.has(s.name) || (!worded.size && !/^(intro|outro|ending)/i.test(s.name)));
+    this.key = v.key;
     if (!this.sections.length) { st.textContent = "This song has no sections to sing."; return; }
     const NAMES_ = new Proxy({ A: "Verse 1", "A'": "Verse 2", B: "Bridge", "A''": "Final chorus" }, { get: (o, k) => o[k] || k });
     const box = $("#sg-sections");
@@ -422,7 +426,12 @@ const Sing = {
     this.notes = v.tracks.filter((t) => t.role === "lead").flatMap((t) => t.notes).sort((a, b) => a[0] - b[0]);
     const ly = await api(songUrl(`/lyrics?v=${curV()}`));
     this.events = ly.events || [];
-    const presets = await api("/api/vocal_presets");
+    const opts = await api("/api/vocal_options");
+    const presets = opts.presets;
+    const fill = (sel, items, keep) => { const cur = $(sel).value; $(sel).innerHTML = items; if (keep && cur) $(sel).value = cur; };
+    fill("#sg-track", opts.tracks.map((t) => `<option>${esc(t)}</option>`).join(""), true);
+    fill("#sg-mk-track", opts.tracks.map((t) => `<option>${esc(t)}</option>`).join(""), true);
+    fill("#sg-character", opts.characters.map((c) => `<option value="${c.id}">${esc(c.label)}</option>`).join(""), true);
     const t = await api(songUrl("/takes"));
     this.takes = t.takes;
     this.latency = t.latency_ms || 0;
@@ -520,7 +529,7 @@ const Sing = {
     const st = $("#sg-result");
     busy($("#sg-status"), "Checking the take…");
     try {
-      const t = await api(songUrl(`/takes?start=${start.toFixed(4)}&section=${encodeURIComponent(rec.range && this.section.name)}&v=${curV()}`),
+      const t = await api(songUrl(`/takes?start=${start.toFixed(4)}&section=${encodeURIComponent(rec.range && this.section.name)}&v=${curV()}&track=${encodeURIComponent($("#sg-track").value || "Lead")}`),
         { method: "POST", body: wavBlob(all, sr) });
       busy($("#sg-status"), "");
       this.takes.push(t);
@@ -540,9 +549,10 @@ const Sing = {
       el.className = "take";
       const lines = Object.entries(s.lines).filter(([, l]) => l.sung).map(([k, l]) =>
         `<span class="lchip ${l.score >= 0.8 ? "g" : l.score >= 0.6 ? "y" : "r"}" title="${l.pitch_cents} cents off, ${l.timing_ms} ms off the beat">line ${+k + 1}</span>`).join("");
-      el.innerHTML = `<b>${esc(NAMES_[t.section] || t.section || "Take")}</b>
-        <span class="bar"><span style="width:${Math.round(s.score * 100)}%"></span></span>
-        <span class="small">${Math.round(s.score * 100)}</span> ${lines}
+      const scored = s.notes > 0;
+      el.innerHTML = `<span class="tag">${esc(t.track || "Lead")}</span> <b>${esc(NAMES_[t.section] || t.section || "Take")}</b>
+        ${scored ? `<span class="bar"><span style="width:${Math.round(s.score * 100)}%"></span></span>
+        <span class="small">${Math.round(s.score * 100)}</span> ${lines}` : `<span class="small muted">${s.peak_db != null ? "peak " + s.peak_db + " dB" : ""}</span>`}
         <span class="spacer"></span><audio controls preload="none" src="${songUrl(`/takes/${t.id}/audio`)}"></audio>
         <button class="ghost">✕</button>`;
       el.querySelector("button").onclick = async () => {
@@ -567,7 +577,8 @@ const Sing = {
     const now = beat ?? (r ? r.a / spb : 0);
     const left = now - 2, right = now + 8;
     const vis = this.notes.filter((n) => n[0] + n[1] > left && n[0] < right);
-    const ps = (vis.length ? vis : this.notes).map((n) => n[2]);
+    let ps = (vis.length ? vis : this.notes).map((n) => n[2]);
+    if (!ps.length) ps = this.trail.filter((x) => x.m != null).map((x) => x.m).concat([57, 74]);
     const lo = Math.min(...ps) - 3, hi = Math.max(...ps) + 3;
     const X = (b) => (b - left) / (right - left) * w, Y = (m) => h - 10 - (m - lo) / (hi - lo) * (h - 20);
     ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, w, h);
@@ -593,6 +604,13 @@ const Sing = {
       if (pt.m == null || pt.s < left) continue;
       const n = this.notes.find((x) => x[0] <= pt.s && pt.s < x[0] + x[1]);
       let m = pt.m, col = "--muted";
+      if (!n && !this.notes.length && this.key) {  // no melody to follow: in key or not
+        const [kn, km] = this.key.split(" ");
+        const tonic = NAMES.indexOf(kn) >= 0 ? NAMES.indexOf(kn) : ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"].indexOf(kn);
+        const sc = (km === "major" ? [0, 2, 4, 5, 7, 9, 11] : [0, 2, 3, 5, 7, 8, 10]).map((x) => (x + tonic) % 12);
+        const near = Math.min(...[-1, 0, 1].flatMap((o) => sc.map((pc) => Math.abs(m - (Math.floor(m / 12 + o) * 12 + pc)))));
+        col = near * 100 <= 25 ? "--green" : near * 100 <= 50 ? "--amber" : "--red";
+      }
       if (n) {
         const diff = ((m - n[2]) % 12 + 18) % 12 - 6;
         m = n[2] + diff;
@@ -613,6 +631,19 @@ const Sing = {
   },
   drawLyrics(beat) {
     const ev = this.events, box = $("#sg-lyrics");
+    if (!ev.length && this.sheet && this.sheet.length) {  // your own words, no melody: a teleprompter by section
+      const sec = this.sheet.find((x) => beat >= x.start && beat < x.start + x.beats) ||
+        this.sheet.find((x) => x.start > beat);
+      if (!sec) { box.querySelector(".now").innerHTML = ""; box.querySelector(".next").textContent = ""; return; }
+      const per = sec.beats / Math.max(1, sec.lines.length);
+      const i = Math.max(0, Math.min(sec.lines.length - 1, Math.floor((beat - sec.start) / per)));
+      const f = beat < sec.start ? 0 : Math.max(0, Math.min(1, (beat - sec.start - i * per) / per));
+      const tag = sec.mode !== "sung" ? `<span class="tag">${esc(sec.mode)}</span> ` : "";
+      box.querySelector(".now").innerHTML = tag + `<span class="syl" style="--f:${(f * 100).toFixed(0)}%">${esc(sec.lines[i])}</span>`;
+      const nxt = sec.lines[i + 1] || ((this.sheet[this.sheet.indexOf(sec) + 1] || {}).lines || [])[0] || "";
+      box.querySelector(".next").textContent = nxt;
+      return;
+    }
     if (!ev.length) { box.querySelector(".now").innerHTML = `<span class="muted small">No words chosen yet: hum or sing "la", or pick lyrics on the Lyrics tab.</span>`; box.querySelector(".next").innerHTML = ""; return; }
     const key = (e) => e.section + "|" + e.line;
     let i = ev.findIndex((e) => e.start + e.length > beat);
@@ -686,7 +717,8 @@ $("#sg-make").onclick = async () => {
   st.textContent = "";
   busy($("#sg-status"), "Picking the best line from each take, cleaning, timing, tuning and mixing… (about a minute)");
   try {
-    const r = await post(songUrl("/vocals"), { v: curV(), preset: $("#sg-preset").value, lead_mode: $("#sg-lead").value });
+    const r = await post(songUrl("/vocals"), { v: curV(), preset: $("#sg-preset").value, lead_mode: $("#sg-lead").value,
+      track: $("#sg-mk-track").value || "Lead", character: $("#sg-character").value || "natural", tune: $("#sg-tune").value });
     const q = r.vocals.quality;
     busy($("#sg-status"), "");
     Mix.state = null;
@@ -701,3 +733,13 @@ $("#sg-make").onclick = async () => {
 };
 
 $("#bg-listen").onchange = async () => { await post("/api/settings", { background_listening: $("#bg-listen").checked }); setTimeout(refreshStatus, 1500); };
+
+$("#mx-hits-go").onclick = async () => {
+  busy($("#mx-status"), "Finding the hard accents in your vocal…");
+  try {
+    Mix.state = await post(songUrl("/mixer/vocal_hits"), { v: curV(), amount: $("#mx-hits-amount").value });
+    Mix.dirty = true;
+    await Mix.loadStems(); Mix.restartIfPlaying(); Mix.render();
+    $("#mx-msg").textContent = `Added hits on ${Mix.state.hits} accents. Switch them off or try "a few" / "lots" if it's too much or too little.`;
+  } catch (e) { busy($("#mx-status"), ""); $("#mx-msg").textContent = errText(e); }
+};

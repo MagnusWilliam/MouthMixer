@@ -59,10 +59,13 @@ SLOTS = {
     # starter-only
     "chords": {"label": "Chords", "kind": "loop", "source": "starter", "bars": 4, "role": "comp", "hint": ""},
     "pad": {"label": "Pad", "kind": "loop", "source": "starter", "bars": 4, "role": "pad", "hint": ""},
+    "fx": {"label": "Risers", "kind": "loop", "source": "starter", "bars": 4, "role": "fx", "hint": ""},
+    "chime": {"label": "Station chime", "kind": "loop", "source": "starter", "bars": 4, "role": "chime", "hint": ""},
+    "keys": {"label": "Piano for the quiet parts", "kind": "loop", "source": "starter", "bars": 4, "role": "comp", "hint": ""},
 }
 RECORDABLE = [k for k, v in SLOTS.items() if v["source"] != "starter"]
 MIX_ROLE = {"lead": "lead", "counter": "counter", "riff": "riff", "drums": "drums", "perc": "perc", "bass": "bass",
-            "comp": "comp", "pad": "pad", "chop": "chop"}
+            "comp": "comp", "pad": "pad", "chop": "chop", "fx": "perc", "chime": "arp"}
 PAN = {"riff": 0.25, "counter": -0.3, "perc": 0.35, "comp": -0.2, "chop": 0.0}
 
 DEFAULT_FORM = [("Intro", 4, "A"), ("Verse", 8, "A"), ("Hook", 8, "A"), ("Verse 2", 8, "A"), ("Hook 2", 8, "A"),
@@ -93,18 +96,66 @@ def list_projects() -> list[dict]:
 
 def _section_kind(name: str) -> str:
     n = name.lower()
-    for k in ("intro", "outro", "verse", "hook", "bridge", "break"):
+    if n.startswith(("chorus", "final")):
+        return "hook"
+    if n.startswith(("pre", "build")):
+        return "pre"
+    for k in ("intro", "outro", "verse", "hook", "bridge", "break", "rap"):
         if n.startswith(k):
             return k
     return "verse"
 
 
-DEFAULT_PLAYS = {  # slot -> section kinds it plays in when first added
-    "beat": {"verse", "hook", "bridge"}, "bass": {"verse", "hook", "bridge"}, "chords": {"intro", "verse", "hook", "bridge", "outro"},
-    "pad": {"intro", "hook", "bridge", "outro"}, "riff": {"hook", "verse"}, "stab": {"hook"}, "chop": {"hook"},
+ALL_KINDS = {"intro", "verse", "pre", "hook", "rap", "bridge", "break", "outro"}
+DEFAULT_PLAYS = {  # slot -> section kinds it plays in when first added (each section's feel shapes it there)
+    "beat": {"intro", "verse", "pre", "hook", "rap", "bridge", "outro"}, "bass": {"intro", "verse", "pre", "hook", "rap", "bridge"},
+    "chords": ALL_KINDS, "pad": {"intro", "hook", "bridge", "break", "outro"}, "fx": ALL_KINDS,
+    "chime": {"intro", "outro"}, "keys": {"bridge", "break"}, "riff": {"hook", "verse"}, "stab": {"hook"}, "chop": {"hook"},
     "perc": {"hook", "bridge"}, "hook": {"hook"}, "lead": {"verse"}, "bridge": {"bridge"}, "counter": {"hook"},
     "intro": {"intro", "outro"}, "fill": {"verse", "bridge"},
 }
+
+
+def _feels(sections: list[dict], mood: str = "") -> list[str]:
+    """Each section's feel: its own setting, or one guessed from its name (the last chorus is the biggest;
+    battle and boss tracks end on three big hits)."""
+    hooks = [i for i, s in enumerate(sections) if _section_kind(s["name"]) == "hook"]
+    out = []
+    for i, s in enumerate(sections):
+        f = s.get("feel")
+        if f not in starters.FEELS:
+            f = starters.feel_for(s["name"], bool(hooks) and i == hooks[-1])
+            if f == "outro" and mood in ("battle", "boss"):
+                f = "hits_end"
+        out.append(f)
+    return out
+
+
+def favourites_dir() -> Path:
+    p = config.home() / "favourites"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def list_favourites() -> list[dict]:
+    out = []
+    for f in sorted(favourites_dir().glob("*/favourite.json"), reverse=True):
+        try:
+            d = json.loads(f.read_text())
+        except ValueError:
+            continue
+        out.append({k: d[k] for k in ("id", "name", "slot", "bars", "instrument", "bpm", "key", "created", "source")}
+                   | {"label": SLOTS[d["slot"]]["label"], "notes": len(d["notes"]), "audio": bool(d.get("audio"))})
+    return out
+
+
+def delete_favourite(fid: str) -> None:
+    import shutil
+
+    d = (favourites_dir() / fid).resolve()
+    if d.parent != favourites_dir().resolve() or not d.exists():
+        raise KeyError(fid)
+    shutil.rmtree(d)
 
 
 class Project:
@@ -171,10 +222,11 @@ class Project:
     # --- pieces ----------------------------------------------------------------------------------
     def _default_instrument(self, slot: str) -> str:
         pk = self.st["pack"]
-        kit = "kit:" + self.pack["kit"][0]
+        kit = "kit:" + self.st.get("kit", self.pack["kit"][0])
         return {"beat": kit, "fill": kit, "perc": kit, "bass": starters.instrument_for(pk, "bass"),
                 "riff": starters.instrument_for(pk, "riff"), "stab": "brass_section", "chop": "your voice",
-                "hook": starters.instrument_for(pk, "lead"), "lead": starters.instrument_for(pk, "lead", 1),
+                "hook": self.st.get("lead") or starters.instrument_for(pk, "lead"),
+                "lead": self.st.get("lead") or starters.instrument_for(pk, "lead", 1),
                 "bridge": starters.instrument_for(pk, "lead", 2), "counter": starters.instrument_for(pk, "counter"),
                 "intro": starters.instrument_for(pk, "arp"), "chords": starters.instrument_for(pk, "comp"),
                 "pad": starters.instrument_for(pk, "pad")}[slot]
@@ -195,11 +247,24 @@ class Project:
         self.pieces.append(piece)
         return piece
 
+    def _worded(self) -> set:
+        sheet = (self.data.get("lyrics") or {}).get("sheet", [])
+        return {x["section"] for x in sheet if x.get("lines")}
+
     def _default_sections(self, piece: dict):
+        """Put a new piece in the sections it suits. Where you sing or rap a verse, the parts that compete
+        with a voice (melodies, riffs, answer lines, chops, extra percussion) stay out; the supporting
+        ones (beat, bass, chords, pad) stay in. Choruses get everything."""
         kinds = DEFAULT_PLAYS.get(piece["slot"], {"hook"})
+        worded = self._worded()
+        busy = piece["slot"] in ("hook", "lead", "riff", "counter", "chop", "perc", "stab", "intro")
         for s in self.data["sections"]:
-            if _section_kind(s["name"]) in kinds and piece["id"] not in s["parts"]:
-                s["parts"].append(piece["id"])
+            kind = _section_kind(s["name"])
+            if kind not in kinds or piece["id"] in s["parts"]:
+                continue
+            if busy and s["id"] in worded and kind in ("verse", "rap", "pre") and piece["slot"] != "lead":
+                continue
+            s["parts"].append(piece["id"])
 
     def add_piece(self, slot: str, bars: int | None = None) -> dict:
         if slot not in RECORDABLE:
@@ -314,6 +379,70 @@ class Project:
         self.save()
         return p
 
+    # --- favourites: pieces you reuse across tracks -----------------------------------------------
+    def favourite(self, pid: str, name: str = "") -> dict:
+        """Save a piece (its notes, sound, and a vocal chop's audio) to your favourites."""
+        import shutil
+
+        p = self.piece(pid)
+        if p["source"] == "starter":
+            raise ValueError("starter parts come with every starter beat; favourite your own pieces")
+        if not p["notes"] and not p.get("audio"):
+            raise ValueError("record this piece first")
+        fid = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4]
+        d = favourites_dir() / fid
+        d.mkdir()
+        fav = {"id": fid, "name": (name or p["name"])[:40], "slot": p["slot"], "bars": p["bars"],
+               "instrument": p["instrument"], "octave": p["octave"], "gain_db": p["gain_db"], "notes": p["notes"],
+               "over": p["over"], "source": p["source"], "repeat": p.get("repeat", False), "chords": p["chords"],
+               "bpm": self.st["bpm"], "tonic": self.st["tonic"], "mode": self.st["mode"],
+               "key": f"{theory.NAMES[self.st['tonic']]} {self.st['mode']}", "from": self.data["id"],
+               "created": time.time(), "audio": None}
+        if p.get("audio"):
+            shutil.copy(self.dir / "takes" / p["audio"], d / "audio.wav")
+            fav["audio"] = "audio.wav"
+        write_json(d / "favourite.json", fav)
+        return fav
+
+    def use_favourite(self, fid: str) -> dict:
+        """Add a favourite as a new piece here: moved to this key (pitched notes to the nearest notes of the
+        scale), and a vocal chop stretched to this tempo and shifted to this key."""
+        d = (favourites_dir() / fid).resolve()
+        if d.parent != favourites_dir().resolve() or not (d / "favourite.json").exists():
+            raise KeyError(fid)
+        fav = json.loads((d / "favourite.json").read_text())
+        q = self._new_piece(fav["slot"], source=fav["source"], name=fav["name"], instrument=fav["instrument"],
+                            bars=fav["bars"])
+        shift = ((self.st["tonic"] - fav["tonic"]) + 6) % 12 - 6
+        drums = fav["instrument"].startswith("kit:")
+        scale = {(self.st["tonic"] + i) % 12 for i in theory.MODES.get(self.st["mode"], theory.MODES["major"])}
+
+        def fit(pt):
+            pt = pt + shift
+            if pt % 12 in scale:
+                return pt
+            return pt - 1 if (pt - 1) % 12 in scale else pt + 1
+
+        q["notes"] = [list(n) for n in fav["notes"]] if drums else [[s_, l_, fit(pt), v_] for s_, l_, pt, v_ in fav["notes"]]
+        q["over"] = [(r + shift) % 12 for r in fav.get("over", [])]
+        q["octave"], q["gain_db"], q["repeat"], q["chords"] = fav["octave"], fav["gain_db"], fav["repeat"], fav["chords"]
+        if fav.get("audio"):
+            import librosa
+            import soundfile as sf
+
+            a, sr = sf.read(str(d / fav["audio"]), dtype="float32")
+            if abs(fav["bpm"] - self.st["bpm"]) > 0.5:
+                a = librosa.effects.time_stretch(a, rate=self.st["bpm"] / fav["bpm"])
+            if shift:
+                a = librosa.effects.pitch_shift(a, sr=sr, n_steps=shift)
+            name = f"chop-fav-{fid}.wav"
+            sf.write(str(self.dir / "takes" / name), a.astype(np.float32), sr, subtype="FLOAT")
+            q["audio"] = name
+        q["take"] = None
+        self._default_sections(q)
+        self.save()
+        return q
+
     # --- takes -----------------------------------------------------------------------------------
     def add_recording(self, pid: str, audio: np.ndarray, sr: int, start: float, cal=None) -> list[dict]:
         """A loop recording for a piece. `start` = loop time (s) of sample 0, latency already removed.
@@ -412,11 +541,124 @@ class Project:
                 raise ValueError("a section is 1, 2, 4, 8, 12 or 16 bars")
             out.append({"id": s.get("id") or f"s{time.time_ns() % 10 ** 9}{i}", "name": str(s.get("name", "Section"))[:24],
                         "bars": bars, "chords": "B" if s.get("chords") == "B" else "A",
+                        "feel": s.get("feel") if s.get("feel") in starters.FEELS else None,
+                        "drop": int(s["drop"]) if s.get("drop") in (0, 2, 4, 8, "0", "2", "4", "8") else None,
                         "parts": [x for x in s.get("parts", []) if x in ids]})
         if not out:
             raise ValueError("a song needs at least one section")
         self.data["sections"] = out
         self.save()
+        return out
+
+    def apply_lyrics(self, text: str) -> list[dict]:
+        """Set the song up from lyrics with [Section] headers: one section per header, bars from the line
+        count (a sung line is about 2 bars, a rap line 1 at this kind of tempo), a feel from the name
+        ("Chorus" lifts, "Rap Verse" drops into a half-time pocket, "Intro" is the flashy intro), the
+        bridge on the bridge chords ("slow, then building" splits it into a breakdown and a build), the
+        final chorus as long as the chorus, and an outro. The words go with the song into Sing."""
+        title, blocks, cur = "", [], None
+        for raw in text.splitlines():
+            line = raw.strip().strip("\u201c\u201d\"").strip()
+            if not line:
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                head = line[1:-1].strip()
+                name, _, note = head.partition(",")
+                cur = {"name": name.strip()[:24] or "Section", "note": note.strip().lower(), "lines": []}
+                blocks.append(cur)
+            elif cur is None:
+                title = title or line
+            else:
+                cur["lines"].append(line)
+        if not blocks:
+            raise ValueError("no [Section] headers found: put each part under a header like [Verse 1] or [Chorus]")
+        fast = self.st["bpm"] >= 110
+        sections: list[dict] = []
+        sheet: list[dict] = []
+        chorus_bars, chorus_lines = None, []
+
+        def bars_for(n: int, per: int) -> int:
+            want = max(4, n * per)
+            return next(b for b in (4, 8, 12, 16) if b >= min(want, 16))
+
+        def add(name, bars, chords, feel, lines, mode):
+            base, k = name, 2
+            while any(x["name"] == name for x in sections):  # "Chorus" twice -> "Chorus", "Chorus 2"
+                name = f"{base} {k}"[:24]
+                k += 1
+            sid = f"s{len(sections)}-{uuid.uuid4().hex[:4]}"
+            sections.append({"id": sid, "name": name, "bars": bars, "chords": chords, "feel": feel, "parts": []})
+            sheet.append({"section": sid, "name": name, "lines": lines, "mode": mode})
+
+        for i, b in enumerate(blocks):
+            n = b["name"]
+            low = n.lower()
+            feel = starters.feel_for(n)
+            lines = b["lines"]
+            spoken = "spoken" in b["note"] or "spoken" in low
+            whisper = "whisper" in b["note"]
+            mode = "whisper" if whisper else "spoken" if spoken else "sung"
+            if feel == "intro":
+                quick = any(w in b["note"] for w in ("shout", "hit", "fast"))  # battle: hit from the first beat
+                add(n, 2 if quick else 4, "A", "intro", lines, mode)
+            elif not lines and feel != "outro":  # an empty header: an instrumental stretch
+                add(n, 8, "B" if feel == "breakdown" else "A", feel, [], "sung")
+            elif low.startswith("final") and chorus_bars and len(lines) <= 2:
+                extra = [x for x in lines if x.startswith("(")]
+                add(n, chorus_bars, "A", "final", chorus_lines + extra, "sung")
+            elif feel == "breakdown" and ("build" in b["note"] or "building" in b["note"]):
+                bars = bars_for(len(lines), 2)
+                half_l = (len(lines) + 1) // 2
+                add(n, max(4, bars // 2), "B", "breakdown", lines[:half_l], "sung")
+                add(n + " build", max(4, bars // 2), "B", "pre", lines[half_l:], "sung")
+            else:
+                rap = feel == "rap"
+                bars = bars_for(len(lines), 1 if rap and fast else 2)
+                chords = "B" if feel == "breakdown" else "A"
+                if low.startswith(("chorus", "hook")) and i == max(j for j, x in enumerate(blocks)
+                                                               if x["name"].lower().startswith(("chorus", "hook", "final"))):
+                    feel = "final"
+                add(n, bars, chords, feel, lines, "rap" if rap else mode)
+                if low.startswith(("chorus", "hook")) and chorus_bars is None:
+                    chorus_bars, chorus_lines = bars, list(lines)
+        end_feel = "hits_end" if self.st["mood"] in ("battle", "boss") else "outro"
+        for x in sections:
+            if x["feel"] == "outro":
+                x["feel"] = end_feel
+        if not any(s["feel"] in ("outro", "hits_end") for s in sections):
+            add("Outro", 4, "A", end_feel, [], "sung")
+        self.data["sections"] = sections
+        for piece in self.pieces:
+            self._default_sections(piece)
+        self.data["lyrics"] = {"title": title, "text": text, "sheet": sheet}
+        if title:
+            self.data["title"] = title[:60]
+        self.save()
+        return sections
+
+    def drops(self, feels: list[str] | None = None) -> list[int]:
+        """Beats of freeze at the start of each section: your setting, or 4 (one bar) for a chorus that
+        comes straight after a build-up."""
+        feels = feels or _feels(self.data["sections"], self.st["mood"])
+        out = []
+        for i, (s, f) in enumerate(zip(self.data["sections"], feels)):
+            if s.get("drop") is not None:
+                out.append(int(s["drop"]))
+            else:
+                out.append(4 if f in ("lift", "final") and i > 0 and feels[i - 1] == "pre" else 0)
+        return out
+
+    def lyric_sheet(self) -> list[dict]:
+        """The words per section with where they fall in the song (beats), for the Sing screen."""
+        lyr = self.data.get("lyrics") or {}
+        by_id = {x["section"]: x for x in lyr.get("sheet", [])}
+        out, start = [], 0
+        for s in self.data["sections"]:
+            x = by_id.get(s["id"])
+            if x and x["lines"]:
+                out.append({"section": s["name"], "start": start * 4, "beats": s["bars"] * 4, "lines": x["lines"],
+                            "mode": x.get("mode", "sung")})
+            start += s["bars"]
         return out
 
     def set_key(self, tonic: int) -> None:
@@ -444,14 +686,15 @@ class Project:
         return max(i for i, x in enumerate(scale) if x <= off)
 
     def place(self, p: dict, start_bar: int, bars: int, chords: list, last_section: bool = False,
-              melody: list | None = None, section_name: str = "") -> list[tuple]:
+              melody: list | None = None, section_name: str = "", feel: str | None = None,
+              next_feel: str | None = None) -> list[tuple]:
         """The piece's notes laid into a section starting at `start_bar`, `bars` long."""
         if p.get("gen"):
-            kind = _section_kind(section_name)
-            light = kind in ("intro", "outro")
-            fills = p["gen"] == "drums" and bars >= 8 and not last_section
+            feel = feel or starters.feel_for(section_name)
+            fills = p["gen"] == "drums" and bars >= 8 and not last_section and next_feel not in ("breakdown",)
             return starters.generate(p["gen"], self.st, chords, (start_bar, start_bar + bars), fills=fills,
-                                     light=light, melody=melody, rng=np.random.default_rng(hash(p["id"]) % 997))
+                                     melody=melody, rng=np.random.default_rng(int(p["id"][1:] or 0) * 7 + 1),
+                                     feel=feel, next_feel=next_feel)
         if not p["notes"]:
             return []
         L = p["bars"] * 4
@@ -591,6 +834,9 @@ class Project:
         d["chords_a"] = [c.name for _, _, c in self.progression("A", 4)]
         d["chords_b"] = [c.name for _, _, c in self.progression("B", 4)]
         d["slots"] = {k: {kk: vv for kk, vv in v.items()} for k, v in SLOTS.items()}
+        d["feels"] = starters.FEELS
+        d["section_feels"] = _feels(self.data["sections"], self.st["mood"])
+        d["section_drops"] = self.drops()
         d["recordable"] = RECORDABLE
         pieces = []
         for p in self.pieces:
@@ -614,8 +860,9 @@ class Project:
         # Melodies first, so generated chords can step out of their way (H1).
         order = sorted(self.pieces, key=lambda p: 0 if p["role"] == "lead" else 1)
         melody: list = []
+        feels = _feels(self.data["sections"], self.st["mood"])
         for p in order:
-            for s, (name, sb, bars) in zip(self.data["sections"], secs):
+            for k, (s, (name, sb, bars)) in enumerate(zip(self.data["sections"], secs)):
                 if p["id"] not in s["parts"]:
                     continue
                 if p["source"] == "voice":
@@ -623,10 +870,34 @@ class Project:
                     continue
                 sec_chords = [c for c in chords if sb * 4 <= c[0] < (sb + bars) * 4]
                 notes = self.place(p, sb, bars, sec_chords, last_section=s is self.data["sections"][-1],
-                                   melody=melody, section_name=name)
+                                   melody=melody, section_name=name, feel=feels[k],
+                                   next_feel=feels[k + 1] if k + 1 < len(feels) else None)
                 tracks.setdefault(p["id"], []).extend(notes)
                 if p["role"] == "lead":
                     melody += notes
+        # The freeze before the drop: the first beats of a chorus are left to the voice alone, then the
+        # whole band comes back in on a crash and kick (tension, then release).
+        drops = self.drops(feels)
+        for (name, sb, bars), d in zip(secs, drops):
+            if not d:
+                continue
+            a, b = sb * 4, sb * 4 + d
+            for pid, notes in tracks.items():
+                kept = []
+                for n in notes:
+                    if a <= n[0] < b:
+                        continue
+                    if n[0] < a < n[0] + n[1]:  # a note ringing into the freeze stops at it
+                        n = (n[0], a - n[0], n[2], n[3])
+                    kept.append(n)
+                tracks[pid] = kept
+            fx = next((q for q in self.pieces if q.get("gen") == "fx" and q["id"] in tracks), None)
+            if fx is not None:  # the swell rises through the freeze and lands on the drop
+                tracks[fx["id"]] = [(n[0] + d, n[1], n[2], n[3]) if abs(n[0] + n[1] - a) < 0.01 else n
+                                    for n in tracks[fx["id"]]]
+            beat = next((q for q in self.pieces if q["role"] == "drums" and q["id"] in tracks), None)
+            if beat is not None:
+                tracks[beat["id"]] += [(b, 1.0, 49, 118), (b, 0.3, 36, 120)]
         out_tracks = [self._track(self.piece(pid), sorted(n)) for pid, n in tracks.items() if n]
         song = self._song(secs, chords, out_tracks)
         return song, [{"piece": self.piece(pid), "where": w} for pid, w in audio.items()]
@@ -696,9 +967,16 @@ class Project:
         version = {"file": f"v{idx}.ogg", "midi": f"v{idx}.mid", "score": verdict["score"], "critic": verdict,
                    "title": f"{self.data['title']} · {self.pack['title']}",
                    "spec": {"clips": [], "seed": song.seed, "project": self.data["id"], "starter": self.st["id"]},
-                   **summary, "audio_parts": audio_parts,
+                   **summary, "audio_parts": audio_parts, "lyric_sheet": self.lyric_sheet(),
+                   "section_feels": _feels(self.data["sections"], self.st["mood"]),
                    "added": [p["name"] for p in self.pieces if p["source"] == "starter"
                              and any(p["id"] in s["parts"] for s in self.data["sections"])]}
+        sheet = version["lyric_sheet"]
+        if sheet:
+            title = (self.data.get("lyrics") or {}).get("title") or self.data["title"]
+            version["lyrics"] = {"brief": "", "chosen": 0, "options": [{
+                "title": title, "idea": "your own words", "check": None,
+                "sections": [{"name": x["section"], "lines": [{"text": t} for t in x["lines"]]} for x in sheet]}]}
         if record:
             record["versions"].append(version)
             write_json(sdir / "song.json", record)
