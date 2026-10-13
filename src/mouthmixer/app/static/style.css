@@ -217,3 +217,35 @@ button.preset.on { outline: 2px solid var(--clean); }
 .tweak span { color: var(--muted); }
 .tweak.set span { color: var(--ink); }
 .tweak input[type=range] { width: 100%; }
+
+/* Sing: vocal track cards, the track you're working on, takes in use, full lyrics */
+.vtracks { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 8px 0 10px; }
+.vtrack { --h: 210; border: 1px solid var(--line); border-left: 5px solid hsl(var(--h) 65% 55%); border-radius: 9px;
+  padding: 8px 10px; background: var(--panel); cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.vtrack:hover { border-color: hsl(var(--h) 65% 55%); }
+.vtrack.on { outline: 3px solid hsl(var(--h) 65% 55%); background: hsl(var(--h) 70% 55% / 0.10); }
+.vtrack.empty { opacity: 0.6; }
+.vtrack.empty.on { opacity: 1; }
+.vt-name { font-weight: 700; }
+.vtrack button { align-self: flex-start; padding: 3px 8px; font-size: 12px; }
+.pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); width: fit-content; }
+.pill.in { background: #2e9e5b; border-color: #2e9e5b; color: #fff; }
+.pill.muted { background: var(--line); }
+.pill.todo { border-color: #e8a22c; color: #b57610; }
+.pill.warn { border-color: #e8a22c; background: rgba(232, 162, 44, 0.15); }
+.working { --h: 210; margin: 4px 0 10px; padding: 8px 12px; border-radius: 8px; background: hsl(var(--h) 70% 55% / 0.12);
+  border-left: 5px solid hsl(var(--h) 65% 55%); }
+.dot { --h: 210; display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: hsl(var(--h) 65% 55%); vertical-align: -1px; }
+.trackname { font-weight: 700; }
+.take { --h: 210; border-left: 4px solid hsl(var(--h) 65% 55%); padding-left: 8px; }
+.take.inuse { background: hsl(var(--h) 70% 55% / 0.10); }
+.take.other { opacity: 0.55; }
+.tag.trk { border-color: hsl(var(--h) 65% 55%); color: hsl(var(--h) 60% 40%); }
+.karaoke.full { text-align: left; max-width: 760px; margin: 0 auto; }
+.karaoke.full.song { max-height: 340px; overflow-y: auto; }
+.karaoke.full .lsec { margin: 4px 0 12px; }
+.karaoke.full .lsec.cur { border-left: 3px solid var(--clean); padding-left: 10px; }
+.karaoke.full .lhead { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 2px; }
+.karaoke.full .lline { font-size: 18px; line-height: 1.45; }
+.karaoke.full .lline.on { font-weight: 700; color: var(--clean); }
+.karaoke.full.song .lsec:not(.cur) .lline { font-size: 15px; color: var(--muted); }

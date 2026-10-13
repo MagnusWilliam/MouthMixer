@@ -19,6 +19,11 @@ own (optional)": **run the Sync test there first** so takes land on the beat. On
 **Voice tweaks** (pitch, tone, breath, grit, tuning, doubling, a harmony voice, echo, space, radio /
 megaphone / phone / robot / tape) and press **Preview** to hear 8 seconds of your voice that way.
 
+**Sing is clearer now:** click a vocal track card to work on it (it lights up; green "In the song" means
+it's in the finished song), pick which take each section uses, try any take's voice with the band, and
+switch the words to the whole section or the whole song. Takes marked "old recorder" may sit a little
+late: re-record them or use the **Timing** tweak.
+
 **Earlier: the songbook, voices and song structure.** In **Make**, start one of the 8 LINE ZERO songs from the
 songbook (lyrics, beat and voice plan ready), or paste your own lyrics with [Verse]/[Chorus]/[Rap Verse]
 headers. Choruses lift, rap verses drop into a hip-hop pocket, intros get hits and the station chime. On

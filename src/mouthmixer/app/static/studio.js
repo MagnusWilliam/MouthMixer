@@ -394,6 +394,9 @@ function detectPitch(buf, sr) {
 }
 const hzToMidi = (f) => 69 + 12 * Math.log2(f / 440);
 
+const TRACK_HUES = { Lead: 210, "Verse lead": 190, "Chorus lead": 330, Rap: 30, Gang: 0, Backing: 270, Harmony: 290,
+  "Ad-libs": 50, Announcer: 160, Whisper: 240 };
+
 const Sing = {
   takes: null, sections: [], section: null, events: [], notes: [], trail: [], mic: null, stream: null, proc: null,
   recording: null, latency: 0, mode: null, deviceId: localStorage.getItem("mm-sing-mic") || "",
@@ -434,7 +437,8 @@ const Sing = {
     fill("#sg-mk-track", opts.tracks.map((t) => `<option>${esc(t)}</option>`).join(""), true);
     fill("#sg-character", opts.characters.map((c) => `<option value="${c.id}">${esc(c.label)}</option>`).join(""), true);
     this.tweakSpec = opts.tweaks || [];
-    this.renderTweaks();
+    this.trackNames = opts.tracks;
+    this.characters = opts.characters;
     const t = await api(songUrl("/takes"));
     this.takes = t.takes;
     this.latency = t.latency_ms || 0;
@@ -443,11 +447,103 @@ const Sing = {
     $("#sg-latr").value = Math.round(this.latency);
     $("#sg-preset").innerHTML = presets.map((p) => `<option value="${p.id}"${p.id === t.preset ? " selected" : ""}>${esc(p.label)}${p.id === t.preset ? " (suits this style)" : ""}</option>`).join("");
     await this.listMics();
-    this.renderTakes();
+    let want = this.track;
+    try { want = want || localStorage.getItem("mm-track:" + currentSong.id); } catch { }
+    if (!want || !this.trackNames.includes(want)) {  // the track with the newest take, else Lead
+      const last = this.takes.slice().reverse().find((x) => this.trackNames.includes(x.track || "Lead"));
+      want = last ? last.track || "Lead" : "Lead";
+    }
+    this.setTrack(want);
     this.draw();
   },
+
+  // ---- the vocal track you're working on --------------------------------------------------------
+  setTrack(name) {
+    this.track = name;
+    try { localStorage.setItem("mm-track:" + currentSong.id, name); } catch { }
+    $("#sg-track").value = name; $("#sg-mk-track").value = name;
+    let voice = null;
+    try { voice = localStorage.getItem("mm-voice:" + currentSong.id + ":" + name); } catch { }
+    const made = this.madeReport(name);
+    $("#sg-character").value = voice || (made && made.character) || "natural";
+    // jump to a section this track has takes for, if the one showing has none
+    const mine = (this.takes || []).filter((t) => (t.track || "Lead") === name);
+    if (mine.length && this.section && !mine.some((t) => t.section === this.section.name)) {
+      const sec = (this.sections || []).find((x) => x.name === mine[mine.length - 1].section);
+      if (sec) {
+        this.section = sec;
+        [...$("#sg-sections").children].forEach((c) => c.classList.toggle("on", c.textContent === sec.name));
+        this.draw();
+      }
+    }
+    this.renderTracks(); this.renderTakes(); this.renderTweaks(); this.renderWorking();
+  },
+  trackColor(name) { return TRACK_HUES[name] ?? 200; },
+  madeReport(name) {
+    const v = currentSong && currentSong.record.versions[curV()];
+    return v && v.vocal_tracks ? v.vocal_tracks[name] : null;
+  },
+  vocalPart(name) {
+    return Mix.state ? Mix.state.parts.find((p) => p.role === "vocal" && (p.track || "Lead") === name) : null;
+  },
+  renderWorking() {
+    const name = this.track, voice = (this.characters || []).find((c) => c.id === $("#sg-character").value);
+    const html = `<span class="dot" style="--h:${this.trackColor(name)}"></span> Working on <b>${esc(name)}</b>
+      <span class="muted">· voice: ${esc(voice ? voice.label : "your voice")}</span>`;
+    $("#sg-working").innerHTML = html + `<span class="muted"> · new takes go to this track</span>`;
+    $("#sg-working").style.setProperty("--h", this.trackColor(name));
+    $("#sg-mk-name").innerHTML = `<span class="dot" style="--h:${this.trackColor(name)}"></span> ${esc(name)}`;
+    $("#sg-takes-for").textContent = $("#sg-alltakes").checked ? "(every track)" : `for ${name}`;
+  },
+  renderTracks() {
+    const box = $("#sg-tracks");
+    box.innerHTML = "";
+    for (const name of this.trackNames || []) {
+      const mine = (this.takes || []).filter((t) => (t.track || "Lead") === name);
+      const secs = [...new Set(mine.map((t) => t.section).filter(Boolean))];
+      const part = this.vocalPart(name), made = this.madeReport(name);
+      const status = part ? (part.muted ? ["muted", "Muted (not in the song)"] : ["in", "In the song"])
+        : mine.length ? ["todo", "Not made yet"] : ["empty", "No takes yet"];
+      const el = document.createElement("div");
+      el.className = "vtrack" + (name === this.track ? " on" : "") + (mine.length || part ? "" : " empty");
+      el.style.setProperty("--h", this.trackColor(name));
+      el.innerHTML = `<div class="vt-name">${name === this.track ? "● " : ""}${esc(name)}</div>
+        <div class="pill ${status[0]}">${status[1]}</div>
+        <div class="small muted">${mine.length} take${mine.length === 1 ? "" : "s"}${secs.length ? " · " + esc(secs.join(", ")) : ""}</div>
+        ${made ? `<div class="small muted">voice: ${esc(made.character_label || made.character || "your voice")}</div>` : ""}
+        ${part ? `<button class="ghost small" data-mute>${part.muted ? "Put back in the song" : "Take out of the song"}</button>` : ""}`;
+      el.onclick = (e) => { if (!e.target.closest("button")) this.setTrack(name); };
+      const mb = el.querySelector("[data-mute]");
+      if (mb) mb.onclick = () => this.toggleInSong(name, mb);
+      box.appendChild(el);
+    }
+  },
+  async toggleInSong(name, btn) {
+    const part = this.vocalPart(name);
+    if (!part) return;
+    btn.disabled = true;
+    busy($("#sg-status"), `${part.muted ? "Putting" : "Taking"} ${name} ${part.muted ? "back in" : "out of"} the song and saving it…`);
+    try {
+      await post(songUrl("/mixer/part"), { v: curV(), id: part.id, muted: !part.muted });
+      const r = await post(songUrl("/mixer/save"), { v: curV() });
+      Mix.state = null;
+      await reloadSong(r.version);
+      busy($("#sg-status"), "");
+      await this.open();
+    } catch (e) { busy($("#sg-status"), ""); $("#sg-result").textContent = errText(e); btn.disabled = false; }
+  },
+  // Which take goes into the track for each section: your pick, else the newest.
+  choiceKey() { return "mm-choice:" + currentSong.id + ":" + this.track; },
+  getChoice() { try { return JSON.parse(localStorage.getItem(this.choiceKey()) || "{}"); } catch { return {}; } },
+  setChoice(c) { try { localStorage.setItem(this.choiceKey(), JSON.stringify(c)); } catch { } },
+  stacks() { return ["Gang", "Backing", "Harmony"].includes(this.track); },
+  takeInUse(section) {
+    const mine = (this.takes || []).filter((t) => (t.track || "Lead") === this.track && t.section === section);
+    const pick = this.getChoice()[section];
+    return mine.find((t) => t.id === pick) || mine[mine.length - 1] || null;
+  },
   // Voice tweaks: only the settings you touch are sent; they're remembered per vocal track.
-  tweakKey() { return "mm-tweaks:" + ($("#sg-mk-track").value || "Lead"); },
+  tweakKey() { return "mm-tweaks:" + (this.track || "Lead"); },
   getTweaks() { try { return JSON.parse(localStorage.getItem(this.tweakKey()) || "{}"); } catch { return {}; } },
   setTweaks(t) { try { localStorage.setItem(this.tweakKey(), JSON.stringify(t)); } catch { } },
   renderTweaks() {
@@ -592,6 +688,8 @@ const Sing = {
         { method: "POST", body: wavBlob(all, sr) });
       busy($("#sg-status"), "");
       this.takes.push(t);
+      const c = this.getChoice(); delete c[t.section]; this.setChoice(c);  // a new take is the one in use
+      this.renderTracks();
       const s = t.score;
       st.textContent = (s.peak_db > -1 ? "That take clipped: lean back a little or turn the mic gain down." :
         s.peak_db < -24 ? "That take is very quiet: move a little closer or turn the mic gain up." : "") + dropoutNote(gaps);
@@ -600,23 +698,42 @@ const Sing = {
   },
   renderTakes() {
     const box = $("#sg-takes");
-    box.innerHTML = this.takes.length ? "" : `<p class="muted small">No takes yet.</p>`;
+    const all = $("#sg-alltakes").checked;
+    const list = (this.takes || []).filter((t) => all || (t.track || "Lead") === this.track);
+    box.innerHTML = list.length ? "" : `<p class="muted small">No takes on ${esc(this.track || "this track")} yet: pick a section and press Record.</p>`;
     const NAMES_ = { A: "Verse 1", "A'": "Verse 2", B: "Bridge", "A''": "Final chorus", all: "Whole song" };
-    this.takes.slice().reverse().forEach((t) => {
+    const order = (this.sections || []).map((x) => x.name);
+    list.slice().sort((a, b) => (order.indexOf(a.section) - order.indexOf(b.section)) || (b.created || 0) - (a.created || 0)).forEach((t) => {
       const s = t.score || { score: 0, lines: {} };
+      const track = t.track || "Lead", ours = track === this.track;
+      const inUse = ours && (this.stacks() || (this.takeInUse(t.section) || {}).id === t.id);
       const el = document.createElement("div");
-      el.className = "take";
-      const lines = Object.entries(s.lines).filter(([, l]) => l.sung).map(([k, l]) =>
+      el.className = "take" + (inUse ? " inuse" : "") + (ours ? "" : " other");
+      el.style.setProperty("--h", this.trackColor(track));
+      const lines = Object.entries(s.lines || {}).filter(([, l]) => l.sung).map(([k, l]) =>
         `<span class="lchip ${l.score >= 0.8 ? "g" : l.score >= 0.6 ? "y" : "r"}" title="${l.pitch_cents} cents off, ${l.timing_ms} ms off the beat">line ${+k + 1}</span>`).join("");
       const scored = s.notes > 0;
-      el.innerHTML = `<span class="tag">${esc(t.track || "Lead")}</span> <b>${esc(NAMES_[t.section] || t.section || "Take")}</b>
+      const old = !t.pipeline;  // recorded before the timing fix
+      const when = t.created ? new Date(t.created * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+      el.innerHTML = `<span class="tag trk">${esc(track)}</span> <b>${esc(NAMES_[t.section] || t.section || "Take")}</b>
+        <span class="small muted">${esc(when)}</span>
+        ${inUse ? `<span class="pill in">${this.stacks() ? "★ stacked" : "★ in use"}</span>` : ""}
+        ${old ? `<span class="pill warn" title="Recorded before the timing fix: it may sit up to ~0.2 s late. Re-record it, or use the Timing tweak.">old recorder</span>` : ""}
+        ${t.dropouts ? `<span class="pill warn">${t.dropouts} dropout${t.dropouts > 1 ? "s" : ""}</span>` : ""}
         ${scored ? `<span class="bar"><span style="width:${Math.round(s.score * 100)}%"></span></span>
         <span class="small">${Math.round(s.score * 100)}</span> ${lines}` : `<span class="small muted">${s.peak_db != null ? "peak " + s.peak_db + " dB" : ""}</span>`}
         <span class="spacer"></span><audio controls preload="none" src="${songUrl(`/takes/${t.id}/audio`)}"></audio>
-        <button class="ghost">✕</button>`;
-      el.querySelector("button").onclick = async () => {
+        ${ours && !inUse && !this.stacks() ? `<button data-use>Use this one</button>` : ""}
+        ${ours ? `<button data-try>▶ Try voice</button>` : ""}
+        <button class="ghost" data-del title="Delete this take">✕</button>`;
+      const use = el.querySelector("[data-use]");
+      if (use) use.onclick = () => { const c = this.getChoice(); c[t.section] = t.id; this.setChoice(c); this.renderTakes(); };
+      const tr = el.querySelector("[data-try]");
+      if (tr) tr.onclick = () => previewVoice(t.id, tr);
+      el.querySelector("[data-del]").onclick = async () => {
+        if (!confirm(`Delete this ${track} take of ${NAMES_[t.section] || t.section}?`)) return;
         await api(songUrl(`/takes/${t.id}`), { method: "DELETE" });
-        this.takes = this.takes.filter((x) => x.id !== t.id); this.renderTakes();
+        this.takes = this.takes.filter((x) => x.id !== t.id); this.renderTakes(); this.renderTracks();
       };
       box.appendChild(el);
     });
@@ -688,8 +805,43 @@ const Sing = {
     }
     this.drawLyrics(now);
   },
+  // The words by section: from your own lyric sheet, or from the chosen lyrics' note events.
+  lyricSections() {
+    if (this.sheet && this.sheet.length) return this.sheet.map((x) => ({ name: x.section, start: x.start, beats: x.beats, mode: x.mode, lines: x.lines }));
+    const out = [];
+    for (const e of this.events || []) {
+      let sec = out.find((x) => x.name === e.section);
+      if (!sec) { sec = { name: e.section, start: e.start, beats: 0, mode: "sung", lines: [], starts: [] }; out.push(sec); }
+      if (!sec.lines[e.line]) { sec.lines[e.line] = ""; sec.starts[e.line] = e.start; }
+      if (e.text) sec.lines[e.line] += (sec.lines[e.line] ? " " : "") + e.text;
+      sec.beats = Math.max(sec.beats, e.start + e.length - sec.start);
+    }
+    for (const x of out) x.lines = x.lines.filter((l) => l != null);
+    return out;
+  },
+  drawFullLyrics(beat, mode) {
+    const box = $("#sg-lyrics"), secs = this.lyricSections();
+    if (!secs.length) { box.innerHTML = `<div class="muted small">No words yet: paste lyrics in Make, or pick lyrics on the Lyrics tab.</div>`; return; }
+    const playing = Eng.playing;
+    const cur = (playing && secs.find((x) => beat >= x.start && beat < x.start + x.beats)) ||
+      secs.find((x) => this.section && x.name === this.section.name) || secs[0];
+    const per = cur.beats / Math.max(1, cur.lines.length);
+    const li = playing && beat >= cur.start ? Math.min(cur.lines.length - 1, Math.floor((beat - cur.start) / per)) : -1;
+    const key = mode + "|" + cur.name + "|" + li + "|" + secs.length;
+    if (box.dataset.key === key) return;
+    box.dataset.key = key;
+    const show = mode === "song" ? secs : [cur];
+    box.className = "karaoke full" + (mode === "song" ? " song" : "");
+    box.innerHTML = show.map((x) => `<div class="lsec${x === cur ? " cur" : ""}"><div class="lhead">${esc(x.name)}${x.mode && x.mode !== "sung" ? ` <span class="tag">${esc(x.mode)}</span>` : ""}</div>` +
+      x.lines.map((l, i) => `<div class="lline${x === cur && i === li ? " on" : ""}">${esc(l)}</div>`).join("") + "</div>").join("");
+    const on = box.querySelector(".lline.on") || box.querySelector(".lsec.cur");
+    if (on && mode === "song") on.scrollIntoView({ block: "nearest" });
+  },
   drawLyrics(beat) {
+    const mode = $("#sg-words").value;
+    if (mode !== "line") { this.drawFullLyrics(beat, mode); return; }
     const ev = this.events, box = $("#sg-lyrics");
+    if (box.classList.contains("full")) { box.className = "karaoke"; box.dataset.key = ""; box.innerHTML = `<div class="now"></div><div class="next"></div>`; }
     if (!ev.length && this.sheet && this.sheet.length) {  // your own words, no melody: a teleprompter by section
       const sec = this.sheet.find((x) => beat >= x.start && beat < x.start + x.beats) ||
         this.sheet.find((x) => x.start > beat);
@@ -825,11 +977,12 @@ $("#sg-make").onclick = async () => {
   try {
     const r = await post(songUrl("/vocals"), { v: curV(), preset: $("#sg-preset").value, lead_mode: $("#sg-lead").value,
       track: $("#sg-mk-track").value || "Lead", character: $("#sg-character").value || "natural", tune: $("#sg-tune").value,
-      tweaks: Sing.getTweaks() });
+      tweaks: Sing.getTweaks(), choice: Sing.stacks() ? undefined : Sing.getChoice() });
     const q = r.vocals.quality;
     busy($("#sg-status"), "");
     Mix.state = null;
     await reloadSong(r.version);
+    await Sing.open();
     st.innerHTML = `<p><b>Done: version ${r.version + 1}, "${esc(r.title)}".</b> Your vocals are now a part in the Mix tab,
       so you can turn them up, down or off.</p>
       <ul class="checks">${q.checks.map((c) => `<li class="${c.level === "ok" ? "ok" : "warn"}">${esc(c.text)}</li>`).join("")}</ul>
@@ -839,21 +992,35 @@ $("#sg-make").onclick = async () => {
   $("#sg-make").disabled = false;
 };
 
-$("#sg-mk-track").onchange = () => Sing.renderTweaks();
 $("#sg-tw-reset").onclick = () => { Sing.setTweaks({}); Sing.renderTweaks(); };
-$("#sg-preview").onclick = async () => {
-  const msg = $("#sg-prev-msg"), au = $("#sg-prev-audio"), btn = $("#sg-preview");
+// Try the voice and tweaks on a take (the one in use for the chosen section, or any take you click).
+async function previewVoice(takeId, btn) {
+  const msg = $("#sg-prev-msg"), au = $("#sg-prev-audio");
   btn.disabled = true; busy(msg, "Making the preview…");
+  if (!$("#sg-tweaks-box").open) $("#sg-tweaks-box").open = true;
   try {
     const res = await fetch(songUrl("/vocals/preview"), { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ v: curV(), track: $("#sg-mk-track").value || "Lead", character: $("#sg-character").value || "natural",
-        preset: $("#sg-preset").value, tweaks: Sing.getTweaks() }) });
+      body: JSON.stringify({ v: curV(), track: Sing.track || "Lead", take: takeId || undefined,
+        character: $("#sg-character").value || "natural", preset: $("#sg-preset").value, tweaks: Sing.getTweaks(),
+        band: $("#sg-prev-band").checked }) });
     if (!res.ok) { let d = ""; try { d = (await res.json()).detail; } catch { } throw new Error(d || res.statusText); }
     if (au.src) URL.revokeObjectURL(au.src);
     au.src = URL.createObjectURL(await res.blob());
     au.classList.remove("hidden"); busy(msg, ""); Eng.stop(true); au.play();
+    au.scrollIntoView({ block: "nearest" });
   } catch (e) { busy(msg, ""); msg.textContent = e.message; }
   btn.disabled = false;
+}
+$("#sg-preview").onclick = (e) => {
+  const t = Sing.section && Sing.takeInUse(Sing.section.name);
+  previewVoice(t ? t.id : null, e.currentTarget);
+};
+$("#sg-alltakes").onchange = () => { Sing.renderTakes(); Sing.renderWorking(); };
+$("#sg-words").onchange = () => { try { localStorage.setItem("mm-words", $("#sg-words").value); } catch { } Sing.draw(); };
+try { const w = localStorage.getItem("mm-words"); if (w) $("#sg-words").value = w; } catch { }
+$("#sg-character").onchange = () => {
+  try { localStorage.setItem("mm-voice:" + currentSong.id + ":" + Sing.track, $("#sg-character").value); } catch { }
+  Sing.renderWorking();
 };
 
 $("#bg-listen").onchange = async () => { await post("/api/settings", { background_listening: $("#bg-listen").checked }); setTimeout(refreshStatus, 1500); };

@@ -1132,6 +1132,18 @@ the Make tab says so plainly if the starters can't load.
   ~16 fps. Tested in Chromium with the page frozen 300 ms of every second: no gaps. A latency measured with
   the old capture doesn't carry over, so the sync test asks to be run again. `.js` files are served as
   JavaScript explicitly (Windows can map them to text/plain, which blocks a worklet).
+- **Vocal tracks drifting off the beat in the finished song (user report).** Measured: the old capture
+  stamped each take's start from the ScriptProcessor's playbackTime, which was 50 ms late on a calm page
+  and 210-220 ms late on a busy one (pressing Record is the busiest moment), and by a different amount
+  every take. The audio-thread capture is exact. The server side was checked end to end (a synthetic
+  take through the API lands within 15 ms of where it was sung; test added). For takes recorded before
+  the fix: an "old recorder" badge and a **Timing** tweak (-400 to +400 ms) per track.
+- **Sing made clearer (user request):** vocal track cards at the top (colour per track; "In the song",
+  "Muted", "Not made yet", "No takes yet"; a button to take a track out of or back into the finished song,
+  which saves a new version), one "Working on <track>" banner that drives both recording and making, takes
+  filtered to that track with **★ in use** per section and **Use this one** to pick an older take, **▶ Try
+  voice** on any take, Preview **with the band**, and a **Words** option (line by line, the whole section,
+  the whole song). Voice, tweaks and take picks are remembered per track.
 - Not yet: auditioning a ready-made part before adding it (adding plays it; delete or swap if it's wrong);
   per-section voice tweaks within one track.
 - **Next:** the user runs the sync test in Make, builds "Last Train, First Light" from a combo and a few

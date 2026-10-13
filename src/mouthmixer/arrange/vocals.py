@@ -1544,6 +1544,8 @@ TWEAKS = [
                                                           ["octave_up", "an octave above"], ["octave_down", "an octave below"]]},
     {"id": "echo", "label": "Echo", "min": 0, "max": 100, "step": 5, "default": 0},
     {"id": "space", "label": "Space (reverb)", "min": 0, "max": 100, "step": 5, "default": 40},
+    {"id": "timing", "label": "Timing (ms)", "hint": "move this whole track earlier (left) or later (right) if it "
+     "doesn't sit on the beat", "min": -400, "max": 400, "step": 10, "default": 0},
     {"id": "fx", "label": "Effect", "options": [["", "none"], ["radio", "old radio"], ["megaphone", "megaphone"],
                                                ["phone", "phone call"], ["robot", "robot"], ["tape", "lo-fi tape"]]},
 ]
@@ -1731,10 +1733,11 @@ def stack_takes(takes: list[Take], spans: list, length: float, tonic: int, mode:
 
 
 def preview(take: Take, tonic: int, mode: str, preset_name: str | None, character: str = "natural",
-            tweaks: dict | None = None, seconds: float = 8.0, untuned: bool = False) -> np.ndarray:
+            tweaks: dict | None = None, seconds: float = 8.0, untuned: bool = False, with_start: bool = False):
     """A few seconds of one take as a character with your tweaks, without the band (for trying voices
     quickly): from the first sung sound, tuned to the key (unless `untuned`, for rap and spoken parts),
-    re-voiced, with the style's drive and a quick reverb and echo. Stereo float32 at SR."""
+    re-voiced, with the style's drive and a quick reverb and echo. Stereo float32 at SR (and, with
+    `with_start`, the song time it starts at)."""
     from pedalboard import Delay, Pedalboard, Reverb
 
     x = np.asarray(take.audio, dtype=np.float32)
@@ -1765,4 +1768,18 @@ def preview(take: Take, tonic: int, mode: str, preset_name: str | None, characte
     if fx:
         out = Pedalboard(fx)(out.astype(np.float32), SR)
     pk = float(np.abs(out).max()) or 1.0
-    return (out / pk * 0.89).astype(np.float32)
+    out = (out / pk * 0.89).astype(np.float32)
+    return (out, take.t0 + i0 / SR) if with_start else out
+
+
+def shift_ms(x: np.ndarray, ms: float) -> np.ndarray:
+    """Move audio (mono or stereo, song time) later by `ms` (earlier if negative), keeping its length."""
+    k = int(round(ms / 1000 * SR))
+    if k == 0:
+        return x
+    out = np.zeros_like(x)
+    if k > 0:
+        out[..., k:] = x[..., :-k]
+    else:
+        out[..., :k] = x[..., -k:]
+    return out

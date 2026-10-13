@@ -285,3 +285,73 @@ def test_scripts_are_served_as_javascript(home):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/javascript")
     assert "registerProcessor" in r.text
     assert c.get("/static/../server.py").status_code == 404
+
+
+def _onset_offsets_ms(stem, sr, truth_onsets, window):
+    """For each true note onset (song seconds) in `window`, how far (ms) the nearest pitched onset in the
+    processed vocal is from it; the median of those."""
+    import librosa
+
+    y = librosa.resample(np.asarray(stem, dtype=np.float32), orig_sr=sr, target_sr=V.SR)
+    f0, _ = V.track_f0(y)
+    t = np.arange(len(f0)) * V.FRAME_MS / 1000
+    on = t[1:][(f0[1:] > 0) & (f0[:-1] == 0)]
+    offs = []
+    for o in truth_onsets:
+        if window[0] <= o <= window[1]:
+            near = on[np.argmin(np.abs(on - o))] if len(on) else None
+            if near is not None and abs(near - o) < 0.3:
+                offs.append((near - o) * 1000)
+    return float(np.median(offs)), len(offs)
+
+
+def test_vocals_land_where_they_were_sung_and_choices_and_nudges_work(home):
+    """The finished vocal sits where the take says it was sung; a section can use an older take; the
+    Timing tweak moves the whole track; a preview can be of any take, with the band."""
+    from fastapi.testclient import TestClient
+
+    from mouthmixer.app.server import create_app
+    from mouthmixer.library.db import Library
+    from mouthmixer.studio import songbook
+
+    c = TestClient(create_app(start_worker=False))
+    song = next(s for s in songbook.songs() if s["title"].startswith("Last Train"))
+    pid = c.post("/api/projects", json={"songbook": song["id"]}).json()["id"]
+    sid = c.post(f"/api/projects/{pid}/build").json()["song_id"]
+    v = c.get(f"/api/songs/{sid}").json()["record"]["versions"][-1]
+    spb = 60 / v["bpm"]
+    sec = next(s for s in v["sections"] if s["name"] == "Verse 1")
+    a, b_ = sec["start"] * 4 * spb, (sec["start"] + sec["bars"]) * 4 * spb
+    count_in = 8 * spb
+    takes = []
+    for seed, step in ((3, 2), (4, 3)):  # two takes of the verse with different rhythms
+        notes = [(count_in / spb + b, 0.9, 62 + ((b + seed) % 3) * 3) for b in range(0, sec["bars"] * 4 - 2, step)]
+        x, truth = S.sing(notes, v["bpm"], pre_roll=0.0, sibilants=0, breaths=False, seed=seed, detune_cents=10)
+        b = io.BytesIO()
+        sf.write(b, (x * 0.6).astype(np.float32), 44100, format="WAV", subtype="FLOAT")  # sing() is 44.1 kHz
+        t = c.post(f"/api/songs/{sid}/takes?start={a - count_in:.4f}&section=Verse%201&track=Verse%20lead&est_ms=0",
+                   content=b.getvalue()).json()
+        takes.append((t["id"], [a - count_in + n.onset for n in truth]))
+    lib = Library(config.paths()["db"], config.paths()["clips"])
+
+    def stem_of(version):
+        mix = c.get(f"/api/songs/{sid}/mixer?v={version}").json()
+        part = next(q for q in mix["parts"] if q["role"] == "vocal")
+        y, sr = sf.read(str(lib.song_dir(sid) / "stems" / part["stem"]))
+        return y.mean(axis=1), sr
+
+    win = (a + 0.3, b_ - 0.3)
+    # newest take, no nudge: right on the notes as sung
+    r = c.post(f"/api/songs/{sid}/vocals", json={"track": "Verse lead", "v": 0}).json()
+    off, n = _onset_offsets_ms(*stem_of(r["version"]), takes[1][1], win)
+    assert n >= 6 and abs(off) <= 15, (off, n)
+    # the older take picked for Verse 1, nudged 120 ms later
+    r = c.post(f"/api/songs/{sid}/vocals", json={"track": "Verse lead", "v": 0, "choice": {"Verse 1": takes[0][0]},
+                                                 "tweaks": {"timing": 120}}).json()
+    y, sr = stem_of(r["version"])
+    off, n = _onset_offsets_ms(y, sr, takes[0][1], win)
+    assert n >= 6 and abs(off - 120) <= 15, (off, n)
+    # previews: a chosen take, with the band under it
+    p1 = c.post(f"/api/songs/{sid}/vocals/preview", json={"track": "Verse lead", "take": takes[0][0], "band": True})
+    p2 = c.post(f"/api/songs/{sid}/vocals/preview", json={"track": "Verse lead", "take": takes[0][0]})
+    assert p1.status_code == p2.status_code == 200 and p1.content != p2.content

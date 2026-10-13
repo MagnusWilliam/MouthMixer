@@ -122,13 +122,15 @@
 
     <!-- Sing -->
     <div id="sub-sing" class="hidden">
-      <p class="hint">Pick a <b>Track</b> (Verse lead, Chorus lead, Rap, Gang…) and a section, press Record, and sing after
-        the count-in. Redo a section to replace it. Then, for each track, pick a <b>Voice</b> (female, deeper, raspy, gang
-        shout, choir…) and press <b>Make this vocal track</b>. Gang and backing tracks use every take at once.</p>
+      <p class="hint"><b>1.</b> Click the vocal track you're working on. <b>2.</b> Pick a section, press Record and
+        sing after the count-in. <b>3.</b> Choose its voice and tweaks, try them with Preview, then press <b>Make this
+        vocal track</b>. A green "In the song" means that track is in the finished song.</p>
+      <div id="sg-tracks" class="vtracks"></div>
+      <div id="sg-working" class="working"></div>
       <div class="singbar">
         <div id="sg-sections" class="chips choose"></div>
         <span class="spacer"></span>
-        <label class="small" title="Which vocal track these takes go to">Track <select id="sg-track"></select></label>
+        <label class="small hidden" title="Which vocal track these takes go to">Track <select id="sg-track"></select></label>
         <button id="sg-rec" class="rec">● Record</button>
         <button id="sg-listen">▶ Listen</button>
         <button id="sg-stop" disabled>■ Stop</button>
@@ -140,6 +142,9 @@
         <label>Music <input type="range" id="sg-music" min="0" max="100" value="80"></label>
         <label>Guide melody <input type="range" id="sg-guide" min="0" max="100" value="45"></label>
         <label><input type="checkbox" id="sg-click" checked> Click in quiet bits</label>
+        <label title="How the words show while you sing">Words <select id="sg-words">
+          <option value="line">line by line</option><option value="section">the whole section</option>
+          <option value="song">the whole song</option></select></label>
         <label>Mic <select id="sg-mic"></select></label>
         <span id="sg-level" class="meter inline"><span></span></span>
       </div>
@@ -148,12 +153,15 @@
         <button id="sg-sync" class="ghost" title="Measures how late your recordings arrive">Sync test</button>
         <input type="range" id="sg-latr" min="-100" max="400" value="0" title="Fine-tune: if your voice sounds late, move right">
       </div>
-      <h3>Takes</h3>
+      <div class="row"><h3>Takes <span id="sg-takes-for" class="small muted"></span></h3><span class="spacer"></span>
+        <label class="small"><input type="checkbox" id="sg-alltakes"> show every track's takes</label></div>
+      <p class="small muted">For each section, the take marked <b>★ in use</b> goes into the track (the newest, unless you
+        pick another with <b>Use this one</b>). <b>▶ Try voice</b> plays that take with the voice and tweaks below.</p>
       <div id="sg-takes" class="takes"></div>
       <div class="card inner">
-        <h3>Make the vocal</h3>
+        <h3>Make the vocal: <span id="sg-mk-name" class="trackname"></span></h3>
         <div class="row">
-          <label>Track <select id="sg-mk-track"></select></label>
+          <label class="hidden">Track <select id="sg-mk-track"></select></label>
           <label title="Change how your voice sounds: another character, a crowd, a whisper">Voice <select id="sg-character"></select></label>
           <label title="Sung parts: follow your hummed melody, or snap to the key (singing your own tune). Rap and spoken parts are never tuned.">Tune to
             <select id="sg-tune"><option value="auto">automatic</option><option value="key">the key (my own tune)</option><option value="melody">my hummed melody</option></select></label>
@@ -168,7 +176,8 @@
             echo, space, effects. Saved per track; anything you don't touch stays as the voice and style set it.</span></summary>
           <div id="sg-tweaks" class="tweaks"></div>
           <div class="row">
-            <button id="sg-preview">▶ Preview (8 s of your newest take on this track, no band)</button>
+            <button id="sg-preview">▶ Preview (8 s of the take in use)</button>
+            <label class="small"><input type="checkbox" id="sg-prev-band" checked> with the band</label>
             <button id="sg-tw-reset" class="ghost">Reset tweaks</button>
             <audio id="sg-prev-audio" controls class="hidden"></audio>
             <span id="sg-prev-msg" class="small muted"></span>

@@ -357,11 +357,14 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         """A few seconds of your newest take on a track with a voice and tweaks, no band: a WAV to listen to."""
         import io
 
+        import numpy as np
         import soundfile as sf
         from fastapi.responses import Response
 
         track = str(body.get("track") or "Lead")[:20]
         items = [t for t in takes_list(song_id) if t.get("track", "Lead") == track]
+        if body.get("take"):
+            items = [t for t in takes_list(song_id) if t["id"] == str(body["take"])]
         if not items:
             raise HTTPException(400, f"record a take on the {track} track first")
         t = items[-1]
@@ -374,11 +377,27 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         untuned = track in ("Rap", "Announcer", "Whisper") or modes.get(t.get("section")) in ("rap", "spoken", "whisper")
         character = body.get("character") if body.get("character") in vocals.CHARACTERS else "natural"
         preset = body.get("preset") if body.get("preset") in vocals.PRESETS else PACKS[m.v["pack"]].get("vocal_preset")
+        tweaks = vocals.clean_tweaks(body.get("tweaks"))
+        tk = load_take(song_id, t)
         try:
-            y = vocals.preview(load_take(song_id, t), song.tonic, song.mode, preset, character,
-                               vocals.clean_tweaks(body.get("tweaks")), untuned=untuned)
+            y, at = vocals.preview(tk, song.tonic, song.mode, preset, character, tweaks, untuned=untuned,
+                                   with_start=True)
         except ValueError as e:
             raise HTTPException(400, str(e))
+        if body.get("band"):  # the same seconds of the song under it, to hear whether it sits on the beat
+            from ..arrange import render
+
+            with _lock(song_id):
+                m.render_stems()
+                total, n = render.song_length(m.song(False))
+                music, _, _, _ = m._stems(n)
+            a = int(round((at + tweaks.get("timing", 0.0) / 1000) * vocals.SR))
+            seg = np.zeros_like(y)
+            lo, hi = max(0, a), min(music.shape[1], a + y.shape[1])
+            if hi > lo:
+                seg[:, lo - a:hi - a] = music[:, lo:hi]
+            y = y * 0.8 + seg * 0.55
+            y = (y / max(1.0, float(np.abs(y).max()) / 0.89)).astype(np.float32)
         buf = io.BytesIO()
         sf.write(buf, y.T, vocals.SR, format="WAV", subtype="PCM_16")
         return Response(buf.getvalue(), media_type="audio/wav")
@@ -407,8 +426,11 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
             try:
                 tune = body.get("tune", "auto") if body.get("tune") in ("auto", "melody", "key") else "auto"
                 character = body.get("character") if body.get("character") in vocals.CHARACTERS else "natural"
-                new = m.with_vocals(takes, preset, lead_mode, lyrics=lyr, tune=tune, track=track, character=character,
-                                    tweaks=vocals.clean_tweaks(body.get("tweaks")))
+                ids = {t["id"] for t in items}
+                choice = {str(k): str(v) for k, v in (body.get("choice") or {}).items() if str(v) in ids} \
+                    if isinstance(body.get("choice"), dict) else None
+                new = m.with_vocals(takes, preset, lead_mode, choice=choice or None, lyrics=lyr, tune=tune, track=track,
+                                    character=character, tweaks=vocals.clean_tweaks(body.get("tweaks")))
             except ValueError as e:
                 raise HTTPException(400, str(e))
         return new_version(song_id, new)

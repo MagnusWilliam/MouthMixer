@@ -370,6 +370,10 @@ class Mixer:
                                  total, choice, character=character, tweaks=tweaks)
         music, lead, _, _ = self._stems(n)
         voc = res.stereo[:, :n]
+        nudge = vocals.clean_tweaks(tweaks).get("timing", 0.0)
+        if nudge:  # your own timing fix for this track (e.g. takes recorded before the timing fix)
+            voc = vocals.shift_ms(voc, nudge)
+            res.f0_after = np.roll(res.f0_after, int(round(nudge / vocals.FRAME_MS)))
         if voc.shape[1] < n:
             voc = np.pad(voc, ((0, 0), (0, n - voc.shape[1])))
         env = vocals.voice_envelope(res.f0_after, n)

@@ -242,3 +242,9 @@ measured value once the sync test has run. The sync test is now on the Make reco
 **Capture**: the page records on the audio thread (`capture-worklet.js`, an AudioWorklet), so a busy page
 can't drop mic audio; each 2048-sample block is placed by its own time, and any gap is filled with silence
 and reported. A sync-test value measured with the old main-thread capture isn't reused.
+
+**Choosing takes and timing (2026-10-14)**: each section of a track uses its newest take unless you pick
+another (**Use this one**); the pick is sent as `choice` and the comp uses it. The **Timing** tweak moves
+the whole track in ms. Takes recorded before the audio-thread capture can sit 50-220 ms late, varying per
+take (measured), and are marked "old recorder". Preview can play any take, optionally over the same
+seconds of the band.
