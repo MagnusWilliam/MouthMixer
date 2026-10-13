@@ -1144,6 +1144,13 @@ the Make tab says so plainly if the starters can't load.
   filtered to that track with **★ in use** per section and **Use this one** to pick an older take, **▶ Try
   voice** on any take, Preview **with the band**, and a **Words** option (line by line, the whole section,
   the whole song). Voice, tweaks and take picks are remembered per track.
+- **Who sings what (user request).** Lyric headers can name the singers (`[Chorus, Chorus lead + Gang]`) and set a
+  length (`[Intro, 8 bars]`); a line can start with a track name (`Gang: Ride, ride, ride…`) for who joins
+  in. Make's board and Sing show them: coloured dots on the section buttons, singer tags on the words,
+  "sings: …" on each track card, a warning when you're recording a section on a track that doesn't sing it,
+  and picking a section switches to its singer. A chorus straight after a rap also gets the 1-bar freeze.
+  "Last Train, First Light" was smoothed and re-laid out (2:58): 8-bar intro, an instrumental after the
+  first chorus, a half chorus after the rap, every section ending on a hand-off line.
 - Not yet: auditioning a ready-made part before adding it (adding plays it; delete or swap if it's wrong);
   per-section voice tweaks within one track.
 - **Next:** the user runs the sync test in Make, builds "Last Train, First Light" from a combo and a few

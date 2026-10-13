@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 import uuid
 from pathlib import Path
@@ -642,6 +643,15 @@ class Project:
         ("Chorus" lifts, "Rap Verse" drops into a half-time pocket, "Intro" is the flashy intro), the
         bridge on the bridge chords ("slow, then building" splits it into a breakdown and a build), the
         final chorus as long as the chorus, and an outro. The words go with the song into Sing."""
+        from ..arrange.mixer import VOCAL_TRACKS
+
+        tracks = {t.lower(): t for t in VOCAL_TRACKS}
+
+        def singers_in(text: str) -> list[str]:
+            """Track names in "Chorus lead + Gang" (also & or /), or [] if any part isn't a track."""
+            parts = [x.strip().lower() for x in re.split(r"\+|&|/", text) if x.strip()]
+            return [tracks[x] for x in parts] if parts and all(x in tracks for x in parts) else []
+
         title, blocks, cur = "", [], None
         for raw in text.splitlines():
             line = raw.strip().strip("\u201c\u201d\"").strip()
@@ -650,53 +660,72 @@ class Project:
             if line.startswith("[") and line.endswith("]"):
                 head = line[1:-1].strip()
                 name, _, note = head.partition(",")
-                cur = {"name": name.strip()[:24] or "Section", "note": note.strip().lower(), "lines": []}
+                # who sings it: any comma part of the header that names vocal tracks ("Chorus lead + Gang")
+                who, rest = [], []
+                for part in note.split(","):
+                    found = singers_in(part)
+                    who += [x for x in found if x not in who]
+                    if not found:
+                        rest.append(part)
+                cur = {"name": name.strip()[:24] or "Section", "note": ",".join(rest).strip().lower(), "lines": [],
+                       "singers": who, "line_singers": []}
                 blocks.append(cur)
             elif cur is None:
                 title = title or line
             else:
-                cur["lines"].append(line)
+                # "Gang: Ride, ride, ride…" = who joins in on this line (the section's singer still sings it)
+                head_, sep, tail = line.partition(":")
+                extra = singers_in(head_) if sep and tail.strip() else []
+                cur["lines"].append(tail.strip() if extra else line)
+                cur["line_singers"].append(extra)
         if not blocks:
             raise ValueError("no [Section] headers found: put each part under a header like [Verse 1] or [Chorus]")
         fast = self.st["bpm"] >= 110
         sections: list[dict] = []
         sheet: list[dict] = []
-        chorus_bars, chorus_lines = None, []
+        chorus_bars, chorus_lines, chorus_who, chorus_ls = None, [], [], []
 
         def bars_for(n: int, per: int) -> int:
             want = max(4, n * per)
             return next(b for b in (4, 8, 12, 16) if b >= min(want, 16))
 
-        def add(name, bars, chords, feel, lines, mode):
+        def add(name, bars, chords, feel, lines, mode, singers=(), line_singers=()):
+            if want_bars:  # "[Intro, 8 bars]": your length wins
+                bars = want_bars
             base, k = name, 2
             while any(x["name"] == name for x in sections):  # "Chorus" twice -> "Chorus", "Chorus 2"
                 name = f"{base} {k}"[:24]
                 k += 1
             sid = f"s{len(sections)}-{uuid.uuid4().hex[:4]}"
             sections.append({"id": sid, "name": name, "bars": bars, "chords": chords, "feel": feel, "parts": []})
-            sheet.append({"section": sid, "name": name, "lines": lines, "mode": mode})
+            sheet.append({"section": sid, "name": name, "lines": lines, "mode": mode, "singers": list(singers),
+                          "line_singers": [list(x) for x in line_singers][: len(lines)]})
 
         for i, b in enumerate(blocks):
             n = b["name"]
             low = n.lower()
             feel = starters.feel_for(n)
             lines = b["lines"]
+            who, ls = b["singers"], b["line_singers"]
+            m = re.search(r"(\d+)\s*bars?", b["note"])
+            want_bars = int(m.group(1)) if m and int(m.group(1)) in (1, 2, 4, 8, 12, 16) else None
             spoken = "spoken" in b["note"] or "spoken" in low
             whisper = "whisper" in b["note"]
             mode = "whisper" if whisper else "spoken" if spoken else "sung"
             if feel == "intro":
                 quick = any(w in b["note"] for w in ("shout", "hit", "fast"))  # battle: hit from the first beat
-                add(n, 2 if quick else 4, "A", "intro", lines, mode)
+                add(n, 2 if quick else 4, "A", "intro", lines, mode, who, ls)
             elif not lines and feel != "outro":  # an empty header: an instrumental stretch
-                add(n, 8, "B" if feel == "breakdown" else "A", feel, [], "sung")
+                add(n, 8, "B" if feel == "breakdown" else "A", feel, [], "sung", who)
             elif low.startswith("final") and chorus_bars and len(lines) <= 2:
                 extra = [x for x in lines if x.startswith("(")]
-                add(n, chorus_bars, "A", "final", chorus_lines + extra, "sung")
+                add(n, chorus_bars, "A", "final", chorus_lines + extra, "sung", who or chorus_who,
+                    chorus_ls + [[]] * len(extra))
             elif feel == "breakdown" and ("build" in b["note"] or "building" in b["note"]):
                 bars = bars_for(len(lines), 2)
                 half_l = (len(lines) + 1) // 2
-                add(n, max(4, bars // 2), "B", "breakdown", lines[:half_l], "sung")
-                add(n + " build", max(4, bars // 2), "B", "pre", lines[half_l:], "sung")
+                add(n, max(4, bars // 2), "B", "breakdown", lines[:half_l], "sung", who, ls[:half_l])
+                add(n + " build", max(4, bars // 2), "B", "pre", lines[half_l:], "sung", who, ls[half_l:])
             else:
                 rap = feel == "rap"
                 bars = bars_for(len(lines), 1 if rap and fast else 2)
@@ -704,14 +733,15 @@ class Project:
                 if low.startswith(("chorus", "hook")) and i == max(j for j, x in enumerate(blocks)
                                                                if x["name"].lower().startswith(("chorus", "hook", "final"))):
                     feel = "final"
-                add(n, bars, chords, feel, lines, "rap" if rap else mode)
+                add(n, bars, chords, feel, lines, "rap" if rap else mode, who, ls)
                 if low.startswith(("chorus", "hook")) and chorus_bars is None:
-                    chorus_bars, chorus_lines = bars, list(lines)
+                    chorus_bars, chorus_lines, chorus_who, chorus_ls = bars, list(lines), who, ls
         end_feel = "hits_end" if self.st["mood"] in ("battle", "boss") else "outro"
         for x in sections:
             if x["feel"] == "outro":
                 x["feel"] = end_feel
         if not any(s["feel"] in ("outro", "hits_end") for s in sections):
+            want_bars = None
             add("Outro", 4, "A", end_feel, [], "sung")
         self.data["sections"] = sections
         for piece in self.pieces:
@@ -724,14 +754,14 @@ class Project:
 
     def drops(self, feels: list[str] | None = None) -> list[int]:
         """Beats of freeze at the start of each section: your setting, or 4 (one bar) for a chorus that
-        comes straight after a build-up."""
+        comes straight after a build-up or a rap verse (the band stops, then drops back in)."""
         feels = feels or _feels(self.data["sections"], self.st["mood"])
         out = []
         for i, (s, f) in enumerate(zip(self.data["sections"], feels)):
             if s.get("drop") is not None:
                 out.append(int(s["drop"]))
             else:
-                out.append(4 if f in ("lift", "final") and i > 0 and feels[i - 1] == "pre" else 0)
+                out.append(4 if f in ("lift", "final") and i > 0 and feels[i - 1] in ("pre", "rap") else 0)
         return out
 
     def lyric_sheet(self) -> list[dict]:
@@ -743,7 +773,8 @@ class Project:
             x = by_id.get(s["id"])
             if x and x["lines"]:
                 out.append({"section": s["name"], "start": start * 4, "beats": s["bars"] * 4, "lines": x["lines"],
-                            "mode": x.get("mode", "sung")})
+                            "mode": x.get("mode", "sung"), "singers": x.get("singers", []),
+                            "line_singers": x.get("line_singers", [])})
             start += s["bars"]
         return out
 

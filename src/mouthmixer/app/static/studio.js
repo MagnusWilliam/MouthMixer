@@ -423,8 +423,17 @@ const Sing = {
     for (const s of [...this.sections, { name: "all", start: this.sections[0].start, bars: this.sections.at(-1).start + this.sections.at(-1).bars - this.sections[0].start }]) {
       const b = document.createElement("button");
       b.className = "chip" + (this.section && this.section.name === s.name ? " on" : "");
-      b.textContent = s.name === "all" ? "Whole song" : NAMES_[s.name] || s.name;
-      b.onclick = () => { this.section = s; [...box.children].forEach((c) => c.classList.toggle("on", c === b)); this.draw(); };
+      b.dataset.name = s.name;
+      const who = this.singersOf(s.name);
+      b.innerHTML = esc(s.name === "all" ? "Whole song" : NAMES_[s.name] || s.name) +
+        (who.length ? ` <span class="who">${who.map((w) => `<span class="dot" style="--h:${this.trackColor(w)}" title="${esc(w)}"></span>`).join("")}</span>` : "");
+      if (who.length) b.title = "Sung by: " + who.join(", ");
+      b.onclick = () => {
+        this.section = s; [...box.children].forEach((c) => c.classList.toggle("on", c === b));
+        // a section's singer: switch to that track unless you're already on one of its singers
+        if (who.length && !who.includes(this.track)) this.setTrack(who[0]); else this.renderWorking();
+        this.draw();
+      };
       box.appendChild(b);
     }
     this.notes = v.tracks.filter((t) => t.role === "lead").flatMap((t) => t.notes).sort((a, b) => a[0] - b[0]);
@@ -472,13 +481,16 @@ const Sing = {
       const sec = (this.sections || []).find((x) => x.name === mine[mine.length - 1].section);
       if (sec) {
         this.section = sec;
-        [...$("#sg-sections").children].forEach((c) => c.classList.toggle("on", c.textContent === sec.name));
+        [...$("#sg-sections").children].forEach((c) => c.classList.toggle("on", c.dataset.name === sec.name));
         this.draw();
       }
     }
     this.renderTracks(); this.renderTakes(); this.renderTweaks(); this.renderWorking();
   },
   trackColor(name) { return TRACK_HUES[name] ?? 200; },
+  // who sings a section, from the lyric headers ("[Chorus, Chorus lead + Gang]")
+  singersOf(section) { const x = (this.sheet || []).find((l) => l.section === section); return (x && x.singers) || []; },
+  pills(names) { return (names || []).map((w) => `<span class="pill sing" style="--h:${this.trackColor(w)}">${esc(w)}</span>`).join(" "); },
   madeReport(name) {
     const v = currentSong && currentSong.record.versions[curV()];
     return v && v.vocal_tracks ? v.vocal_tracks[name] : null;
@@ -490,7 +502,10 @@ const Sing = {
     const name = this.track, voice = (this.characters || []).find((c) => c.id === $("#sg-character").value);
     const html = `<span class="dot" style="--h:${this.trackColor(name)}"></span> Working on <b>${esc(name)}</b>
       <span class="muted">· voice: ${esc(voice ? voice.label : "your voice")}</span>`;
-    $("#sg-working").innerHTML = html + `<span class="muted"> · new takes go to this track</span>`;
+    const who = this.section ? this.singersOf(this.section.name) : [];
+    const fit = !who.length ? "" : who.includes(name) ? ` <span class="muted">· ${esc(this.section.name)} is sung by ${esc(who.join(" + "))}</span>`
+      : ` <span class="warnc">· ${esc(this.section.name)} is sung by ${esc(who.join(" + "))}, not ${esc(name)}</span>`;
+    $("#sg-working").innerHTML = html + fit + `<span class="muted"> · new takes go to this track</span>`;
     $("#sg-working").style.setProperty("--h", this.trackColor(name));
     $("#sg-mk-name").innerHTML = `<span class="dot" style="--h:${this.trackColor(name)}"></span> ${esc(name)}`;
     $("#sg-takes-for").textContent = $("#sg-alltakes").checked ? "(every track)" : `for ${name}`;
@@ -510,6 +525,8 @@ const Sing = {
       el.innerHTML = `<div class="vt-name">${name === this.track ? "● " : ""}${esc(name)}</div>
         <div class="pill ${status[0]}">${status[1]}</div>
         <div class="small muted">${mine.length} take${mine.length === 1 ? "" : "s"}${secs.length ? " · " + esc(secs.join(", ")) : ""}</div>
+        ${(() => { const sings = (this.sheet || []).filter((x) => (x.singers || []).includes(name) || (x.line_singers || []).some((l) => (l || []).includes(name))).map((x) => x.section);
+          return sings.length ? `<div class="small">sings: ${esc(sings.join(", "))}</div>` : ""; })()}
         ${made ? `<div class="small muted">voice: ${esc(made.character_label || made.character || "your voice")}</div>` : ""}
         ${part ? `<button class="ghost small" data-mute>${part.muted ? "Put back in the song" : "Take out of the song"}</button>` : ""}`;
       el.onclick = (e) => { if (!e.target.closest("button")) this.setTrack(name); };
@@ -807,7 +824,8 @@ const Sing = {
   },
   // The words by section: from your own lyric sheet, or from the chosen lyrics' note events.
   lyricSections() {
-    if (this.sheet && this.sheet.length) return this.sheet.map((x) => ({ name: x.section, start: x.start, beats: x.beats, mode: x.mode, lines: x.lines }));
+    if (this.sheet && this.sheet.length) return this.sheet.map((x) => ({ name: x.section, start: x.start, beats: x.beats, mode: x.mode,
+      lines: x.lines, singers: x.singers || [], line_singers: x.line_singers || [] }));
     const out = [];
     for (const e of this.events || []) {
       let sec = out.find((x) => x.name === e.section);
@@ -832,8 +850,8 @@ const Sing = {
     box.dataset.key = key;
     const show = mode === "song" ? secs : [cur];
     box.className = "karaoke full" + (mode === "song" ? " song" : "");
-    box.innerHTML = show.map((x) => `<div class="lsec${x === cur ? " cur" : ""}"><div class="lhead">${esc(x.name)}${x.mode && x.mode !== "sung" ? ` <span class="tag">${esc(x.mode)}</span>` : ""}</div>` +
-      x.lines.map((l, i) => `<div class="lline${x === cur && i === li ? " on" : ""}">${esc(l)}</div>`).join("") + "</div>").join("");
+    box.innerHTML = show.map((x) => `<div class="lsec${x === cur ? " cur" : ""}"><div class="lhead">${esc(x.name)}${x.mode && x.mode !== "sung" && !(x.singers || []).some((w) => w.toLowerCase() === x.mode) ? ` <span class="tag">${esc(x.mode)}</span>` : ""} ${this.pills(x.singers)}</div>` +
+      x.lines.map((l, i) => `<div class="lline${x === cur && i === li ? " on" : ""}">${esc(l)}${((x.line_singers || [])[i] || []).length ? ` <span class="small muted">+</span> ${this.pills(x.line_singers[i])}` : ""}</div>`).join("") + "</div>").join("");
     const on = box.querySelector(".lline.on") || box.querySelector(".lsec.cur");
     if (on && mode === "song") on.scrollIntoView({ block: "nearest" });
   },
@@ -849,7 +867,11 @@ const Sing = {
       const per = sec.beats / Math.max(1, sec.lines.length);
       const i = Math.max(0, Math.min(sec.lines.length - 1, Math.floor((beat - sec.start) / per)));
       const f = beat < sec.start ? 0 : Math.max(0, Math.min(1, (beat - sec.start - i * per) / per));
-      const tag = sec.mode !== "sung" ? `<span class="tag">${esc(sec.mode)}</span> ` : "";
+      const lineWho = (sec.line_singers || [])[i] || [];
+      const sameAsSinger = (sec.singers || []).some((w) => w.toLowerCase() === sec.mode);
+      const tag = (sec.mode !== "sung" && !sameAsSinger ? `<span class="tag">${esc(sec.mode)}</span> ` : "") +
+        (sec.singers && sec.singers.length ? this.pills(sec.singers) + " " : "") +
+        (lineWho.length ? `<span class="small muted">+</span> ${this.pills(lineWho)} ` : "");
       box.querySelector(".now").innerHTML = tag + `<span class="syl" style="--f:${(f * 100).toFixed(0)}%">${esc(sec.lines[i])}</span>`;
       const nxt = sec.lines[i + 1] || ((this.sheet[this.sheet.indexOf(sec) + 1] || {}).lines || [])[0] || "";
       box.querySelector(".next").textContent = nxt;

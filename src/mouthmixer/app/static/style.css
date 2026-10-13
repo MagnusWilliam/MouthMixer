@@ -249,3 +249,9 @@ button.preset.on { outline: 2px solid var(--clean); }
 .karaoke.full .lline { font-size: 18px; line-height: 1.45; }
 .karaoke.full .lline.on { font-weight: 700; color: var(--clean); }
 .karaoke.full.song .lsec:not(.cur) .lline { font-size: 15px; color: var(--muted); }
+
+/* who sings what */
+.pill.sing { --h: 210; border-color: hsl(var(--h) 65% 55%); background: hsl(var(--h) 70% 55% / 0.14); font-size: 12px; font-weight: 600; vertical-align: middle; }
+.karaoke .now .pill.sing { font-size: 13px; }
+.chip .who { margin-left: 4px; }
+.chip .who .dot { width: 8px; height: 8px; margin-left: 1px; }

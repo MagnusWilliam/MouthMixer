@@ -1,59 +1,69 @@
 title: Last Train, First Light
 slot: Main theme / opening
 starter: battle_funk
-voices: Announcer = the spoken intro | Verse lead = your own voice, low and steady | Chorus lead = Female lead (higher, brighter: the big contrast) | Rap = Deeper male | Gang = Gang shout on "Ride, ride, ride" | Ad-libs = "Hey!", "Ayy!" in the gaps
+voices: Announcer = the spoken intro and "Next stop: tomorrow" | Verse lead = your own voice, low and steady | Chorus lead = Female lead (higher, brighter: the big contrast) | Rap = Deeper male | Gang = shouts only the lines marked Gang ("Ride, ride, ride", "hold the gate!") | Ad-libs = "Ayy!" over the last rap line | Backing = "but we shine anyway" | Harmony = a third voice on the final chorus
 hits: yes, on "Ride, ride, ride" and "hold the gate!"
-notes: Your lyrics, kept almost as written. One change: the title says "First Light" but the song never did, so the last line of the final chorus now lands it. The chorus starts and ends on the title idea (ride / last train) and repeats it 3 times.
+notes: Your lyrics, smoothed (2026-10-14): every section ends on a line that hands off to the next (the pre-chorus ends "here we go!" into the freeze), the chorus shout is "Ride, ride, ride" both times, the rap ends on a punchline into a half chorus, and "Next stop: tomorrow" moved to the outro. Each [header] names who sings it; "Gang:" at the start of a line means the gang joins on that line. About 2:55: an 8-bar intro that simmers, an 8-bar instrumental after the first chorus, and a half chorus after the rap (with the freeze-and-drop).
 ---
-[Intro, spoken over the station chime]
+[Intro, 8 bars, spoken over the station chime, Announcer]
 Doors are closing…
 Mind the gap.
 
-[Verse 1]
+[Verse 1, Verse lead]
 Midnight hum on an empty platform,
-Clock says zero but my heart's still running.
+clock says zero, but my heart says go.
 Paper ticket with a name unwritten,
-Something in the dark says you've been chosen.
+something in the dark already knows.
 
-[Pre-Chorus]
+[Pre-Chorus, Verse lead]
 Hold on tight, don't look back,
-City's sleeping on a broken track.
-Put the mask on, let it show
-The part of me I didn't know.
+city's sleeping on a broken track.
+Mask on, I let the real me show,
+doors slide open… here we go!
 
-[Chorus]
-Ride, ride, ride on the last train,
-Every stop is a door with a different name.
+[Chorus, Chorus lead + Gang]
+Gang: Ride, ride, ride on the last train,
+every stop's a door with a different name.
 We don't fade, we don't break,
-We're the passengers the night can't take.
-Ride, ride, till the morning shows,
-Out on Line Zero, where nobody goes.
-Hearts on the timetable, we won't be late.
-This is our line, so we hold the gate!
+we're the passengers the night can't take.
+Gang: Ride, ride, ride till the morning glows,
+out on Line Zero, where nobody goes.
+Hearts on the timetable, we won't be late,
+Gang: this is our line, so we hold the gate!
 
-[Rap Verse]
+[Chorus instrumental]
+
+[Rap Verse, Rap]
 Tap in, step up, lights flicker green,
-Hollow eyes watching from the in-between.
+hollow eyes watching from the in-between.
 Got my crew on the left, got my fear on the right,
-Turn the static to a signal, turn the signal to light.
-Six years gone but the rails remember,
-Burn like a match in the cold December.
-No more waiting for someone to save me.
-I'm the one who rewrites the ending, baby.
+turn the static to a signal, turn the signal to light.
+Six years gone, but the rails remember,
+burn like a match in the cold December.
+No more waiting for someone to save me,
+Ad-libs: I'll rewrite the ending, nothing can break me!
 
-[Bridge, slow, then building]
+[Chorus, Chorus lead + Gang]
+Gang: Ride, ride, ride on the last train,
+every stop's a door with a different name.
+Hearts on the timetable, we won't be late,
+Gang: this is our line, so we hold the gate!
+
+[Bridge, slow, then building, Chorus lead]
 If I lose my way, call my name.
-If the doors won't open, we'll break the frame.
+If the doors won't open, we'll break the chain.
 The line goes dark…
-(but we shine anyway)
+Backing: but we shine anyway.
 
-[Final Chorus]
-Ride, ride, ride on the last train,
-Every stop is a door with a different name.
+[Final Chorus, Chorus lead + Gang + Harmony]
+Gang: Ride, ride, ride on the last train,
+every stop's a door with a different name.
 We don't fade, we don't break,
-We're the passengers the night can't take.
-Ride, ride, till the morning shows,
-Out on Line Zero, where nobody goes.
-Hold on, hold on, here comes the first light.
-This is our line, and we ride tonight!
-(Next stop: tomorrow.)
+we're the passengers the night can't take.
+Gang: Ride, ride, ride till the morning glows,
+out on Line Zero, where nobody goes.
+Hold on, hold on, here comes the first light,
+Gang: this is our line, and we ride tonight!
+
+[Outro, spoken, Announcer]
+Next stop: tomorrow.

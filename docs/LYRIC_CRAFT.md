@@ -47,3 +47,22 @@ or our default.
    chorus, then long instrumental stretches. [U]
 10. **Rap verses**: 8 lines, about one bar per line at battle tempo, internal rhymes and a punch word at the
     end of each line for the band to hit with the vocal accent. [U]
+
+
+## Marking who sings (2026-10-14)
+
+In the lyrics you paste (or a songbook file), a header can name the singers and a length, and a line can
+name who joins in. The app shows these on the Make board and the Sing screen.
+
+```
+[Intro, 8 bars, spoken, Announcer]
+[Chorus, Chorus lead + Gang]
+Gang: Ride, ride, ride on the last train,
+```
+
+Singer names are the vocal tracks: Lead, Verse lead, Chorus lead, Rap, Gang, Backing, Harmony, Ad-libs,
+Announcer, Whisper. A line starting with anything else before a colon ("Note: …") stays as written.
+
+**Endings that hand off.** End each section on a line that leads into the next: the pre-chorus ends rising
+("here we go!") into the chorus freeze, the chorus ends on its shout ("hold the gate!"), the rap ends on a
+punchline into the chorus, and a quiet bridge line makes room for the build.

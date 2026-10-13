@@ -563,7 +563,9 @@ const Make = {
   lyricCount(s) {
     const sheet = (this.proj.lyrics && this.proj.lyrics.sheet) || [];
     const x = sheet.find((l) => l.section === s.id);
-    return x && x.lines.length ? `<div class="small muted">${x.lines.length} line${x.lines.length > 1 ? "s" : ""}${x.mode !== "sung" ? " · " + x.mode : ""}</div>` : "";
+    if (!x) return "";
+    const who = x.singers && x.singers.length ? `<div class="small">🎤 ${esc(x.singers.join(" + "))}</div>` : "";
+    return (x.lines.length ? `<div class="small muted">${x.lines.length} line${x.lines.length > 1 ? "s" : ""}${x.mode !== "sung" ? " · " + x.mode : ""}</div>` : "") + who;
   },
   async build() {
     const out = $("#mk-built"), btn = $("#mk-build");

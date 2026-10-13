@@ -355,3 +355,28 @@ def test_vocals_land_where_they_were_sung_and_choices_and_nudges_work(home):
     p1 = c.post(f"/api/songs/{sid}/vocals/preview", json={"track": "Verse lead", "take": takes[0][0], "band": True})
     p2 = c.post(f"/api/songs/{sid}/vocals/preview", json={"track": "Verse lead", "take": takes[0][0]})
     assert p1.status_code == p2.status_code == 200 and p1.content != p2.content
+
+
+def test_lyrics_say_who_sings_each_part(home):
+    """Headers name the singers ("[Chorus, Chorus lead + Gang]"), "Gang:" marks who joins on a line, "8 bars"
+    sets a section's length, and a chorus straight after the rap gets the freeze-and-drop."""
+    from mouthmixer.studio import songbook
+
+    song = next(s for s in songbook.songs() if s["title"].startswith("Last Train"))
+    p = Project.create(song["starter"], song["title"])
+    secs = p.apply_lyrics(song["lyrics"])
+    by = {s["name"]: s for s in secs}
+    assert by["Intro"]["bars"] == 8 and by["Chorus instrumental"]["bars"] == 8 and by["Chorus 2"]["bars"] == 8
+    sheet = {x["section"]: x for x in p.lyric_sheet()}
+    assert sheet["Intro"]["singers"] == ["Announcer"] and sheet["Intro"]["mode"] == "spoken"
+    assert sheet["Chorus"]["singers"] == ["Chorus lead", "Gang"]
+    assert sheet["Chorus"]["lines"][0].startswith("Ride, ride, ride") and sheet["Chorus"]["line_singers"][0] == ["Gang"]
+    assert sheet["Rap Verse"]["mode"] == "rap" and sheet["Rap Verse"]["line_singers"][7] == ["Ad-libs"]
+    assert sheet["Bridge build"]["singers"] == ["Chorus lead"] and sheet["Bridge build"]["line_singers"][1] == ["Backing"]
+    assert sheet["Outro"]["singers"] == ["Announcer"] and sheet["Outro"]["lines"] == ["Next stop: tomorrow."]
+    names = [s["name"] for s in secs]
+    drops = p.drops()
+    assert drops[names.index("Chorus 2")] == 4 and drops[names.index("Chorus")] == 4  # after the rap / the pre
+    # a line with a colon that isn't a singer stays as written
+    p.apply_lyrics("[Verse 1, Verse lead]\nNote: this stays\nTwo\n")
+    assert p.lyric_sheet()[0]["lines"][0] == "Note: this stays"
