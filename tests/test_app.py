@@ -113,3 +113,15 @@ def test_songs_flow(home):
     from mouthmixer import config
 
     assert config.Settings.load().mic_name == "Microphone (HyperX QuadCast 2)"
+
+
+def test_ping_reports_the_code_version(home):
+    """The launcher compares it with the installed code and replaces an app left running from before an
+    update (the user's starter beats didn't show because the old app was still serving)."""
+    from mouthmixer.app.server import create_app
+    from mouthmixer.runtime import code_version
+
+    c = TestClient(create_app(start_worker=False))
+    v = c.get("/api/ping").json()["version"]
+    assert v == code_version() and len(v) == 12
+    assert c.get("/api/starters").status_code == 200

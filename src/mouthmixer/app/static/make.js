@@ -23,7 +23,15 @@ const Make = {
     this.stop();
     this.proj = null;
     $("#mk-home").classList.remove("hidden"); $("#mk-project").classList.add("hidden");
-    if (!this.starters) this.starters = await api("/api/starters");
+    if (!this.starters) {
+      try { this.starters = await api("/api/starters"); }
+      catch (e) {
+        $("#mk-moods").innerHTML = `<p class="warnc"><b>The starter beats couldn't load.</b> MouthMixer is probably still
+          running the old version. Close this window and open MouthMixer again from the desktop shortcut (it now
+          replaces an old copy by itself). If that doesn't help, restart the PC.</p>`;
+        return;
+      }
+    }
     const box = $("#mk-moods");
     box.innerHTML = "";
     for (const m of this.starters.moods) {

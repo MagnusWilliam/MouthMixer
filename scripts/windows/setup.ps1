@@ -36,6 +36,13 @@ if (-not (Test-Path (Join-Path $Venv "Scripts\python.exe"))) {
 }
 $VPy = Join-Path $Venv "Scripts\python.exe"
 $VPyw = Join-Path $Venv "Scripts\pythonw.exe"
+# A MouthMixer that's already running would keep using the old code: ask it to quit first.
+if (Test-Path (Join-Path $Venv "Scripts\python.exe")) {
+  try { & (Join-Path $Venv "Scripts\python.exe") -m mouthmixer stop 2>$null } catch {}
+}
+# Older versions don't know "stop": end whatever still serves the app's port (8765).
+Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue |
+  ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
 & $VPy -m pip install --upgrade pip --quiet
 & $VPy -m pip install -e ".[windows,dev]" --quiet
 if ($LASTEXITCODE -ne 0) { throw "pip install failed" }

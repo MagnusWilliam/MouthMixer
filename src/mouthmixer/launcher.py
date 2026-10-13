@@ -44,6 +44,62 @@ def app_running(port: int) -> bool:
         return False
 
 
+def app_version(port: int) -> str | None:
+    try:
+        with _NO_PROXY.open(f"http://127.0.0.1:{port}/api/ping", timeout=1) as r:
+            return json.loads(r.read()).get("version")
+    except (OSError, ValueError):
+        return None
+
+
+def stop_old(port: int, force: bool = False) -> None:
+    """After an update, a MouthMixer started from the old code may still be running (the app keeps
+    serving the new page files but not the new features). Ask it, and the listener, to quit."""
+    from .runtime import code_version
+
+    cur = code_version()
+    if app_running(port) and (force or app_version(port) != cur):
+        try:
+            _NO_PROXY.open(urllib.request.Request(f"http://127.0.0.1:{port}/api/shutdown", data=b"", method="POST"),
+                           timeout=2).read()
+        except OSError:
+            pass
+        for _ in range(40):
+            if not app_running(port):
+                break
+            time.sleep(0.25)
+        if app_running(port):  # an app too old to know /api/shutdown: stop whatever holds the port
+            _kill_port(port)
+    p = config.paths()
+    try:
+        st = json.loads(p["status"].read_text())
+        if time.time() - st.get("updated", 0) < 5 and (force or st.get("version") != cur):
+            p["control"].mkdir(parents=True, exist_ok=True)
+            (p["control"] / f"quit-{time.time_ns()}.cmd").write_text("")
+            for _ in range(40):
+                if not listener_running():
+                    break
+                time.sleep(0.25)
+    except (OSError, ValueError):
+        pass
+
+
+def _kill_port(port: int) -> None:
+    if sys.platform != "win32":
+        return
+    cmd = (f"Get-NetTCPConnection -LocalPort {int(port)} -State Listen -ErrorAction SilentlyContinue | "
+           "ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }")
+    try:
+        subprocess.run(["powershell", "-NoProfile", "-Command", cmd], timeout=15, capture_output=True,
+                       creationflags=0x08000000)  # CREATE_NO_WINDOW
+    except (OSError, subprocess.SubprocessError):
+        pass
+    for _ in range(20):
+        if not app_running(port):
+            return
+        time.sleep(0.25)
+
+
 def listener_running() -> bool:
     p = config.paths()["status"]
     try:
@@ -144,6 +200,7 @@ def launch() -> None:
 
     log = setup("launcher")
     settings = config.Settings.load()
+    stop_old(settings.port)
     if settings.background_listening and not listener_running():
         _spawn(["listen"])
     if not app_running(settings.port):

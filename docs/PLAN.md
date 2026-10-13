@@ -1065,6 +1065,15 @@ reconnected.
   more starters per mood, arrangement suggestions on the board.
 - **Next:** the user tries Make with the QuadCast: one starter, a beat, a bassline and a hook.
 
+**Fix (2026-10-13): updates and Windows file locks.** The user's setup run showed two problems. (1) Windows
+refuses to replace a file another program has open; the listener's status file is read by the app every
+second, so the listener's control loop could crash. Replacing now waits and retries (then copies), and
+one failed control step no longer stops the loop. (2) The starter beats didn't show: the MouthMixer
+started before the update was still running and served the new page without the new features. The app
+and listener now report a code fingerprint; the launcher replaces an out-of-date copy (stopping whatever
+holds the port if it's too old to understand), setup stops a running MouthMixer before installing, and
+the Make tab says so plainly if the starters can't load.
+
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.
 

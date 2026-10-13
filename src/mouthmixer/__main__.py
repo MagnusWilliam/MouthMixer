@@ -77,10 +77,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="mouthmixer")
     sub = ap.add_subparsers(dest="cmd")
     sub.add_parser("launch")
+    sub.add_parser("stop", help="quit a running MouthMixer (setup does this before updating)")
     lp = sub.add_parser("listen")
     lp.add_argument("--no-tray", action="store_true")
     sub.add_parser("app")
-    sub.add_parser("stop")
     pp = sub.add_parser("process")
     pp.add_argument("file", type=Path)
     pp.add_argument("--out", type=Path)
@@ -94,6 +94,11 @@ def main(argv: list[str] | None = None) -> int:
         from .launcher import launch
 
         launch()
+    elif a.cmd == "stop":
+        from . import config
+        from .launcher import stop_old
+
+        stop_old(config.Settings.load().port, force=True)
     elif a.cmd == "listen":
         from .listener.service import main as listen
 
@@ -102,11 +107,6 @@ def main(argv: list[str] | None = None) -> int:
         from .app.server import main as app
 
         app()
-    elif a.cmd == "stop":
-        from . import config
-
-        p = config.ensure_dirs()
-        (p["control"] / f"quit-{time.time_ns()}.cmd").write_text("")
     elif a.cmd == "process":
         from .analysis import pipeline
 

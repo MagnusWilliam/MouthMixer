@@ -72,3 +72,20 @@ def ensure_dirs() -> dict[str, Path]:
         p[k].mkdir(parents=True, exist_ok=True)
     p["calibration"].parent.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def replace_file(tmp: Path, target: Path, tries: int = 40) -> None:
+    """Move a freshly written temp file over `target` (atomic for readers). On Windows this fails with
+    "Access is denied" while another program has `target` open (the app reads the listener's status every
+    second), so wait a moment and retry; as a last resort copy the contents over instead of crashing."""
+    import time
+
+    for i in range(tries):
+        try:
+            tmp.replace(target)
+            return
+        except PermissionError:
+            time.sleep(0.025 * (1 + i % 4))
+    target.write_bytes(tmp.read_bytes())
+    tmp.unlink(missing_ok=True)
+

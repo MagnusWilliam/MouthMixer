@@ -205,3 +205,61 @@ def test_a_bad_block_does_not_stop_the_audio_thread(home, monkeypatch):
         time.sleep(0.05)
     assert len(calls) == 3 and lst.seg.last_feed > 0
     lst.running = False
+
+
+def test_status_file_survives_a_reader_holding_it_open(tmp_path, monkeypatch):
+    """Windows refuses to replace a file another program has open (the app reads the status every
+    second). That crashed the listener's control loop on the user's PC; now it waits and retries."""
+    from pathlib import Path
+
+    from mouthmixer import config
+
+    target = tmp_path / "status.json"
+    target.write_text("old")
+    tmp = tmp_path / "status.tmp"
+    tmp.write_text("new")
+    real = Path.replace
+    fails = {"n": 3}
+
+    def flaky(self, dst):
+        if fails["n"] > 0:
+            fails["n"] -= 1
+            raise PermissionError(5, "Access is denied")
+        return real(self, dst)
+
+    monkeypatch.setattr(Path, "replace", flaky)
+    config.replace_file(tmp, target)
+    assert target.read_text() == "new" and not tmp.exists()
+
+    tmp.write_text("newer")  # never succeeds: the contents are copied instead of crashing
+    fails["n"] = 10 ** 6
+    config.replace_file(tmp, target, tries=3)
+    assert target.read_text() == "newer"
+
+
+def test_control_loop_keeps_going_after_an_error(home, monkeypatch):
+    import threading
+    import time
+
+    from mouthmixer import config
+    from mouthmixer.listener import service
+
+    lst = service.Listener(config.Settings(sample_rate=SR))
+    monkeypatch.setattr(lst, "_open_stream", lambda: (_ for _ in ()).throw(RuntimeError("no device")))
+    calls = {"n": 0}
+    real = lst.write_status
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise PermissionError(5, "Access is denied")
+        real()
+
+    monkeypatch.setattr(lst, "write_status", flaky)
+    threading.Thread(target=lst._control_loop, daemon=True).start()
+    time.sleep(1.6)
+    assert calls["n"] >= 3  # it carried on after the failure
+    assert json.loads(lst.paths["status"].read_text())["version"]
+    (lst.paths["control"] / "quit-1.cmd").write_text("")
+    time.sleep(1.2)
+    assert not lst.running

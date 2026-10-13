@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .. import config
 from . import arranger, catalog, critic, render, theory
 from .styles import INSTRUMENTS, PACKS
 
@@ -20,7 +21,7 @@ def write_json(path: Path, obj) -> None:
     """Write-then-rename, so a reader in another request never sees a half-written file."""
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(obj, default=float))
-    tmp.replace(path)
+    config.replace_file(tmp, path)
 
 
 def next_version_index(song_dir: Path, record: dict) -> int:

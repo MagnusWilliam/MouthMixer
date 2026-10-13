@@ -199,6 +199,10 @@ class Listener:
         self.opened_at = 0.0
         self.restarts = 0
         self._stream_lock = threading.RLock()
+        self._last_auto = 0.0
+        from ..runtime import code_version
+
+        self.version = code_version()
 
     # --- state --------------------------------------------------------------------------------
     @property
@@ -229,10 +233,11 @@ class Listener:
             "mic_restarts": self.restarts,
             "hotkey": self.settings.hotkey,
             "updated": time.time(),
+            "version": self.version,
         }
         tmp = self.paths["status"].with_suffix(".tmp")
         tmp.write_text(json.dumps(status))
-        tmp.replace(self.paths["status"])
+        config.replace_file(tmp, self.paths["status"])
 
     # --- audio --------------------------------------------------------------------------------
     def _callback(self, indata, frames, t, status):
@@ -343,43 +348,49 @@ class Listener:
                 self.writer.notice = "The mic stopped sending sound for a moment and was reconnected."
 
     def _control_loop(self):
-        ctl = self.paths["control"]
-        last_auto = 0.0
         while self.running:
-            for f in sorted(ctl.glob("*.cmd")):
-                cmd = f.stem.split("-")[0]
-                f.unlink(missing_ok=True)
-                if cmd == "pause":
-                    self.set_paused(True)
-                elif cmd == "resume":
-                    self.set_paused(False)
-                elif cmd == "save_last":
-                    self.save_last()
-                elif cmd == "quit":
-                    self.quit()
-                elif cmd == "reload_mic":
-                    self.settings = config.Settings.load()
-                    self.stop_stream()
-                    if not self.paused:
-                        self.start_stream()
-            if time.time() - last_auto > 5:
-                last_auto = time.time()
-                reason = ""
-                if in_quiet_hours(self.settings.quiet_start, self.settings.quiet_end):
-                    reason = "quiet hours"
-                else:
-                    apps = apps_using_mic(self.settings.pause_for_apps)
-                    if apps:
-                        reason = "mic in use by " + ", ".join(apps)
-                if reason != self.auto_reason:
-                    self.auto_reason = reason
-                    self._apply_pause()
-            if not self.paused and self.stream is None and time.time() - self._last_try > 5:
-                self.start_stream()
-            self.check_stream()
-            self.write_status()
-            self._update_icon()
+            try:
+                self._control_step()
+            except Exception:  # one failed step (a file in use, a registry hiccup) must not stop the listener
+                log.exception("control step failed")
             time.sleep(0.5)
+
+    def _control_step(self):
+        ctl = self.paths["control"]
+        for f in sorted(ctl.glob("*.cmd")):
+            cmd = f.stem.split("-")[0]
+            f.unlink(missing_ok=True)
+            if cmd == "pause":
+                self.set_paused(True)
+            elif cmd == "resume":
+                self.set_paused(False)
+            elif cmd == "save_last":
+                self.save_last()
+            elif cmd == "quit":
+                self.quit()
+                return
+            elif cmd == "reload_mic":
+                self.settings = config.Settings.load()
+                self.stop_stream()
+                if not self.paused:
+                    self.start_stream()
+        if time.time() - self._last_auto > 5:
+            self._last_auto = time.time()
+            reason = ""
+            if in_quiet_hours(self.settings.quiet_start, self.settings.quiet_end):
+                reason = "quiet hours"
+            else:
+                apps = apps_using_mic(self.settings.pause_for_apps)
+                if apps:
+                    reason = "mic in use by " + ", ".join(apps)
+            if reason != self.auto_reason:
+                self.auto_reason = reason
+                self._apply_pause()
+        if not self.paused and self.stream is None and time.time() - self._last_try > 5:
+            self.start_stream()
+        self.check_stream()
+        self.write_status()
+        self._update_icon()
 
     def quit(self):
         self.running = False

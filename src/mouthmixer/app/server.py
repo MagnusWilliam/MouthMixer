@@ -192,6 +192,16 @@ def create_app(start_worker: bool = True) -> FastAPI:
 
     @app.get("/api/ping")
     def ping():
+        from ..runtime import code_version
+
+        return {"ok": True, "version": code_version()}
+
+    @app.post("/api/shutdown")
+    def shutdown():
+        """Used by the launcher and by setup when the code was updated: this (old) app steps aside."""
+        import os
+
+        threading.Timer(0.3, lambda: os._exit(0)).start()
         return {"ok": True}
 
     @app.get("/api/status")
