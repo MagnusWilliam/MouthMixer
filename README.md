@@ -11,7 +11,15 @@ many instruments, effects and a mastered mix. MouthMixer tries many versions and
 checks each against the music rules in `docs/MUSIC_KNOWLEDGE.md`, and shows the best three. Raw clips live
 in the **Clips** tab; pick your microphone in **Setup**.
 
-**Newest: the songbook, voices and song structure.** In **Make**, start one of the 8 LINE ZERO songs from the
+**Newest: ready-made parts, timing fix, voice tweaks.** In **Make**, pick a **groove combo** (Heist break,
+Night train, Jazz club, Boss rush…) or mix and match a beat, bassline and chords, then add ready-made
+riffs, stabs, answer lines, intro motifs, hooks, percussion and fills. Swap any part's pattern from its
+tile, make it simpler or busier, change its sound. Recording your own is still there under "Record your
+own (optional)": **run the Sync test there first** so takes land on the beat. On **Sing**, open
+**Voice tweaks** (pitch, tone, breath, grit, tuning, doubling, a harmony voice, echo, space, radio /
+megaphone / phone / robot / tape) and press **Preview** to hear 8 seconds of your voice that way.
+
+**Earlier: the songbook, voices and song structure.** In **Make**, start one of the 8 LINE ZERO songs from the
 songbook (lyrics, beat and voice plan ready), or paste your own lyrics with [Verse]/[Chorus]/[Rap Verse]
 headers. Choruses lift, rap verses drop into a hip-hop pocket, intros get hits and the station chime. On
 the **Sing** screen pick a **Track** (Lead, Rap, Gang…) and a **Voice** (female, deeper, raspy, whisper,

@@ -867,7 +867,7 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
     # 9 doubles: synthetic ADT (+12 ms / +5 cents left, +19 ms / -5 cents right), -8 dB, ±30%.
     if p["doubles"]:
         m = _mask(x, notes, None if p["doubles"] == "all" else hook)
-        g = 10 ** (-8 / 20)
+        g = 10 ** (p.get("double_db", -8) / 20)
         d1 = _shift(_pitch_shift(x, 5), 12) * m * g
         d2 = _shift(_pitch_shift(x, -5), 19) * m * g
         layers["doubles"] = _pan(d1, -0.3) + _pan(d2, 0.3)
@@ -897,7 +897,7 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
     spb = 60.0 / bpm
     duck = 1 - 0.7 * np.clip(_env(x, 150) / (np.quantile(_env(x, 150)[voiced], 0.9) + 1e-9 if voiced.any() else 1), 0, 1)
     if p["delay"]:
-        dl = Pedalboard([Delay(delay_seconds=p["delay_beats"] * spb, feedback=0.2, mix=1.0), HighpassFilter(300),
+        dl = Pedalboard([Delay(delay_seconds=p["delay_beats"] * spb, feedback=p.get("delay_feedback", 0.2), mix=1.0), HighpassFilter(300),
                          LowpassFilter(5000)])
         space += dl(bus * p["delay"], SR) * duck
         if p["throws"]:
@@ -1087,9 +1087,9 @@ class Result:
 
 def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], tonic: int, mode: str,
             preset_name: str | None, length: float, choice: dict | None = None, hook: set | None = None,
-            character: str = "natural") -> Result:
+            character: str = "natural", tweaks: dict | None = None) -> Result:
     """Takes in, a processed vocal out (song time, `length` seconds)."""
-    p = preset(preset_name)
+    p = tweak_preset(preset(preset_name), tweaks)
     notes = notes_in_seconds(lead, bpm, sections)
     if not notes:
         raise ValueError("this song has no melody to sing")
@@ -1107,9 +1107,9 @@ def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], ton
     x = clean(raw, sung, noise, noise_db, report)
     y, f0_before, f0_after = correct(x, sung, p, report)
     y = tame_breaths(y, f0_after, noise_db, report)
-    y, stack = apply_character(y, f0_after, character, report)
-    ch = CHARACTERS.get(character or "natural", {})
-    if ch.get("octave") or ch.get("stack") or ch.get("whisper") or ch.get("pa"):
+    y, stack = apply_character(y, f0_after, character, report, tweaks=tweaks, scale=(tonic, mode))
+    ch = character_spec(character, tweaks)
+    if ch.get("octave") or ch.get("steps") or ch.get("stack") or ch.get("whisper") or ch.get("pa") or ch.get("harmony_voice"):
         p = dict(p, harmony=None)  # the harmony voice follows the plain pitch line; skip it for changed voices
     if hook is None:
         from .lyrics import is_hook
@@ -1290,11 +1290,11 @@ def phrase_notes(f0: np.ndarray, spans: list[tuple[str, float, float]]) -> list[
 def produce_free(takes: list[Take], bpm: float, sections: list[dict], tonic: int, mode: str,
                  preset_name: str | None, length: float, section_modes: dict[str, str] | None = None,
                  choice: dict | None = None, hook: set | None = None, character: str = "natural",
-                 stack_all: bool = False) -> Result:
+                 stack_all: bool = False, tweaks: dict | None = None) -> Result:
     """Takes in, a processed vocal out, for singing without a melody to follow (and for rap)."""
     from .lyrics import is_hook
 
-    p = dict(preset(preset_name))
+    p = tweak_preset(preset(preset_name), tweaks)
     p["harmony"] = None  # harmonies need real notes
     section_modes = section_modes or {}
     spb = 60.0 / bpm
@@ -1320,9 +1320,10 @@ def produce_free(takes: list[Take], bpm: float, sections: list[dict], tonic: int
     report["untuned_sections"] = [nm for nm, a, b in spans if section_modes.get(nm) in untuned]
     y, f0_before, f0_after = tune_to_key(x, tonic, mode, p, keep, report)
     y = tame_breaths(y, f0_after, noise_db, report)
-    if (character or "natural") != "natural":
+    if (character or "natural") != "natural" or clean_tweaks(tweaks):
         # rap/spoken parts keep their own pitch line; the character still applies to them
-        y, stack = apply_character(y, f0_after, character, report, source=tame_breaths(x, f0_after, noise_db, {}))
+        y, stack = apply_character(y, f0_after, character, report, source=tame_breaths(x, f0_after, noise_db, {}),
+                                   tweaks=tweaks, scale=(tonic, mode))
     else:
         stack = None
         report["character"] = "natural"
@@ -1456,9 +1457,10 @@ def world_passages(y: np.ndarray, f0: np.ndarray) -> list[tuple]:
 
 def voice_variant(y: np.ndarray, f0: np.ndarray, *, formant: float = 1.0, octave: int = 0, cents: float = 0.0,
                   breath: float = 0.0, rasp: float = 0.0, whisper: bool = False, seed: int = 0,
-                  analysis: list | None = None) -> np.ndarray:
+                  analysis: list | None = None, steps: int = 0, scale: tuple | None = None) -> np.ndarray:
     """One re-voiced copy of the vocal, passage by passage with WORLD. `f0` is the 5 ms pitch track to
-    sing (already tuned), in the time base of `y`."""
+    sing (already tuned), in the time base of `y`. `steps` (with `scale` = (tonic, mode)): a harmony
+    voice that many notes of the key away from each sung note (2 = a third above), keeping its bends."""
     import pyworld as pw
 
     rng = np.random.default_rng(seed)
@@ -1477,6 +1479,8 @@ def voice_variant(y: np.ndarray, f0: np.ndarray, *, formant: float = 1.0, octave
             ap = 1 - (1 - ap) * (1 - burst * np.clip((freqs - 600) / 1500, 0, 1)[None, :])
             f = f * (1 + rasp * 0.012 * rng.normal(0, 1, len(f)))
         f_new = np.zeros_like(f) if whisper else f * shift
+        if steps and not whisper:
+            f_new = f_new * (_harmony_ratio(f, steps, *scale) if scale is not None else 2 ** (steps / 7))
         if whisper:
             ap = np.ones_like(ap)
         z = pw.synthesize(np.ascontiguousarray(f_new), np.ascontiguousarray(sp), np.ascontiguousarray(ap), SR, FRAME_MS)
@@ -1492,18 +1496,164 @@ def voice_variant(y: np.ndarray, f0: np.ndarray, *, formant: float = 1.0, octave
     return out
 
 
+def _harmony_ratio(f: np.ndarray, steps: int, tonic: int, mode: str) -> np.ndarray:
+    """Per frame: how far to move each sung note to land `steps` notes of the key away from it."""
+    from . import theory
+
+    sc = [(tonic + i) % 12 for i in theory.MODES.get(mode, theory.MODES["major"])]
+    out = np.ones(len(f))
+    v = f > 0
+    if not v.any():
+        return out
+    m = 69 + 12 * np.log2(f[v] / 440.0)
+    near = np.round(m).astype(int)
+    tgt = np.empty_like(near)
+    for i, n in enumerate(near):
+        q = n
+        while q % 12 not in sc:  # snap to the key first
+            q -= 1
+        k, d = abs(steps), 1 if steps > 0 else -1
+        while k:
+            q += d
+            if q % 12 in sc:
+                k -= 1
+        tgt[i] = q - n
+    # Smooth the move over ~60 ms so a glide between notes doesn't step.
+    shift = tgt.astype(float)
+    if len(shift) > 12:
+        shift = _movavg(shift, 12)
+    out[v] = 2 ** (shift / 12.0)
+    return out
+
+
+# Your own voice settings on top of a character (the "Voice tweaks" on the Sing screen). Each one only
+# changes what you move; values are [U] defaults to tune by ear (docs/VOCALS.md §12).
+TWEAKS = [
+    {"id": "pitch", "label": "Pitch (notes of the key)", "hint": "higher or lower by notes of the key, so it stays in key "
+     "(7 = an octave)", "min": -7, "max": 7, "step": 1, "default": 0},
+    {"id": "tone", "label": "Tone", "hint": "bigger and darker (left) or smaller and lighter (right)", "min": -30,
+     "max": 30, "step": 1, "default": 0},
+    {"id": "breath", "label": "Breathiness", "min": 0, "max": 100, "step": 5, "default": 0},
+    {"id": "grit", "label": "Grit / rasp", "min": 0, "max": 100, "step": 5, "default": 0},
+    {"id": "warmth", "label": "Warmth / drive", "min": 0, "max": 100, "step": 5, "default": 15},
+    {"id": "tuning", "label": "Tuning", "options": [["", "as the style sets it"], ["off", "off (exactly as sung)"],
+                                                   ["gentle", "gentle"], ["tight", "tight"], ["robot", "robot (hard snap)"]]},
+    {"id": "double", "label": "Double (wider, thicker)", "min": 0, "max": 100, "step": 5, "default": 0},
+    {"id": "harmony", "label": "Harmony voice", "options": [["", "none"], ["third_up", "a third above"],
+                                                          ["fifth_up", "a fifth above"], ["third_down", "a third below"],
+                                                          ["octave_up", "an octave above"], ["octave_down", "an octave below"]]},
+    {"id": "echo", "label": "Echo", "min": 0, "max": 100, "step": 5, "default": 0},
+    {"id": "space", "label": "Space (reverb)", "min": 0, "max": 100, "step": 5, "default": 40},
+    {"id": "fx", "label": "Effect", "options": [["", "none"], ["radio", "old radio"], ["megaphone", "megaphone"],
+                                               ["phone", "phone call"], ["robot", "robot"], ["tape", "lo-fi tape"]]},
+]
+HARMONY_STEPS = {"third_up": 2, "fifth_up": 4, "third_down": -2, "octave_up": 7, "octave_down": -7}
+FX = ("radio", "megaphone", "phone", "robot", "tape")
+
+
+def clean_tweaks(t: dict | None) -> dict:
+    """Only known settings, clamped; anything left out keeps the character's and style's own value."""
+    out: dict = {}
+    for spec in TWEAKS:
+        k = spec["id"]
+        if not t or k not in t or t[k] in (None, ""):
+            continue
+        if "options" in spec:
+            if t[k] in {o[0] for o in spec["options"]}:
+                out[k] = t[k]
+        else:
+            try:
+                out[k] = float(np.clip(float(t[k]), spec["min"], spec["max"]))
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
+def tweak_preset(p: dict, t: dict | None) -> dict:
+    """The style's processing with your tweaks on top: tuning, warmth, doubling, echo, space, tape."""
+    t = clean_tweaks(t)
+    p = dict(p)
+    tuning = "robot" if t.get("fx") == "robot" else t.get("tuning")
+    if tuning == "off":
+        p["strength"], p["tune"] = 0.0, "natural"
+    elif tuning == "gentle":
+        p["strength"], p["retune_ms"], p["tune"] = 0.5, 60, "natural"
+    elif tuning == "tight":
+        p["strength"], p["retune_ms"], p["tune"] = 0.95, 20, "natural"
+    elif tuning == "robot":
+        p["strength"], p["retune_ms"], p["tune"] = 1.0, 0, "hard"
+    if "warmth" in t:
+        p["sat"] = t["warmth"] / 100 * 0.7
+    if "double" in t:
+        p["doubles"] = "all" if t["double"] > 0 else None
+        p["double_db"] = -14 + 9 * t["double"] / 100  # -14 dB (a hint) to -5 dB (thick)
+    if "echo" in t:
+        p["delay"], p["delay_beats"], p["throws"] = t["echo"] / 100 * 0.35, 0.75, t["echo"] > 0 and p.get("throws", True)
+        p["delay_feedback"] = 0.2 + 0.35 * t["echo"] / 100
+    if "space" in t:
+        v = t["space"] / 100
+        p["reverb"], p["room"], p["decay_s"] = 0.45 * v, 0.35 + 0.55 * v, 0.6 + 2.6 * v
+    if t.get("fx") == "tape":
+        p["bandpass"], p["sat"] = (300, 4000), max(p.get("sat", 0.15), 0.4)
+    return p
+
+
+def _fx(x: np.ndarray, fx: str) -> np.ndarray:
+    """A whole-voice effect, level-matched: radio and megaphone are band-passed and distorted (the megaphone
+    narrower and harder), phone is the telephone band, robot rings the voice against a 60 Hz tone."""
+    from pedalboard import Distortion, PeakFilter, Pedalboard
+
+    x = np.asarray(x, dtype=np.float32)
+    if fx in ("radio", "megaphone", "phone"):
+        lo, hi, drive, peak = {"radio": (400, 3200, 12, 1500), "megaphone": (650, 2800, 22, 1800),
+                               "phone": (300, 3400, 8, 1100)}[fx]
+        z = _filt(_filt(x, _sos("high", lo, 4)), _sos("low", hi, 4))
+        z = Pedalboard([PeakFilter(cutoff_frequency_hz=peak, gain_db=5.0, q=0.8), Distortion(drive_db=drive)])(
+            z[None].astype(np.float32), SR)[0]
+    elif fx == "robot":
+        t = np.arange(len(x)) / SR
+        z = x * (0.35 + 0.65 * np.sin(2 * np.pi * 60 * t)).astype(np.float32)
+    else:
+        return x
+    return (z * np.sqrt(np.mean(x.astype(np.float64) ** 2) / max(np.mean(z.astype(np.float64) ** 2), 1e-12))).astype(np.float32)
+
+
+def character_spec(name: str | None, tweaks: dict | None = None) -> dict:
+    """A character's settings with your tweaks applied (pitch, tone, breath, grit, harmony, effect)."""
+    c = dict(CHARACTERS.get(name or "natural", CHARACTERS["natural"]))
+    t = clean_tweaks(tweaks)
+    if t.get("pitch"):
+        c["steps"] = int(t["pitch"])
+    if t.get("tone"):
+        c["formant"] = c.get("formant", 1.0) * (1 + t["tone"] / 100)
+    if "breath" in t:
+        c["breath"] = max(c.get("breath", 0.0) if not t["breath"] else 0.0, t["breath"] / 100)
+    if "grit" in t:
+        c["rasp"] = t["grit"] / 100 * 0.7
+        c["drive"] = max(c.get("drive", 0.0), t["grit"] / 100 * 0.3)
+    if t.get("harmony"):
+        c["harmony_voice"] = t["harmony"]
+    if t.get("fx") in FX:
+        c["fx"] = t["fx"]
+    return c
+
+
 def apply_character(y: np.ndarray, f0: np.ndarray, name: str, report: dict,
-                    source: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray | None]:
+                    source: np.ndarray | None = None, tweaks: dict | None = None,
+                    scale: tuple | None = None) -> tuple[np.ndarray, np.ndarray | None]:
     """(the main voice as the character, extra stacked voices as a stereo layer or None).
     `source`: the untuned audio, when it lines up with `f0` (free singing). Then pitch correction and the
     character happen in one WORLD pass: running WORLD twice adds artifacts."""
-    c = CHARACTERS.get(name or "natural", CHARACTERS["natural"])
+    c = character_spec(name, tweaks)
     report["character"] = name or "natural"
     report["character_label"] = c["label"]
+    if tweaks:
+        report["tweaks"] = clean_tweaks(tweaks)
     main = y
     src = source if source is not None else y
-    needs = (c.get("formant", 1.0) != 1.0 or c.get("octave") or c.get("breath") or c.get("rasp")
-             or c.get("whisper") or c.get("stack"))
+    revoice = (c.get("formant", 1.0) != 1.0 or c.get("octave") or c.get("steps") or c.get("breath")
+               or c.get("rasp") or c.get("whisper"))
+    needs = revoice or c.get("stack") or c.get("harmony_voice")
     analysis = world_passages(src, f0) if needs and not c.get("pa") else None
     if c.get("pa"):
         # A phone / PA speaker: 300-3400 Hz at 24 dB/octave, a lift near 1 kHz, then light distortion
@@ -1514,11 +1664,10 @@ def apply_character(y: np.ndarray, f0: np.ndarray, name: str, report: dict,
         main = Pedalboard([PeakFilter(cutoff_frequency_hz=1100, gain_db=4.0, q=0.7), Distortion(drive_db=10)])(
             band[None].astype(np.float32), SR)[0]
         main = (main * np.sqrt(np.mean(y ** 2) / max(np.mean(main ** 2), 1e-12))).astype(np.float32)
-    elif any(k in c for k in ("formant", "octave", "breath", "rasp", "whisper")) and \
-            (c.get("formant", 1.0) != 1.0 or c.get("octave") or c.get("breath") or c.get("rasp") or c.get("whisper")):
+    elif revoice:
         main = voice_variant(src, f0, formant=c.get("formant", 1.0), octave=c.get("octave", 0),
                              breath=c.get("breath", 0.0), rasp=c.get("rasp", 0.0), whisper=c.get("whisper", False),
-                             analysis=analysis)
+                             analysis=analysis, steps=c.get("steps", 0), scale=scale)
         if c.get("whisper"):
             from pedalboard import HighShelfFilter, Pedalboard
 
@@ -1532,12 +1681,31 @@ def apply_character(y: np.ndarray, f0: np.ndarray, name: str, report: dict,
             ratio, cents_, ms, pan = v[:4]
             octv = (v[4] // 12) if len(v) > 4 else c.get("octave", 0)
             z = voice_variant(src, f0, formant=ratio * c.get("formant", 1.0), octave=octv, cents=cents_,
-                              breath=c.get("breath", 0.0), rasp=c.get("rasp", 0.0), seed=i + 1, analysis=analysis)
+                              breath=c.get("breath", 0.0), rasp=c.get("rasp", 0.0), seed=i + 1, analysis=analysis,
+                              steps=c.get("steps", 0), scale=scale)
             z = _filt(z, _sos("high", 180, 2))  # backing layers keep out of the low end
             if c.get("drive"):
                 z = _saturate(z, c["drive"])
             layer += _pan(_shift(z, ms), pan) * 10 ** (-7 / 20)
         report["stack_voices"] = len(c["stack"])
+    hv = c.get("harmony_voice")
+    if hv and scale is not None and not c.get("whisper"):
+        # A second you, singing a harmony that follows the key, a little to one side and under the lead.
+        steps = HARMONY_STEPS[hv]
+        z = voice_variant(src, f0, formant=c.get("formant", 1.0) * (1.03 if steps > 0 else 0.97),
+                          octave=c.get("octave", 0), cents=4, breath=c.get("breath", 0.0), rasp=c.get("rasp", 0.0),
+                          seed=11, analysis=analysis, steps=steps + c.get("steps", 0), scale=scale)
+        z = _filt(z, _sos("high", 150, 2))
+        if c.get("drive"):
+            z = _saturate(z, c["drive"])
+        h = _pan(_shift(z, 9), -0.35) * 10 ** (-6 / 20)
+        layer = h if layer is None else layer + h
+        report["harmony_voice"] = hv
+    if c.get("fx"):
+        main = _fx(main, c["fx"])
+        if layer is not None:
+            layer = np.stack([_fx(ch, c["fx"]) for ch in layer])
+        report["fx"] = c["fx"]
     return main.astype(np.float32), layer
 
 
@@ -1560,3 +1728,41 @@ def stack_takes(takes: list[Take], spans: list, length: float, tonic: int, mode:
         y = y * 10 ** (-5 / 20)
         out += _pan(y[:n], pans[i % len(pans)])
     return out
+
+
+def preview(take: Take, tonic: int, mode: str, preset_name: str | None, character: str = "natural",
+            tweaks: dict | None = None, seconds: float = 8.0, untuned: bool = False) -> np.ndarray:
+    """A few seconds of one take as a character with your tweaks, without the band (for trying voices
+    quickly): from the first sung sound, tuned to the key (unless `untuned`, for rap and spoken parts),
+    re-voiced, with the style's drive and a quick reverb and echo. Stereo float32 at SR."""
+    from pedalboard import Delay, Pedalboard, Reverb
+
+    x = np.asarray(take.audio, dtype=np.float32)
+    env = _env(x, 20)
+    on = np.flatnonzero(env > max(float(env.max()) * 0.1, 1e-4))
+    i0 = max(0, int(on[0]) - int(0.1 * SR)) if len(on) else 0
+    seg = _filt(x[i0:i0 + int(seconds * SR)], _sos("high", 100))
+    if len(seg) < SR // 4:
+        raise ValueError("that take is too short to preview")
+    p = tweak_preset(preset(preset_name), tweaks)
+    keep = [(0.0, len(seg) / SR + 1)] if untuned else []
+    y, _, f0 = tune_to_key(seg, tonic, mode, p, keep, {})
+    main, layer = apply_character(y, f0, character, {}, source=seg, tweaks=tweaks, scale=(tonic, mode))
+    main = _saturate(main, p["sat"])
+    if p.get("bandpass"):
+        main = _filt(_filt(main, _sos("high", p["bandpass"][0], 2)), _sos("low", p["bandpass"][1], 2))
+    out = _pan(main, 0.0)
+    if p["doubles"]:
+        g = 10 ** (p.get("double_db", -8) / 20)
+        out = out + _pan(_shift(_pitch_shift(main, 5), 12) * g, -0.3) + _pan(_shift(_pitch_shift(main, -5), 19) * g, 0.3)
+    if layer is not None:
+        out = out + layer[:, :out.shape[1]]
+    fx = []
+    if p["reverb"]:
+        fx.append(Reverb(room_size=p["room"], damping=0.45, wet_level=min(1.0, p["reverb"] * 1.6), dry_level=1.0))
+    if p["delay"]:
+        fx.append(Delay(delay_seconds=0.375, feedback=p.get("delay_feedback", 0.2), mix=min(0.5, p["delay"] * 1.2)))
+    if fx:
+        out = Pedalboard(fx)(out.astype(np.float32), SR)
+    pk = float(np.abs(out).max()) or 1.0
+    return (out / pk * 0.89).astype(np.float32)

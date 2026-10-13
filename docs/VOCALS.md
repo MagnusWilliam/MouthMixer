@@ -206,3 +206,35 @@ take of each section is the centre voice and the others are tuned, high-passed a
 note, natural strength and retune time from the style, ±10 cents left alone); rap, spoken and whispered
 sections are not tuned. **Band hits on vocal accents**: the mixer finds the hardest-hit syllables (louder
 than the phrase around them and on the 16th grid) and adds drum hits and brass stabs there.
+
+## 12. Voice tweaks and preview (2026-10-13, night)
+
+The user asked for more ways to shape the voice. On the Sing screen, under **Make the vocal**, the
+**Voice tweaks** panel adds fine controls on top of the chosen character and style. Only the settings you
+move are sent. Everything else keeps the character's and style's own value. Tweaks are remembered per
+vocal track (in the browser), so the Rap track can be gritty while the Chorus lead stays clean.
+`vocals.TWEAKS`, `clean_tweaks`, `tweak_preset`, `character_spec`:
+
+| Tweak | What it does (values [U], tune by ear) |
+|---|---|
+| Pitch (notes of the key) | moves every sung note up or down by notes of the key (7 = an octave), so the vocal stays in key with the band; the move is smoothed over 60 ms so glides don't step. A plain semitone shift would put a free-sung vocal out of key (measured on synthetic singing: 57% of frames in D minor after +2 semitones, against 77% after +1 key step and 82% before). |
+| Tone | the formant ratio, ±30% (left: bigger and darker; right: smaller and lighter), multiplied onto the character's own |
+| Breathiness | more aperiodicity above 1 kHz (WORLD) |
+| Grit / rasp | uneven noise bursts above 600 Hz, a little pitch jitter, up to 0.3 saturation |
+| Warmth / drive | the chain's saturation, 0-0.7 |
+| Tuning | off (exactly as sung), gentle (50%, 60 ms), tight (95%, 20 ms), robot (hard snap); default = the style's |
+| Double | synthetic ADT doubles on every line, from -14 dB (a hint) to -5 dB (thick) |
+| Harmony voice | a second you, a third above, a fifth above, a third below, or an octave above or below, following the key note by note (the same scale-step walk as Pitch), 9 ms late, panned left, -6 dB, high-passed at 150 Hz |
+| Echo | the delay send (0-0.35) with more feedback as it goes up (0.2-0.55); line-end throws on |
+| Space | reverb send 0-0.45, room 0.35-0.9, decay 0.6-3.2 s |
+| Effect | old radio (400-3200 Hz, +5 dB at 1.5 kHz, drive 12 dB), megaphone (650-2800 Hz, drive 22 dB), phone call (300-3400 Hz, light drive), robot (ring modulation at 60 Hz plus hard tuning), lo-fi tape (300-4000 Hz band, more saturation); all level-matched |
+
+**Preview** (`vocals.preview`, `POST /api/songs/{id}/vocals/preview`): 8 seconds of your newest take on the
+chosen track, from its first sung sound, tuned (untuned for Rap, Announcer, Whisper and rap/spoken
+sections), re-voiced with the character and tweaks, with a quick reverb and echo and no band. It takes
+a few seconds, so you can try several voices before running the full "Make this vocal track".
+
+**Timing**: until the sync test has run, a take is placed using the browser's own estimate of the
+delay (output latency + base latency + the mic's reported latency). Before this, it was placed with no
+correction, so booth takes came out a 16th late. Takes recorded on that estimate are re-timed with the
+measured value once the sync test has run. The sync test is now on the Make recorder too.

@@ -57,6 +57,12 @@ no black-box AI song generator in the main path.
   notes** (up/down, earlier/later, longer/shorter, delete): this relaxes "never edit notes" at the user's
   request. A **song board** places pieces in sections; **Build** makes a song that the Mix, Lyrics and
   Sing tabs then work on. Vocal chops stay your voice (tuned, cut on the beat).
+- **Ready-made parts first, recording on the side (decided 2026-10-13, night).** After trying Make, the user
+  found hummed pieces didn't sound right and asked for preset beat combos to mix and match and then tweak.
+  Make now leads with **ready-made parts**: beat, bassline and chord grooves (they keep each section's feel),
+  riffs, stabs, answer lines, intro motifs, hooks, percussion and fills (they follow the chords), and named
+  **groove combos**. Every part has a pattern dropdown, simpler/busier, sound, octave and one-note fixes.
+  Recording your own is a fold-out ("Record your own (optional)").
 - **Background listening is off by default** (a switch in Setup); the hotkey only works when it's on.
 - **Vocals and lyrics in the app now** (ahead of Phase 6's order, at the user's request): a Lyrics screen
   and a Sing screen (karaoke, pitch lane, takes), with the processing system in [`VOCALS.md`](VOCALS.md).
@@ -1095,6 +1101,27 @@ the Make tab says so plainly if the starters can't load.
   analysis shared by every character voice).
 - Not yet: hearing a character before processing (preview), per-section characters within one track.
 - **Next:** the user records "Last Train, First Light" from the songbook.
+
+**Build status (2026-10-13, night): ready-made parts, recording timing, voice tweaks.**
+- **Recording lag fixed.** Make subtracted only the Sing screen's sync-test value, which is 0 until that test
+  has run, so every booth take landed late by the whole headphone-and-mic delay (a 16th late in the test
+  that reproduces it). Now a take uses the browser's own latency estimate until the sync test has measured
+  the real delay, the sync test sits on the Make recorder too, and takes recorded on the estimate are
+  re-timed on Sing once it's measured. New "Whole piece ◀ earlier / later ▶" nudges fix pieces recorded
+  before the fix. Booth loops now loop at exactly their bar length, so they can't drift apart.
+- **Ready-made parts** (`studio/presets.py`): 20 beats, 13 basslines, 10 chord rhythms, 12 groove combos,
+  and 38 phrases (riffs, stabs, answer lines, intro motifs, hooks, percussion, fills), all generic
+  figures of their styles. Grooves replace the starter's pattern but keep the section feels (intro build,
+  freeze, chorus lift, rap pocket, breakdown, three-hit ending). Phrases are written in chord tones and
+  laid on the main chords, then behave like recorded pieces. Simpler/busier now also works on grooves
+  (5 levels).
+- **Voice tweaks** (VOCALS §12): pitch in notes of the key, tone, breathiness, grit, warmth, tuning style,
+  doubling, a harmony voice that follows the key, echo, space, and effects (radio, megaphone, phone, robot,
+  lo-fi tape), saved per vocal track; plus an 8-second **preview** of a voice without the band.
+- Not yet: auditioning a ready-made part before adding it (adding plays it; delete or swap if it's wrong);
+  per-section voice tweaks within one track.
+- **Next:** the user runs the sync test in Make, builds "Last Train, First Light" from a combo and a few
+  ready-made parts, and tries voices with Preview.
 
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.

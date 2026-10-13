@@ -151,16 +151,28 @@ STAB_STEPS = [0, 6, 12]  # 16th steps of the intro's hits: beat 1, the "and" of 
 
 def generate(gen: str, starter: dict, chords: list, bars_range: tuple, *, fills: bool = False,
              light: bool = False, melody: list | None = None, rng=None, feel: str = "verse",
-             next_feel: str | None = None) -> list[tuple]:
+             next_feel: str | None = None, style: str = "", busy: int = 0) -> list[tuple]:
     """Notes for a generated starter part over `chords` in `bars_range` (absolute bars), shaped by the
-    section's feel (FEELS) and, for transitions, the next section's."""
+    section's feel (FEELS) and, for transitions, the next section's. `style`: a groove from
+    presets.GROOVES instead of the pack's own; `busy`: simpler (< 0) or busier (> 0)."""
     import numpy as np
 
     from ..arrange.styles import DRUM
+    from . import presets
 
     rng = rng if rng is not None else np.random.default_rng(0)
-    pack = PACKS[starter["pack"]]
+    pack = dict(PACKS[starter["pack"]])
     swing = pack["swing"]
+    groove = presets.GROOVES.get(gen, {}).get(style) if style else None
+    if gen == "drums":
+        pats = [groove["pattern"]] if groove else pack["drums"]
+        if groove and "swing" in groove:
+            swing = groove["swing"]
+        pack["drums"] = [presets.busy_drums(x, busy) for x in pats]
+    elif gen == "bass":
+        pack["bass"] = [presets.busy_bass(x, busy) for x in ([groove["cell"]] if groove else pack["bass"])]
+    elif gen == "comp":
+        pack["comp_rhythm"] = [presets.busy_comp(x, busy) for x in ([groove["rhythm"]] if groove else pack["comp_rhythm"])]
     b0, b1 = bars_range
     n_bars = b1 - b0
     half = b0 + max(1, n_bars // 2) if n_bars > 2 else b0  # a short intro hits from the first beat
@@ -170,7 +182,8 @@ def generate(gen: str, starter: dict, chords: list, bars_range: tuple, *, fills:
     if feel in ("big_intro", "hits_end"):
         feel = "final"  # the full band; a big ending then stops on three hits (below)
     if ending:
-        body = generate(gen, starter, chords, (b0, b1 - 1), fills=False, melody=melody, rng=rng, feel="final") \
+        body = generate(gen, starter, chords, (b0, b1 - 1), fills=False, melody=melody, rng=rng, feel="final",
+                        style=style, busy=busy) \
             if n_bars > 1 and gen not in ("fx", "chime", "keys") else []
         return body + _three_hits(gen, starter, chords, b1 - 1)
     chord_at = lambda beat: next((c for s, l, c in chords if s <= beat < s + l), None)  # noqa: E731

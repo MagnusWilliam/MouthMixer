@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MouthMixer</title>
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -143,7 +144,7 @@
         <span id="sg-level" class="meter inline"><span></span></span>
       </div>
       <div class="row small">
-        <span>Timing offset: <b id="sg-lat">0</b> ms</span>
+        <span>Timing offset: <b id="sg-lat">0 ms</b></span>
         <button id="sg-sync" class="ghost" title="Measures how late your recordings arrive">Sync test</button>
         <input type="range" id="sg-latr" min="-100" max="400" value="0" title="Fine-tune: if your voice sounds late, move right">
       </div>
@@ -162,6 +163,17 @@
             <option value="keep">stays</option></select></label>
           <button id="sg-make" class="primary">Make this vocal track</button>
         </div>
+        <details id="sg-tweaks-box" class="tweaks-box">
+          <summary><b>Voice tweaks</b> <span class="small muted">pitch, tone, breath, grit, tuning, doubling, a harmony voice,
+            echo, space, effects. Saved per track; anything you don't touch stays as the voice and style set it.</span></summary>
+          <div id="sg-tweaks" class="tweaks"></div>
+          <div class="row">
+            <button id="sg-preview">▶ Preview (8 s of your newest take on this track, no band)</button>
+            <button id="sg-tw-reset" class="ghost">Reset tweaks</button>
+            <audio id="sg-prev-audio" controls class="hidden"></audio>
+            <span id="sg-prev-msg" class="small muted"></span>
+          </div>
+        </details>
         <div id="sg-result"></div>
       </div>
     </div>
@@ -196,9 +208,9 @@
   <section id="make" class="hidden">
     <div id="mk-home">
       <h2>Make a track</h2>
-      <p class="hint">Pick a starter beat. Then record pieces on purpose over it (a beat, a bassline, a hook, a
-        vocal chop…). Each recording becomes a piece you can switch on and off, give another instrument, and
-        place in the song.</p>
+      <p class="hint">Pick a starter beat. Then mix and match ready-made parts (beats, basslines, chords, riffs,
+        stabs, hooks…) or record your own. Each piece can be switched on and off, given another sound, made
+        simpler or busier, and placed in the song.</p>
       <h3>Start from the songbook</h3>
       <p class="hint">Songs ready to make: the lyrics, the right starter beat, the sections and a plan for your voices.</p>
       <div id="mk-songbook" class="starter-cards"></div>
@@ -233,23 +245,34 @@
       <h3>Your favourites <span class="hint">(pieces you saved from any track: they move to this key and tempo)</span></h3>
       <div id="mk-favs" class="chips"></div>
 
-      <h3>Record a piece</h3>
-      <div class="mk-slots">
-        <div><div class="small muted">Loops (they repeat)</div><div id="mk-slots-loop" class="chips choose"></div></div>
-        <div><div class="small muted">One-off parts (they play once per section)</div><div id="mk-slots-one" class="chips choose"></div></div>
-      </div>
-      <div id="mk-rec" class="card inner hidden">
-        <p id="mk-rec-hint" class="hint"></p>
-        <div class="row">
-          <label class="small">Length <select id="mk-rec-bars"><option>1</option><option>2</option><option>4</option><option>8</option></select> bars</label>
-          <button id="mk-rec-go" class="rec">● Record</button>
-          <button id="mk-rec-stop" disabled>■ Stop</button>
-          <span id="mk-rec-pass" class="mono"></span>
-          <span class="meter inline" id="mk-level"><span></span></span>
+      <h3>Ready-made parts <span class="hint">(mix and match: click one to add it or swap it in, then tweak it with ⋯)</span></h3>
+      <div class="small muted">Groove combos: a beat, bassline and chords that go together</div>
+      <div id="mk-combos" class="chips choose"></div>
+      <div id="mk-pcats" class="chips choose pcats"></div>
+      <div id="mk-pitems" class="preset-items"></div>
+
+      <details id="mk-own" class="card inner">
+        <summary><b>Record your own (optional)</b> <span class="small muted">hum or beatbox a piece over the loop</span></summary>
+        <div class="mk-slots">
+          <div><div class="small muted">Loops (they repeat)</div><div id="mk-slots-loop" class="chips choose"></div></div>
+          <div><div class="small muted">One-off parts (they play once per section)</div><div id="mk-slots-one" class="chips choose"></div></div>
         </div>
-        <p class="small muted">One bar of clicks, then it loops. Do it as many times as you like: every time round is a
-          take, and the best one is picked for you. Press Stop when you're happy.</p>
-      </div>
+        <div id="mk-rec" class="card inner hidden">
+          <p id="mk-rec-hint" class="hint"></p>
+          <p id="mk-timing" class="small"></p>
+          <p id="mk-timing-msg" class="small"></p>
+          <div class="row">
+            <label class="small">Length <select id="mk-rec-bars"><option>1</option><option>2</option><option>4</option><option>8</option></select> bars</label>
+            <button id="mk-rec-go" class="rec">● Record</button>
+            <button id="mk-rec-stop" disabled>■ Stop</button>
+            <span id="mk-rec-pass" class="mono"></span>
+            <span class="meter inline" id="mk-level"><span></span></span>
+          </div>
+          <p class="small muted">One bar of clicks, then it loops. Do it as many times as you like: every time round is a
+            take, and the best one is picked for you. Press Stop when you're happy.</p>
+        </div>
+
+      </details>
 
       <details id="mk-lyrics-box" class="card inner">
         <summary><b>Have lyrics? Set the song up from them</b></summary>

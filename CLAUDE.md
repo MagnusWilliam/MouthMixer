@@ -14,8 +14,9 @@ Constraints that hold for every session:
   suggestions) and simple controls. Allowed at the user's request: the Incredibox-style piece/part controls
   (on/off, sound swap, octave, volume, add/remove, simpler/busier) and one-note fixes in Make (up/down,
   earlier/later, longer/shorter, delete). No drawing notes from scratch.
-- **The main workflow is Make** (record on purpose over a starter beat). Background listening is off by
-  default and optional.
+- **The main workflow is Make**: pick a starter beat, mix and match **ready-made parts** (`studio/presets.py`)
+  and tweak them; recording your own pieces is a side option. Background listening is off by default and
+  optional.
 - **Free instruments and CC0/permissive samples only**, each with a licence note.
 - **LINE ZERO stays untouched** until the user approves the tool and its music.
 - Change a critic rule's value only with a line in `docs/MUSIC_KNOWLEDGE.md` §13 (tuning log).

@@ -432,15 +432,48 @@ const Sing = {
     fill("#sg-track", opts.tracks.map((t) => `<option>${esc(t)}</option>`).join(""), true);
     fill("#sg-mk-track", opts.tracks.map((t) => `<option>${esc(t)}</option>`).join(""), true);
     fill("#sg-character", opts.characters.map((c) => `<option value="${c.id}">${esc(c.label)}</option>`).join(""), true);
+    this.tweakSpec = opts.tweaks || [];
+    this.renderTweaks();
     const t = await api(songUrl("/takes"));
     this.takes = t.takes;
     this.latency = t.latency_ms || 0;
-    $("#sg-lat").textContent = Math.round(this.latency);
+    this.measured = !!t.latency_measured;
+    $("#sg-lat").textContent = this.measured ? Math.round(this.latency) + " ms" : `about ${latencyEstimateMs()} ms (a guess: press Sync test)`;
     $("#sg-latr").value = Math.round(this.latency);
     $("#sg-preset").innerHTML = presets.map((p) => `<option value="${p.id}"${p.id === t.preset ? " selected" : ""}>${esc(p.label)}${p.id === t.preset ? " (suits this style)" : ""}</option>`).join("");
     await this.listMics();
     this.renderTakes();
     this.draw();
+  },
+  // Voice tweaks: only the settings you touch are sent; they're remembered per vocal track.
+  tweakKey() { return "mm-tweaks:" + ($("#sg-mk-track").value || "Lead"); },
+  getTweaks() { try { return JSON.parse(localStorage.getItem(this.tweakKey()) || "{}"); } catch { return {}; } },
+  setTweaks(t) { try { localStorage.setItem(this.tweakKey(), JSON.stringify(t)); } catch { } },
+  renderTweaks() {
+    const box = $("#sg-tweaks"); if (!box) return;
+    const t = this.getTweaks();
+    box.innerHTML = "";
+    for (const sp of this.tweakSpec || []) {
+      const el = document.createElement("label");
+      el.className = "tweak" + (sp.id in t ? " set" : "");
+      if (sp.options) {
+        el.innerHTML = `<span>${esc(sp.label)}</span><select>${sp.options.map(([v, l]) =>
+          `<option value="${esc(v)}"${(t[sp.id] ?? "") === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
+        el.querySelector("select").onchange = (e) => {
+          const cur = this.getTweaks();
+          if (e.target.value) cur[sp.id] = e.target.value; else delete cur[sp.id];
+          this.setTweaks(cur); el.classList.toggle("set", sp.id in cur);
+        };
+      } else {
+        const v = t[sp.id] ?? sp.default;
+        el.innerHTML = `<span>${esc(sp.label)} <b class="mono">${sp.id in t ? (v > 0 && sp.min < 0 ? "+" : "") + v : "–"}</b></span>
+          <input type="range" min="${sp.min}" max="${sp.max}" step="${sp.step}" value="${v}" title="${esc(sp.hint || "")}">`;
+        const r = el.querySelector("input"), b = el.querySelector("b");
+        r.oninput = () => { b.textContent = (r.value > 0 && sp.min < 0 ? "+" : "") + r.value; };
+        r.onchange = () => { const cur = this.getTweaks(); cur[sp.id] = +r.value; this.setTweaks(cur); el.classList.add("set"); };
+      }
+      box.appendChild(el);
+    }
   },
   async listMics() {
     try {
@@ -529,7 +562,7 @@ const Sing = {
     const st = $("#sg-result");
     busy($("#sg-status"), "Checking the take…");
     try {
-      const t = await api(songUrl(`/takes?start=${start.toFixed(4)}&section=${encodeURIComponent(rec.range && this.section.name)}&v=${curV()}&track=${encodeURIComponent($("#sg-track").value || "Lead")}`),
+      const t = await api(songUrl(`/takes?start=${start.toFixed(4)}&section=${encodeURIComponent(rec.range && this.section.name)}&v=${curV()}&track=${encodeURIComponent($("#sg-track").value || "Lead")}&est_ms=${latencyEstimateMs()}`),
         { method: "POST", body: wavBlob(all, sr) });
       busy($("#sg-status"), "");
       this.takes.push(t);
@@ -674,12 +707,24 @@ for (const id of ["#sg-music", "#sg-guide"]) $(id).oninput = () => {
 };
 $("#sg-latr").onchange = async () => {
   const s = await post("/api/settings", { vocal_latency_ms: +$("#sg-latr").value });
-  Sing.latency = s.vocal_latency_ms; $("#sg-lat").textContent = Math.round(Sing.latency);
+  Sing.latency = s.vocal_latency_ms; Sing.measured = true; $("#sg-lat").textContent = Math.round(Sing.latency) + " ms";
 };
-// Sync test: 8 clicks; say "ta" on each one. Your recorded "ta"s land late by the round-trip latency.
-$("#sg-sync").onclick = async () => {
-  const st = $("#sg-result");
-  try { await Sing.openMic(); } catch (e) { st.textContent = "Couldn't open the mic: " + e.message; return; }
+// How late recordings arrive, as the browser sees it (sound out to the headphones plus the mic back in).
+// Used until the sync test has measured the real delay.
+function latencyEstimateMs() {
+  const ctx = Eng.ctx;
+  if (!ctx) return 0;
+  let ms = ((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000;
+  let inMs = 10;
+  try { const st = Sing.stream && Sing.stream.getAudioTracks()[0].getSettings(); if (st && st.latency) inMs = st.latency * 1000; } catch { }
+  return Math.round(ms + inMs);
+}
+window.latencyEstimateMs = latencyEstimateMs;
+
+// Sync test: 12 clicks; say "ta" on each one (the first four are a count-in). Your recorded "ta"s land late
+// by the round trip; the median is saved and used for every recording from then on (Make and Sing).
+async function syncTest(st) {
+  try { await Sing.openMic(); } catch (e) { st.textContent = "Couldn't open the mic: " + e.message; return null; }
   Eng.stop(true);
   const ctx = Eng.ctx, spb = 0.6, n = 12, at = ctx.currentTime + 0.5;
   Eng.from = 0; Eng.t0 = at; Eng.playing = true;
@@ -695,19 +740,25 @@ $("#sg-sync").onclick = async () => {
     let e = 0; for (let j = i; j < i + hop; j++) e += c.d[j] * c.d[j];
     env.push({ t: Sing.songPosAt(c.t + i / sr), e: Math.sqrt(e / hop) });
   }
-  const peak = Math.max(...env.map((x) => x.e));
+  const peak = env.length ? Math.max(...env.map((x) => x.e)) : 0;
   const thr = peak * 0.25, offs = [];
   for (let i = 4; i < n; i++) {
-    const want = i * spb, hit = env.find((x) => x.t > want - 0.25 && x.t < want + 0.45 && x.e > thr);
+    const want = i * spb, hit = env.find((x) => x.t > want - 0.2 && x.t < want + 0.5 && x.e > thr);
     if (hit) offs.push((hit.t - want) * 1000);
   }
-  if (offs.length < 5 || peak < 0.01) { st.textContent = "Didn't hear enough \"ta\"s. Try again a bit louder."; return; }
+  if (offs.length < 5 || peak < 0.01) { st.textContent = "Didn't hear enough \"ta\"s. Try again a bit louder."; return null; }
   offs.sort((a, b) => a - b);
   const med = offs[Math.floor(offs.length / 2)], spread = offs.at(-1) - offs[0];
   const s = await post("/api/settings", { vocal_latency_ms: med });
-  Sing.latency = s.vocal_latency_ms; $("#sg-lat").textContent = Math.round(med); $("#sg-latr").value = Math.round(med);
-  st.textContent = `Your recordings arrive ${Math.round(med)} ms late; that's now corrected.` +
+  Sing.latency = s.vocal_latency_ms; Sing.measured = true;
+  st.textContent = `Your recordings arrive ${Math.round(med)} ms late; that's now corrected for every recording.` +
     (spread > 120 ? " Your taps were uneven, so you may want to run it once more." : "");
+  return med;
+}
+window.syncTest = syncTest;
+$("#sg-sync").onclick = async () => {
+  const med = await syncTest($("#sg-result"));
+  if (med != null) { $("#sg-lat").textContent = Math.round(med) + " ms"; $("#sg-latr").value = Math.round(med); }
 };
 $("#sg-make").onclick = async () => {
   const st = $("#sg-result");
@@ -718,7 +769,8 @@ $("#sg-make").onclick = async () => {
   busy($("#sg-status"), "Picking the best line from each take, cleaning, timing, tuning and mixing… (about a minute)");
   try {
     const r = await post(songUrl("/vocals"), { v: curV(), preset: $("#sg-preset").value, lead_mode: $("#sg-lead").value,
-      track: $("#sg-mk-track").value || "Lead", character: $("#sg-character").value || "natural", tune: $("#sg-tune").value });
+      track: $("#sg-mk-track").value || "Lead", character: $("#sg-character").value || "natural", tune: $("#sg-tune").value,
+      tweaks: Sing.getTweaks() });
     const q = r.vocals.quality;
     busy($("#sg-status"), "");
     Mix.state = null;
@@ -730,6 +782,23 @@ $("#sg-make").onclick = async () => {
       `vocal ${r.vocals.vocal_gain_db > 0 ? "+" : ""}${r.vocals.vocal_gain_db} dB to sit with the music.</p>`;
   } catch (e) { busy($("#sg-status"), ""); st.textContent = errText(e); }
   $("#sg-make").disabled = false;
+};
+
+$("#sg-mk-track").onchange = () => Sing.renderTweaks();
+$("#sg-tw-reset").onclick = () => { Sing.setTweaks({}); Sing.renderTweaks(); };
+$("#sg-preview").onclick = async () => {
+  const msg = $("#sg-prev-msg"), au = $("#sg-prev-audio"), btn = $("#sg-preview");
+  btn.disabled = true; busy(msg, "Making the preview…");
+  try {
+    const res = await fetch(songUrl("/vocals/preview"), { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ v: curV(), track: $("#sg-mk-track").value || "Lead", character: $("#sg-character").value || "natural",
+        preset: $("#sg-preset").value, tweaks: Sing.getTweaks() }) });
+    if (!res.ok) { let d = ""; try { d = (await res.json()).detail; } catch { } throw new Error(d || res.statusText); }
+    if (au.src) URL.revokeObjectURL(au.src);
+    au.src = URL.createObjectURL(await res.blob());
+    au.classList.remove("hidden"); busy(msg, ""); Eng.stop(true); au.play();
+  } catch (e) { busy(msg, ""); msg.textContent = e.message; }
+  btn.disabled = false;
 };
 
 $("#bg-listen").onchange = async () => { await post("/api/settings", { background_listening: $("#bg-listen").checked }); setTimeout(refreshStatus, 1500); };

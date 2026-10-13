@@ -33,7 +33,15 @@ class Settings:
     claude_api_key: str = ""
     # Background listening (catching hums while you work) is off: you record on purpose in the Make tab.
     background_listening: bool = False
-    vocal_latency_ms: float = 0.0  # measured by the sync test on the Sing screen
+    vocal_latency_ms: float = 0.0  # measured by the sync test (Make or Sing), or set by hand
+    latency_measured: bool = False  # until it is, recordings use the browser's own estimate of the delay
+
+    def latency_ms(self, estimate_ms: float | None = None) -> float:
+        """How late recordings arrive: the measured value, else the browser's estimate (sound out to your
+        ears plus the mic back in), else 0."""
+        if self.latency_measured or estimate_ms is None:
+            return self.vocal_latency_ms
+        return float(max(0.0, min(400.0, estimate_ms)))
 
     @classmethod
     def load(cls) -> "Settings":

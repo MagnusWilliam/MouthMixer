@@ -343,7 +343,7 @@ class Mixer:
     # --- vocals ---------------------------------------------------------------------------------
     def with_vocals(self, takes: list, preset_name: str | None = None, lead_mode: str = "duck",
                     choice: dict | None = None, lyrics: dict | None = None, tune: str = "auto",
-                    track: str = "Lead", character: str = "natural") -> dict:
+                    track: str = "Lead", character: str = "natural", tweaks: dict | None = None) -> dict:
         """Process your takes (vocals.produce), set them against this mix and save a new version with a
         "Your vocals" part you can mute or turn up in the mixer like any other."""
         from . import vocals
@@ -364,16 +364,16 @@ class Mixer:
                     modes.setdefault(sec["name"], "rap")
             res = vocals.produce_free(takes, self.v["bpm"], self.v["sections"], song.tonic, song.mode, name, total,
                                       modes, choice, character=character,
-                                      stack_all=track in ("Gang", "Backing", "Harmony"))
+                                      stack_all=track in ("Gang", "Backing", "Harmony"), tweaks=tweaks)
         else:
             res = vocals.produce(takes, lead_notes, self.v["bpm"], self.v["sections"], song.tonic, song.mode, name,
-                                 total, choice, character=character)
+                                 total, choice, character=character, tweaks=tweaks)
         music, lead, _, _ = self._stems(n)
         voc = res.stereo[:, :n]
         if voc.shape[1] < n:
             voc = np.pad(voc, ((0, 0), (0, n - voc.shape[1])))
         env = vocals.voice_envelope(res.f0_after, n)
-        pr = vocals.preset(name)
+        pr = vocals.tweak_preset(vocals.preset(name), tweaks)
         pr = dict(pr, level_lu=pr["level_lu"] + VOCAL_TRACKS.get(track, -4.0))
         _, voc, _ = vocals.sit_in_song(music, voc, env, pr, lead, lead_mode, res.report)
         h = hashlib.sha1(voc[:, ::97].tobytes()).hexdigest()[:12]

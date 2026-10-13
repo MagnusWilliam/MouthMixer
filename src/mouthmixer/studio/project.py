@@ -26,7 +26,7 @@ from .. import config
 from ..arrange import arranger, critic, render, theory
 from ..arrange.mixer import write_json
 from ..arrange.styles import INSTRUMENTS, PACKS
-from . import starters, transcribe
+from . import presets, starters, transcribe
 
 # slot -> what it is. kind: loop (repeats) | one (plays once per section, from its start)
 SLOTS = {
@@ -344,9 +344,16 @@ class Project:
         """simpler: drop short off-beat notes / merge repeats. busier: split long notes into a rhythm.
         Drums: simpler keeps kick, snare and on-beat hats; busier adds 16th hats and ghost snares."""
         p = self.piece(pid)
+        if p.get("gen"):
+            return self._gen_variation(p, kind)
         notes = [list(n) for n in p["notes"]]
         drums = p["instrument"].startswith("kit:")
-        if kind == "simpler":
+        if kind in ("earlier", "later"):
+            # The whole piece a 16th earlier or later (wrapping round the loop): for takes that came out late.
+            L = p["bars"] * 4
+            d = -0.25 if kind == "earlier" else 0.25
+            notes = [[round((n[0] + d) % L, 4), n[1], n[2], n[3]] for n in notes]
+        elif kind == "simpler":
             if drums:
                 notes = [n for n in notes if n[2] in (36, 38, 39, 64) or abs(n[0] - round(n[0])) < 0.01]
             else:
@@ -378,6 +385,78 @@ class Project:
         p["notes"] = sorted(notes)
         self.save()
         return p
+
+    # --- ready-made parts (presets.py) ------------------------------------------------------------
+    def _gen_variation(self, p: dict, kind: str) -> dict:
+        """Simpler / busier for a groove part: a level from -2 to 2 that thins or fills its pattern."""
+        if p["gen"] not in presets.GROOVES or kind not in ("simpler", "busier"):
+            raise ValueError("this part has no simpler or busier version")
+        p["busy"] = int(np.clip(int(p.get("busy", 0)) + (1 if kind == "busier" else -1), -2, 2))
+        self.save()
+        return p
+
+    def _phrase(self, p: dict, preset_id: str):
+        """Lay a preset phrase onto the main chords: its notes, and the chord roots they were written over."""
+        pr = presets.PHRASES[preset_id]
+        p["preset"], p["bars"], p["slot"] = preset_id, pr["bars"], pr["slot"]
+        p["name"] = pr["name"]
+        drums = "rows" in pr
+        prog = self.progression("A", pr["bars"])
+        p["notes"] = presets.render_phrase(preset_id, prog, self.st["tonic"], self.st["mode"])
+        p["over"] = [] if drums else [c.root for _, _, c in prog]
+        p["takes"], p["take"], p["audio"] = [], None, None
+
+    def add_preset(self, preset_id: str) -> dict:
+        """A ready-made part. A beat, bassline or chord groove changes that part of the track (the starter's
+        own, or a new one if it was deleted); a phrase becomes a new piece in the sections it suits."""
+        for gen, table in presets.GROOVES.items():
+            if preset_id in table:
+                q = next((x for x in self.pieces if x.get("gen") == gen), None)
+                if q is None:
+                    slot = {"drums": "beat", "bass": "bass", "comp": "chords"}[gen]
+                    q = self._new_piece(slot, source="starter", name=f"Starter {SLOTS[slot]['label'].lower()}",
+                                        instrument=self._default_instrument(slot), gen=gen)
+                    self._default_sections(q)
+                q["pattern"], q["busy"] = preset_id, 0
+                self.save()
+                return q
+        if preset_id not in presets.PHRASES:
+            raise KeyError(preset_id)
+        pr = presets.PHRASES[preset_id]
+        q = self._new_piece(pr["slot"], source="preset", name=pr["name"], instrument=pr.get("instrument", ""),
+                            bars=pr["bars"])
+        self._phrase(q, preset_id)
+        self._default_sections(q)
+        self.save()
+        return q
+
+    def set_pattern(self, pid: str, pattern: str) -> dict:
+        """Swap a groove part's pattern ("" = the starter's own) or a preset piece's phrase."""
+        p = self.piece(pid)
+        if p.get("gen") in presets.GROOVES:
+            if pattern and pattern not in presets.GROOVES[p["gen"]]:
+                raise ValueError("unknown pattern")
+            p["pattern"], p["busy"] = pattern, 0
+        elif p.get("preset"):
+            pr = presets.PHRASES.get(pattern)
+            if pr is None or pr["slot"] != p["slot"]:
+                raise ValueError("unknown pattern")
+            old = p["instrument"]
+            self._phrase(p, pattern)
+            p["instrument"] = old
+        else:
+            raise ValueError("only ready-made parts have patterns")
+        self.save()
+        return p
+
+    def apply_combo(self, combo_id: str) -> None:
+        """A named set of beat, bassline and chord grooves at once."""
+        c = presets.COMBOS[combo_id]
+        for gen, key in (("drums", "beat"), ("bass", "bass"), ("comp", "chords")):
+            for q in self.pieces:
+                if q.get("gen") == gen:
+                    q["pattern"], q["busy"] = c[key], 0
+        self.save()
 
     # --- favourites: pieces you reuse across tracks -----------------------------------------------
     def favourite(self, pid: str, name: str = "") -> dict:
@@ -450,8 +529,8 @@ class Project:
         import soundfile as sf
 
         p = self.piece(pid)
-        if p["source"] == "starter":
-            raise ValueError("starter parts aren't recorded")
+        if p["source"] in ("starter", "preset"):
+            raise ValueError("ready-made parts aren't recorded: add a new piece to record your own")
         rid = f"r{int(time.time() * 1000) % 10 ** 10}"
         sf.write(str(self.dir / "takes" / f"{rid}.wav"), audio, sr, subtype="FLOAT")
         bars = p["bars"]
@@ -694,7 +773,8 @@ class Project:
             fills = p["gen"] == "drums" and bars >= 8 and not last_section and next_feel not in ("breakdown",)
             return starters.generate(p["gen"], self.st, chords, (start_bar, start_bar + bars), fills=fills,
                                      melody=melody, rng=np.random.default_rng(int(p["id"][1:] or 0) * 7 + 1),
-                                     feel=feel, next_feel=next_feel)
+                                     feel=feel, next_feel=next_feel, style=p.get("pattern") or "",
+                                     busy=int(p.get("busy", 0)))
         if not p["notes"]:
             return []
         L = p["bars"] * 4
@@ -785,7 +865,8 @@ class Project:
         reverb tails wrap around). Returns (file name in stems/, loop seconds). Cached by content."""
         p = self.piece(pid)
         cb = self.cycle_bars(p)
-        key = json.dumps([p["notes"], p["instrument"], p["octave"], p.get("gen"), p.get("audio"), p["over"], which, cb,
+        key = json.dumps([p["notes"], p["instrument"], p["octave"], p.get("gen"), p.get("pattern"), p.get("busy"),
+                          p.get("audio"), p["over"], which, cb,
                           self.st["tonic"], self.st["bpm"], self.st["a"], self.st["b"], p["slot"]], default=float)
         name = f"booth-{pid}-{which}-{hashlib.sha1(key.encode()).hexdigest()[:12]}.ogg"
         loop_s = cb * 4 * self.spb
@@ -843,6 +924,10 @@ class Project:
             q = dict(p)
             q["takes"] = [{k: v for k, v in t.items() if k != "notes"} for t in p["takes"]]
             q["choices"] = _choices(p)
+            if p.get("gen") in presets.GROOVES:
+                q["patterns"] = presets.groove_options(p["gen"])
+            elif p.get("preset"):
+                q["patterns"] = presets.phrase_options(p["slot"])
             pieces.append(q)
         d["pieces"] = pieces
         return d

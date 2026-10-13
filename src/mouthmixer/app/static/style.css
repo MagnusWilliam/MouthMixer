@@ -199,3 +199,21 @@ table.board { border-collapse: collapse; font-size: 12.5px; min-width: 100%; }
 .chip.fav { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; }
 .chip.fav button { padding: 1px 8px; font-size: 12px; }
 .secdrop { width: 100%; margin-top: 2px; font-size: 11.5px; padding: 2px; }
+
+/* Make: ready-made parts */
+.pcats { margin-top: 10px; }
+.preset-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin: 8px 0 14px; }
+.preset-items > p { grid-column: 1 / -1; margin: 0; }
+button.preset { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; }
+button.preset.on { outline: 2px solid var(--clean); }
+.tile select.pat { margin-bottom: 4px; }
+#mk-own summary, #mk-lyrics-box summary { cursor: pointer; }
+
+/* Sing: voice tweaks */
+.tweaks-box { margin-top: 10px; }
+.tweaks-box summary { cursor: pointer; }
+.tweaks { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px 16px; margin: 10px 0; }
+.tweak { display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.tweak span { color: var(--muted); }
+.tweak.set span { color: var(--ink); }
+.tweak input[type=range] { width: 100%; }

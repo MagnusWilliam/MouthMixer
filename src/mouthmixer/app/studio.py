@@ -65,7 +65,8 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         s = config.Settings.load()
         return {"has_claude_key": bool(s.claude_api_key or os.environ.get("ANTHROPIC_API_KEY")),
                 "claude_key_from_env": bool(os.environ.get("ANTHROPIC_API_KEY")) and not s.claude_api_key,
-                "vocal_latency_ms": s.vocal_latency_ms, "background_listening": s.background_listening}
+                "vocal_latency_ms": s.vocal_latency_ms, "latency_measured": s.latency_measured,
+                "background_listening": s.background_listening}
 
     @app.post("/api/settings")
     def set_settings(body: dict = Body(...)):
@@ -74,6 +75,7 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
             s.claude_api_key = str(body["claude_api_key"] or "").strip()
         if "vocal_latency_ms" in body:
             s.vocal_latency_ms = float(max(-500.0, min(1000.0, float(body["vocal_latency_ms"]))))
+            s.latency_measured = True
         if "background_listening" in body:
             on = bool(body["background_listening"])
             if on != s.background_listening:
@@ -254,7 +256,11 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         import soundfile as sf
 
         x, sr = sf.read(str(takes_path(song_id) / t["file"]), dtype="float32", always_2d=True)
-        return vocals.Take.from_recording(x.mean(axis=1), sr, t["start_sec"], t["latency_ms"], t["id"])
+        lat = t["latency_ms"]
+        s = config.Settings.load()
+        if t.get("latency_estimated") and s.latency_measured:  # recorded on a guess; the sync test has run since
+            lat = s.vocal_latency_ms
+        return vocals.Take.from_recording(x.mean(axis=1), sr, t["start_sec"], lat, t["id"])
 
     def lead_notes(v: dict) -> list:
         return [n for t in v["tracks"] if t["role"] == "lead" for n in t["notes"]]
@@ -269,18 +275,19 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
 
         return {"presets": [{"id": k, "label": p["label"]} for k, p in vocals.PRESETS.items()],
                 "characters": [{"id": k, "label": c["label"]} for k, c in vocals.CHARACTERS.items()],
-                "tracks": list(VOCAL_TRACKS)}
+                "tracks": list(VOCAL_TRACKS), "tweaks": vocals.TWEAKS}
 
     @app.get("/api/songs/{song_id}/takes")
     def get_takes(song_id: str):
         rec = record(song_id)
         v = rec["versions"][version_of(song_id, None)]
         return {"takes": takes_list(song_id), "preset": PACKS[v["pack"]].get("vocal_preset", "soul"),
-                "latency_ms": config.Settings.load().vocal_latency_ms}
+                "latency_ms": config.Settings.load().vocal_latency_ms,
+                "latency_measured": config.Settings.load().latency_measured}
 
     @app.post("/api/songs/{song_id}/takes")
     async def add_take(song_id: str, request: Request, start: float = 0.0, section: str = "", v: int | None = None,
-                       track: str = "Lead"):
+                       track: str = "Lead", est_ms: float | None = None):
         """A recorded take (WAV body). `start`: the song position (seconds) when recording began."""
         import soundfile as sf
 
@@ -296,9 +303,10 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
         vi = version_of(song_id, v)
         tid = time.strftime("%H%M%S") + "-" + uuid.uuid4().hex[:4]
         sf.write(str(takes_path(song_id) / f"{tid}.wav"), x, sr, subtype="FLOAT")
-        t = {"id": tid, "file": f"{tid}.wav", "start_sec": start, "latency_ms": config.Settings.load().vocal_latency_ms,
+        t = {"id": tid, "file": f"{tid}.wav", "start_sec": start, "latency_ms": config.Settings.load().latency_ms(est_ms),
              "section": section, "version": vi, "created": time.time(), "seconds": round(len(x) / sr, 2),
-             "track": str(track or "Lead")[:20]}
+             "track": str(track or "Lead")[:20],
+             "latency_estimated": not config.Settings.load().latency_measured and est_ms is not None}
         v_ = record(song_id)["versions"][vi]
         notes = vocals.notes_in_seconds(lead_notes(v_), v_["bpm"], v_["sections"])
         t["score"] = vocals.score_take(load_take(song_id, t), notes)
@@ -325,6 +333,37 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
                 return FileResponse(takes_path(song_id) / t["file"], media_type="audio/wav")
         raise HTTPException(404)
 
+    @app.post("/api/songs/{song_id}/vocals/preview")
+    def preview_vocals(song_id: str, body: dict = Body(default={})):
+        """A few seconds of your newest take on a track with a voice and tweaks, no band: a WAV to listen to."""
+        import io
+
+        import soundfile as sf
+        from fastapi.responses import Response
+
+        track = str(body.get("track") or "Lead")[:20]
+        items = [t for t in takes_list(song_id) if t.get("track", "Lead") == track]
+        if not items:
+            raise HTTPException(400, f"record a take on the {track} track first")
+        t = items[-1]
+        m = mx(song_id, body.get("v"))
+        song = m.song(False)
+        modes = {x["section"]: x.get("mode", "sung") for x in m.v.get("lyric_sheet", [])}
+        for sec, feel in zip(m.v["sections"], m.v.get("section_feels", [])):
+            if feel == "rap":
+                modes.setdefault(sec["name"], "rap")
+        untuned = track in ("Rap", "Announcer", "Whisper") or modes.get(t.get("section")) in ("rap", "spoken", "whisper")
+        character = body.get("character") if body.get("character") in vocals.CHARACTERS else "natural"
+        preset = body.get("preset") if body.get("preset") in vocals.PRESETS else PACKS[m.v["pack"]].get("vocal_preset")
+        try:
+            y = vocals.preview(load_take(song_id, t), song.tonic, song.mode, preset, character,
+                               vocals.clean_tweaks(body.get("tweaks")), untuned=untuned)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        buf = io.BytesIO()
+        sf.write(buf, y.T, vocals.SR, format="WAV", subtype="PCM_16")
+        return Response(buf.getvalue(), media_type="audio/wav")
+
     @app.post("/api/songs/{song_id}/vocals")
     def make_vocals(song_id: str, body: dict = Body(default={})):
         """Comp, clean, tune, time, process and mix the takes into a new version of the song."""
@@ -347,7 +386,8 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
             try:
                 tune = body.get("tune", "auto") if body.get("tune") in ("auto", "melody", "key") else "auto"
                 character = body.get("character") if body.get("character") in vocals.CHARACTERS else "natural"
-                new = m.with_vocals(takes, preset, lead_mode, lyrics=lyr, tune=tune, track=track, character=character)
+                new = m.with_vocals(takes, preset, lead_mode, lyrics=lyr, tune=tune, track=track, character=character,
+                                    tweaks=vocals.clean_tweaks(body.get("tweaks")))
             except ValueError as e:
                 raise HTTPException(400, str(e))
         return new_version(song_id, new)

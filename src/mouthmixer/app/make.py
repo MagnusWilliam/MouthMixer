@@ -34,6 +34,22 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
     def get_starters():
         return {"moods": [{"id": k, **v} for k, v in starters.MOODS.items()], "starters": starters.public()}
 
+    @app.get("/api/presets")
+    def get_presets():
+        from ..studio import presets
+
+        return presets.public()
+
+    @app.post("/api/projects/{pid}/presets")
+    def add_preset(pid: str, body: dict = Body(...)):
+        with _lock(pid):
+            p = proj(pid)
+            try:
+                q = p.add_preset(str(body.get("preset", "")))
+            except KeyError:
+                raise HTTPException(404, "no such ready-made part")
+            return p.public() | {"added": q["id"]}
+
     @app.get("/api/projects")
     def projects():
         return list_projects()
@@ -76,6 +92,11 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
                 p.save()
             if "tonic" in body:
                 p.set_key(int(body["tonic"]))
+            if body.get("combo"):
+                try:
+                    p.apply_combo(str(body["combo"]))
+                except KeyError:
+                    raise HTTPException(404, "no such combo")
             if body.get("lyrics"):
                 try:
                     p.apply_lyrics(str(body["lyrics"])[:20000])
@@ -139,6 +160,8 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
                     p.variation(qid, body["variation"])
                 elif body.get("take"):
                     p.choose_take(qid, body["take"])
+                elif "pattern" in body:
+                    p.set_pattern(qid, str(body["pattern"] or ""))
                 else:
                     p.edit_piece(qid, **{k: body.get(k) for k in ("name", "instrument", "octave", "gain_db", "repeat")})
             except KeyError:
@@ -158,8 +181,9 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
             return p.public()
 
     @app.post("/api/projects/{pid}/pieces/{qid}/record")
-    async def record(pid: str, qid: str, request: Request, start: float = 0.0):
-        """A booth recording (WAV). `start`: loop time in seconds of the first sample, before latency."""
+    async def record(pid: str, qid: str, request: Request, start: float = 0.0, est_ms: float | None = None):
+        """A booth recording (WAV). `start`: loop time in seconds of the first sample, before latency.
+        `est_ms`: the browser's own estimate of the round trip, used until the sync test has been done."""
         from .server import _wav_from_body
 
         body = await request.body()
@@ -167,7 +191,7 @@ def add_routes(app: FastAPI, lib, paths: dict) -> None:
             y, sr = _wav_from_body(body)
         except Exception:
             raise HTTPException(400, "not a WAV file")
-        lat = config.Settings.load().vocal_latency_ms / 1000.0
+        lat = config.Settings.load().latency_ms(est_ms) / 1000.0
         with _lock(pid):
             p = proj(pid)
             try:

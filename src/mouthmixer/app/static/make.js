@@ -8,8 +8,11 @@ const SLOT_ICON = { beat: "🥁", bass: "〰", riff: "⚡", stab: "💥", chop: 
 const SLOT_COLOR = { beat: "drums", fill: "drums", perc: "perc", bass: "bass", riff: "riff", stab: "riff", chop: "vocal",
   hook: "lead", lead: "lead", bridge: "lead", counter: "counter", intro: "counter", chords: "comp", pad: "pad" };
 
+const GEN_PATTERNS = { drums: 1, bass: 1, comp: 1 };
+const BUSY_WORD = { "-2": "much simpler", "-1": "simpler", 0: "as written", 1: "busier", 2: "much busier" };
+
 const Make = {
-  proj: null, starters: null, which: "A", on: {}, loops: [], playing: false, sel: null, selNote: null,
+  proj: null, starters: null, presets: null, pcat: "beat", which: "A", on: {}, loops: [], playing: false, sel: null, selNote: null,
   slot: null, recPiece: null, recording: false,
 
   async open() {
@@ -99,6 +102,7 @@ const Make = {
       <b>Band hits on vocal accents:</b> ${esc(sbk.hits || "no")}<br><span class="muted">${esc(sbk.notes)}</span>`;
     for (const q of p.pieces) if (!(q.id in this.on)) this.on[q.id] = true;
     this.renderSlots(); this.renderPieces(); this.renderDetail(); this.renderBoard(); this.renderFavs();
+    this.renderPresets();
     $("#mk-built").innerHTML = p.song_id ? `Built before. <a href="#" id="mk-open">Open it in Songs</a> (Mix, Lyrics, Sing).` : "";
     const o = $("#mk-open"); if (o) o.onclick = (e) => { e.preventDefault(); this.openSong(p.song_id); };
     await this.loadLoops();
@@ -106,7 +110,7 @@ const Make = {
   async refresh(p) {  // after any change: new state from the server, new loops
     if (p) this.proj = p;
     for (const q of this.proj.pieces) if (!(q.id in this.on)) this.on[q.id] = true;
-    this.renderPieces(); this.renderDetail(); this.renderBoard();
+    this.renderPieces(); this.renderDetail(); this.renderBoard(); this.renderPresets();
     await this.loadLoops();
   },
 
@@ -141,6 +145,7 @@ const Make = {
       if (!buf || !q) continue;
       const src = ctx.createBufferSource();
       src.buffer = buf; src.loop = true;
+      src.loopStart = 0; src.loopEnd = Math.min(l.seconds, buf.duration);  // exactly n bars: loops can't drift apart
       const g = ctx.createGain();
       g.gain.value = this.on[q.id] && q.id !== exclude ? this.gainOf(q) : 0;
       src.connect(g).connect(Eng.master);
@@ -177,19 +182,23 @@ const Make = {
       const el = document.createElement("div");
       el.className = `tile r-${SLOT_COLOR[q.slot] || "lead"}` + (this.on[q.id] ? "" : " off") + (this.sel === q.id ? " solo" : "");
       const empty = !q.notes.length && !q.gen && !q.audio;
+      const pats = q.patterns && q.patterns.length > 1 ? `<select class="pat" title="Swap the pattern">${q.patterns.map((o) =>
+        `<option value="${esc(o.id)}"${o.id === (q.gen ? q.pattern || "" : q.preset) ? " selected" : ""}>${esc(o.name)}</option>`).join("")}</select>` : "";
       const choices = q.choices.length > 1 ? `<select title="Swap the sound">${q.choices.map((c) =>
         `<option value="${esc(c)}"${c === q.instrument ? " selected" : ""}>${esc(prettySound(c))}</option>`).join("")}</select>`
         : `<span class="small muted">${esc(prettySound(q.instrument))}</span>`;
       el.innerHTML = `
         <button class="power" title="On / off">${SLOT_ICON[q.slot] || "♪"}</button>
-        <div class="tname">${esc(q.name)}${q.source === "starter" ? ' <span class="tag">starter</span>' : ' <span class="yours">yours</span>'}</div>
-        <div class="trole small muted">${esc(this.proj.slots[q.slot].label)} · ${q.bars} bar${q.bars > 1 ? "s" : ""}${empty ? " · not recorded yet" : ""}</div>
-        ${choices}
+        <div class="tname">${esc(q.name)}${q.source === "starter" ? ' <span class="tag">starter</span>' : q.source === "preset" ? ' <span class="tag">ready-made</span>' : ' <span class="yours">yours</span>'}</div>
+        <div class="trole small muted">${esc(this.proj.slots[q.slot].label)} · ${q.bars} bar${q.bars > 1 ? "s" : ""}${empty ? " · not recorded yet" : ""}${q.busy ? " · " + BUSY_WORD[q.busy] : ""}</div>
+        ${pats}${choices}
         <div class="tctl"><input type="range" min="-18" max="6" step="1" value="${q.gain_db || 0}" title="Volume">
           <button class="ghost more" title="Takes, notes, variations">⋯</button></div>`;
       el.querySelector(".power").onclick = () => { this.setOn(q.id, !this.on[q.id]); el.classList.toggle("off", !this.on[q.id]); };
-      const sel = el.querySelector("select");
+      const sel = el.querySelector("select:not(.pat)");
       if (sel) sel.onchange = async () => this.refresh(await post(this.url(`/pieces/${q.id}`), { instrument: sel.value }));
+      const pat = el.querySelector("select.pat");
+      if (pat) pat.onchange = async () => this.refresh(await post(this.url(`/pieces/${q.id}`), { pattern: pat.value }));
       const vol = el.querySelector("input[type=range]");
       vol.oninput = () => { q.gain_db = +vol.value; Eng.setGain(q.id, this.gainOf(q), this.on[q.id]); };
       vol.onchange = () => post(this.url(`/pieces/${q.id}`), { gain_db: q.gain_db });
@@ -206,9 +215,12 @@ const Make = {
     const takes = q.takes.slice().sort((a, b) => b.score - a.score);
     const pitched = !q.instrument.startsWith("kit:") && q.source !== "voice";
     box.innerHTML = `
-      <div class="row"><b>${esc(q.name)}</b><span class="small muted">${esc(this.proj.slots[q.slot].hint || "")}</span><span class="spacer"></span>
+      <div class="row"><b>${esc(q.name)}</b><span class="small muted">${q.source === "starter" || q.source === "preset" ? esc((q.patterns || []).find((o) => o.id === (q.gen ? q.pattern || "" : q.preset))?.name || "") : esc(this.proj.slots[q.slot].hint || "")}</span><span class="spacer"></span>
         <button class="ghost" data-a="close">Close</button></div>
-      ${q.source === "starter" ? `<p class="small muted">A starter part: it follows each section's chords. Switch it off, swap its sound, or record your own ${esc(this.proj.slots[q.slot].label.toLowerCase())} to replace it.</p>` : ""}
+      ${q.source === "starter" ? `<p class="small muted">A starter part: it follows each section's chords and feel (the intro builds, a chorus
+        lifts, a rap verse drops into its pocket).${q.gen in GEN_PATTERNS ? " Pick another pattern on its tile, make it simpler or busier here, or swap its sound." : " Switch it off or swap its sound."}</p>` : ""}
+      ${q.source === "preset" ? `<p class="small muted">A ready-made part on this track's chords: it follows other chords too. Pick another
+        pattern on its tile, fix single notes below, or make it simpler or busier.</p>` : ""}
       ${q.notes.length ? `<canvas class="notes" height="140"></canvas>
       <div class="row small noteops">
         <span class="muted">Click a note, then:</span>
@@ -219,11 +231,13 @@ const Make = {
         <button data-op="delete" title="Remove the note">✕</button>
       </div>` : ""}
       <div class="row small">
-        ${q.notes.length ? `<button data-v="simpler">Simpler</button><button data-v="busier">Busier</button>` : ""}
+        ${q.notes.length || q.gen in GEN_PATTERNS ? `<button data-v="simpler">Simpler</button><button data-v="busier">Busier</button>` : ""}
+        ${q.notes.length ? `<span title="Move the whole piece: use this if your recording came out a little late or early">Whole piece
+          <button data-v="earlier">◀ earlier</button><button data-v="later">later ▶</button></span>` : ""}
         ${pitched ? `<span>Octave <button data-o="-1">−</button> <b>${q.octave > 0 ? "+" : ""}${q.octave}</b> <button data-o="1">+</button></span>` : ""}
         ${q.kind === "one" && !this.proj.slots[q.slot].at_end ? `<label><input type="checkbox" data-a="repeat"${q.repeat ? " checked" : ""}> Repeat to fill the section</label>` : ""}
         <span class="spacer"></span>
-        ${q.source !== "starter" ? `<button data-a="again">● Record more takes</button>` : ""}
+        ${q.source !== "starter" && q.source !== "preset" ? `<button data-a="again">● Record more takes</button>` : ""}
         ${q.source !== "starter" && (q.notes.length || q.audio) ? `<button data-a="fav">★ Save to favourites</button>` : ""}
         <button data-a="delete" class="ghost">Delete piece</button>
       </div>
@@ -319,6 +333,57 @@ const Make = {
     }
   },
 
+  // ---- ready-made parts ----------------------------------------------------------------------
+  async renderPresets() {
+    if (!this.presets) {
+      try { this.presets = await api("/api/presets"); } catch { return; }
+    }
+    const P = this.presets, cur = {};
+    for (const q of this.proj.pieces) if (q.gen in GEN_PATTERNS && !(q.gen in cur)) cur[q.gen] = q.pattern || "";
+    const cb = $("#mk-combos");
+    cb.innerHTML = "";
+    for (const c of P.combos) {
+      const b = document.createElement("button");
+      const on = cur.drums === undefined ? false : ["drums", "bass", "comp"].every((g, i) => (cur[g] ?? "") === ([c.beat, c.bass, c.chords][i] ?? ""));
+      b.className = "chip" + (on ? " on" : "");
+      b.innerHTML = `<b>${esc(c.name)}</b>`;
+      b.title = c.describe;
+      b.onclick = async () => { b.disabled = true; await this.refresh(await post(this.url(""), { combo: c.id })); };
+      cb.appendChild(b);
+    }
+    const cats = $("#mk-pcats");
+    cats.innerHTML = "";
+    for (const c of P.categories) {
+      const b = document.createElement("button");
+      b.className = "chip" + (c.id === this.pcat ? " on" : "");
+      b.textContent = c.label;
+      b.onclick = () => { this.pcat = c.id; this.renderPresets(); };
+      cats.appendChild(b);
+    }
+    const cat = P.categories.find((c) => c.id === this.pcat) || P.categories[0];
+    const box = $("#mk-pitems");
+    box.innerHTML = cat.gen ? `<p class="small muted">Changes the ${esc(cat.label.toLowerCase())} everywhere in the song; each section
+      still shapes it (intro build-up, chorus lift, rap pocket, breakdown, ending).</p>` :
+      `<p class="small muted">Adds a new piece in the sections it suits (see the song board). Add as many as you like.</p>`;
+    for (const it of cat.items) {
+      const b = document.createElement("button");
+      const on = cat.gen && cur[cat.gen] === it.id;
+      b.className = "preset" + (on ? " on" : "");
+      b.innerHTML = `<b>${esc(it.name)}</b><span class="small muted">${esc(it.describe)}</span>`;
+      b.onclick = async () => {
+        b.disabled = true;
+        try {
+          const r = await post(this.url("/presets"), { preset: it.id });
+          this.on[r.added] = true;
+          if (!cat.gen) this.sel = r.added;
+          await this.refresh(r);
+          if (!this.playing) this.play();
+        } catch (e) { $("#mk-status").textContent = errText(e); b.disabled = false; }
+      };
+      box.appendChild(b);
+    }
+  },
+
   // ---- recording ------------------------------------------------------------------------------
   renderSlots() {
     const p = this.proj;
@@ -345,8 +410,23 @@ const Make = {
     $("#mk-rec-bars").value = String(q ? q.bars : s.bars);
     $("#mk-rec-bars").disabled = !!q;
     $("#mk-rec-pass").textContent = "";
+    this.renderTiming();
     this.renderSlots();
     $("#mk-rec").scrollIntoView({ block: "nearest" });
+  },
+  async renderTiming() {
+    const s = await api("/api/settings");
+    this.latency = s.vocal_latency_ms; this.measured = s.latency_measured;
+    $("#mk-timing").innerHTML = this.measured
+      ? `Timing correction: <b>${Math.round(s.vocal_latency_ms)} ms</b> (measured). <button class="ghost" id="mk-sync">Sync test again</button>`
+      : `<b>Do the 10-second sync test first</b> so your recordings land on the beat: it measures how late your
+         headphones and mic are. Until then a guess is used (${Eng.ctx ? "about " + latencyEstimateMs() + " ms" : "from the browser"}).
+         <button id="mk-sync" class="primary">Sync test</button>`;
+    $("#mk-sync").onclick = async () => {
+      this.stop();
+      const med = await syncTest($("#mk-timing-msg"));
+      if (med != null) this.renderTiming();
+    };
   },
   async record() {
     const st = $("#mk-status");
@@ -387,6 +467,7 @@ const Make = {
       if (!buf || !q) continue;
       const src = ctx.createBufferSource();
       src.buffer = buf; src.loop = true;
+      src.loopStart = 0; src.loopEnd = Math.min(l.seconds, buf.duration);
       const g = ctx.createGain();
       g.gain.value = this.on[q.id] && q.id !== exclude ? this.gainOf(q) : 0;
       src.connect(g).connect(Eng.master);
@@ -409,7 +490,8 @@ const Make = {
     const st = $("#mk-status");
     busy(st, "Reading your takes…");
     try {
-      const r = await api(this.url(`/pieces/${this.recPiece}/record?start=${start.toFixed(4)}`), { method: "POST", body: wavBlob(all, sr) });
+      const r = await api(this.url(`/pieces/${this.recPiece}/record?start=${start.toFixed(4)}&est_ms=${latencyEstimateMs()}`),
+        { method: "POST", body: wavBlob(all, sr) });
       busy(st, "");
       const q = r.pieces.find((x) => x.id === this.recPiece);
       $("#mk-rec-pass").textContent = `${r.new_takes.length} take${r.new_takes.length === 1 ? "" : "s"} saved`;
