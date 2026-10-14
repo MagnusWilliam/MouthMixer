@@ -184,7 +184,9 @@ def _wait_with_splash(port: int, seconds: float = 120) -> bool:
 
 
 def open_app(port: int) -> None:
-    _open_window(f"http://127.0.0.1:{port}/")
+    # A new address per code version: the window can't show a page it cached before an update.
+    v = app_version(port) or str(int(time.time()))
+    _open_window(f"http://127.0.0.1:{port}/?v={v}")
 
 
 def _open_window(url: str) -> None:

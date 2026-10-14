@@ -285,6 +285,12 @@ def test_scripts_are_served_as_javascript(home):
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/javascript")
     assert "registerProcessor" in r.text
     assert c.get("/static/../server.py").status_code == 404
+    # after an update the window must load the new page and scripts, never cached old ones
+    from mouthmixer.runtime import code_version
+
+    page = c.get("/")
+    assert "no-cache" in page.headers["cache-control"] and "no-cache" in r.headers["cache-control"]
+    assert f'/static/app.js?v={code_version()}' in page.text and f'/static/make.js?v={code_version()}' in page.text
 
 
 def _onset_offsets_ms(stem, sr, truth_onsets, window):

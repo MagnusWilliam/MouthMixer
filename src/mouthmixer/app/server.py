@@ -179,9 +179,21 @@ def create_app(start_worker: bool = True) -> FastAPI:
     app = FastAPI(title="MouthMixer", lifespan=lifespan)
     app.state.lib, app.state.worker, app.state.paths = lib, worker, paths
 
+    # The page must never come from the browser's cache after an update (the app window kept showing the
+    # old page and scripts): no-cache on everything, and the scripts' links carry the code version.
+    NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
+
     @app.get("/")
     def index():
-        return FileResponse(STATIC / "index.html")
+        from fastapi.responses import HTMLResponse
+
+        from ..runtime import code_version
+
+        v = code_version()
+        html = (STATIC / "index.html").read_text(encoding="utf-8")
+        for name in ("app.js", "studio.js", "make.js", "style.css"):
+            html = html.replace(f'"/static/{name}"', f'"/static/{name}?v={v}"')
+        return HTMLResponse(html, headers=NO_CACHE)
 
     @app.get("/static/{name}")
     def static(name: str):
@@ -190,7 +202,7 @@ def create_app(start_worker: bool = True) -> FastAPI:
             raise HTTPException(404)
         # Explicit types: Windows can map .js to text/plain, and the browser refuses a worklet served that way.
         kind = {".js": "text/javascript", ".css": "text/css", ".html": "text/html"}.get(p.suffix)
-        return FileResponse(p, media_type=kind) if kind else FileResponse(p)
+        return FileResponse(p, media_type=kind, headers=NO_CACHE) if kind else FileResponse(p, headers=NO_CACHE)
 
     @app.get("/api/ping")
     def ping():
