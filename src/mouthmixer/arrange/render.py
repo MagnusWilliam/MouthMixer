@@ -40,26 +40,94 @@ def _synth():
     return _SYNTH
 
 
-def render_track(track: Track, bpm: float, total_sec: float, rng) -> np.ndarray:
+# Played brass and saxes (docs/ARRANGING.md "Making brass sound played"): a scoop into phrase starts,
+# vibrato that comes in partway through long notes, phrases shaped louder into the top note and softer
+# at the end, and single lines doubled by a second player a few cents and ms away. Values are [U].
+PLAYED = {"trumpet", "trombone", "muted_trumpet", "french_horn", "brass_section", "brass_section_2", "tuba",
+          "soprano_sax", "alto_sax", "tenor_sax", "baritone_sax"}
+DOUBLED = {"trumpet", "trombone", "muted_trumpet", "soprano_sax", "alto_sax", "tenor_sax", "baritone_sax"}
+BEND_CENTER, BEND_PER_CENT = 8192, 8192 / 200  # default bend range: 2 semitones = 200 cents
+
+
+def _phrase_velocities(notes: list, spb: float) -> list[int]:
+    """Velocities shaped per phrase (a gap of half a beat starts a new one): the first note and the top
+    note leaned on, the last one lighter unless it's held."""
+    out = [int(n[3]) for n in notes]
+    order = sorted(range(len(notes)), key=lambda i: notes[i][0])
+    phrase: list[int] = []
+
+    def close(ph):
+        if not ph:
+            return
+        top = max(ph, key=lambda i: notes[i][2])
+        out[ph[0]] += 6
+        out[top] += 8
+        if len(ph) > 2 and notes[ph[-1]][1] < 1.0:
+            out[ph[-1]] -= 8
+
+    for k, i in enumerate(order):
+        if phrase and notes[i][0] - (notes[phrase[-1]][0] + notes[phrase[-1]][1]) > 0.5:
+            close(phrase)
+            phrase = []
+        phrase.append(i)
+    close(phrase)
+    return [int(np.clip(v, 1, 127)) for v in out]
+
+
+def _bends(notes: list, spb: float, rng) -> list[tuple[float, int]]:
+    """Pitch-bend moves (time, cents) for a played line: a 40-cent scoop over 60 ms into each phrase
+    start, and on notes of half a second or more a 5.4 Hz vibrato that starts after a quarter of the note
+    and grows to about 18 cents."""
+    out: list[tuple[float, int]] = []
+    starts = sorted(notes, key=lambda n: n[0])
+    prev_end = -1e9
+    for s, l, p, v in starts:
+        t0, dur = s * spb, l * spb
+        if s - prev_end > 0.4:  # a phrase start: scoop up into it
+            for k in range(7):
+                out.append((t0 + k * 0.01, int(-40 * (1 - k / 6) ** 2)))
+        else:
+            out.append((t0, 0))
+        if dur >= 0.5:
+            a, b = t0 + min(0.3, 0.25 * dur), t0 + dur - 0.03
+            rate, ph = 5.4 + rng.normal(0, 0.2), rng.uniform(0, 6.28)
+            t = a
+            while t < b:
+                depth = 18 * min(1.0, (t - a) / 0.25)
+                out.append((t, int(depth * np.sin(ph + 2 * np.pi * rate * (t - a)))))
+                t += 0.015
+            out.append((b, 0))
+        prev_end = max(prev_end, s + l)
+    return out
+
+
+def render_track(track: Track, bpm: float, total_sec: float, rng, _double: bool = False) -> np.ndarray:
     """One part -> stereo float32 array (2, n)."""
     synth, sfid = _synth()
     spb = 60.0 / bpm
     is_drums = track.instrument.startswith("kit:")
+    played = not is_drums and track.instrument in PLAYED
     if is_drums:
         synth.program_select(9, sfid, 128, KITS[track.instrument[4:]], True)
         chan = 9
     else:
         bank, prog = INSTRUMENTS[track.instrument][:2]
-        synth.program_select(0, sfid, bank, prog)
-        chan = 0
+        chan = 1 if _double else 0
+        synth.program_select(chan, sfid, bank, prog)
     jitter = 0.003 if is_drums else 0.007
+    vels = _phrase_velocities(track.notes, spb) if played else [n[3] for n in track.notes]
+    offset = 0.014 if _double else 0.0  # the second player, a little behind
     events = []
-    for s, l, p, v in track.notes:
-        t0 = max(0.0, s * spb + rng.normal(0, jitter))
-        vel = int(np.clip(v + rng.normal(0, 4), 1, 127))
+    for (s, l, p, v), vv in zip(track.notes, vels):
+        t0 = max(0.0, s * spb + offset + rng.normal(0, jitter))
+        vel = int(np.clip(vv + rng.normal(0, 4) - (8 if _double else 0), 1, 127))
         events.append((t0, 1, int(p), vel))
         events.append((t0 + max(0.05, l * spb), 0, int(p), 0))
-    events.sort(key=lambda e: (e[0], e[1]))  # note-offs before note-ons at the same time
+    if played:
+        detune = 7 if _double else 0
+        for t, cents in _bends(track.notes, spb, rng):
+            events.append((t + offset, 2, int(BEND_CENTER + (cents + detune) * BEND_PER_CENT), 0))
+    events.sort(key=lambda e: (e[0], e[1]))  # note-offs before note-ons at the same time, bends after
     n_total = int(total_sec * SR)
     out = np.zeros((n_total, 2), dtype=np.float32)
     pos = 0
@@ -68,16 +136,35 @@ def render_track(track: Track, bpm: float, total_sec: float, rng) -> np.ndarray:
         if target > pos:
             out[pos:target] = np.frombuffer(synth.generate(target - pos), dtype=np.float32).reshape(-1, 2)
             pos = target
-        if on:
+        if on == 2:
+            synth.pitchbend(chan, int(np.clip(p, 0, 16383)))
+        elif on:
             synth.noteon(chan, p, vel)
         else:
             synth.noteoff(chan, p)
     if pos < n_total:
         out[pos:] = np.frombuffer(synth.generate(n_total - pos), dtype=np.float32).reshape(-1, 2)
     synth.notes_off()
+    if not is_drums:
+        synth.pitchbend(chan, BEND_CENTER)
     synth.generate(SR // 2)  # let the synth fall silent before the next part
     gain = 1.0 if is_drums else INSTRUMENTS[track.instrument][5]
-    return (out.T * gain).astype(np.float32)
+    out = (out.T * gain).astype(np.float32)
+    if played and not _double and track.instrument in DOUBLED and not _chordal(track.notes):
+        # a single line gets a second player: same part, a few cents sharp and 14 ms late, the two
+        # spread a little left and right (a section, not one sample)
+        dbl = render_track(track, bpm, total_sec, rng, _double=True)
+        main_, second = out.mean(axis=0), dbl.mean(axis=0) * 10 ** (-5 / 20)
+        out = np.stack([main_ * 0.9 + second * 0.45, main_ * 0.62 + second * 0.82]).astype(np.float32)
+    return out
+
+
+def _chordal(notes: list) -> bool:
+    """Mostly chords (several notes starting together), like stabs: those aren't doubled."""
+    if not notes:
+        return False
+    starts = [round(n[0], 3) for n in notes]
+    return len(set(starts)) < 0.75 * len(starts)
 
 
 def _pan(x: np.ndarray, pan: float) -> np.ndarray:
@@ -130,6 +217,12 @@ def _fx(track: Track, pack: dict, bpm: float):
             fx += [Chorus(rate_hz=0.6, depth=0.2, mix=0.35)]
         if pack.get("drive") and role == "lead" and "guitar" in track.instrument:
             fx += [Distortion(drive_db=8), Gain(-6)]
+        if track.instrument in PLAYED:
+            # brass and saxes: less boxy midrange, a touch of bite and air
+            from pedalboard import HighShelfFilter
+
+            fx += [PeakFilter(cutoff_frequency_hz=380, gain_db=-2.5, q=1.0), Distortion(drive_db=3), Gain(-2),
+                   HighShelfFilter(cutoff_frequency_hz=7000, gain_db=2.0, q=0.7)]
     return Pedalboard(fx)
 
 

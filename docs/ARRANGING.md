@@ -196,3 +196,21 @@ loud/high/fast reads high-arousal; slow/soft reads sad or tender. [S] https://pm
   into sections (§6), percussion toppers, interlocking stabs and off-beat chops (R3.2).
 - Not yet: the 7-part clutter warning in the UI, R1.6's "drop an old part when a new one enters"
   automation, per-subset layer testing for game loops (§7), and loop rendering with folded tails.
+
+
+## Making brass sound played (2026-10-14)
+
+The user found the trumpets flat. Brass and saxophones (`render.PLAYED`) now get what players do and
+sample playback doesn't (all values [U], tune by ear):
+
+- **Scoop:** each phrase start begins 40 cents flat and rises to pitch over 60 ms (pitch bend).
+- **Delayed vibrato:** on notes of half a second or more, 5.4 Hz vibrato starts after a quarter of the
+  note and grows to about ±18 cents (measured on a rendered trumpet: ~30 cents flat at the attack, ~37
+  cents peak-to-peak in the held part; a piano stays within 2).
+- **Phrase shape:** the first note and the top note of each phrase are leaned on (+6 / +8 velocity), a
+  short last note is lighter (-8). Velocity also changes the sample layer, so this changes the tone too.
+- **A second player** on single lines (trumpet, trombone, muted trumpet, saxes): the same part 7 cents sharp
+  and 14 ms late, 5 dB down, the two spread left and right. Chord stabs aren't doubled.
+- **EQ:** -2.5 dB at 380 Hz (boxiness), light saturation for bite, +2 dB shelf above 7 kHz.
+
+Fills no longer land in breakdowns (the drums are out) or build-ups (they have their own snare roll).

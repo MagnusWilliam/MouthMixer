@@ -1151,6 +1151,8 @@ the Make tab says so plainly if the starters can't load.
   and picking a section switches to its singer. A chorus straight after a rap also gets the 1-bar freeze.
   "Last Train, First Light" was smoothed and re-laid out (2:58): 8-bar intro, an instrumental after the
   first chorus, a half chorus after the rap, every section ending on a hand-off line.
+- **Brass sounds played** (ARRANGING "Making brass sound played"): scoops, delayed vibrato, phrase-shaped
+  velocity, a second player on single lines, brass EQ. Fills stay out of breakdowns and build-ups.
 - Not yet: auditioning a ready-made part before adding it (adding plays it; delete or swap if it's wrong);
   per-section voice tweaks within one track.
 - **Next:** the user runs the sync test in Make, builds "Last Train, First Light" from a combo and a few

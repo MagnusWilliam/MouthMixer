@@ -259,12 +259,15 @@ class Project:
         kinds = DEFAULT_PLAYS.get(piece["slot"], {"hook"})
         worded = self._worded()
         busy = piece["slot"] in ("hook", "lead", "riff", "counter", "chop", "perc", "stab", "intro")
-        for s in self.data["sections"]:
+        feels = _feels(self.data["sections"], self.st["mood"])
+        for s, feel in zip(self.data["sections"], feels):
             kind = _section_kind(s["name"])
             if kind not in kinds or piece["id"] in s["parts"]:
                 continue
             if busy and s["id"] in worded and kind in ("verse", "rap", "pre") and piece["slot"] != "lead":
                 continue
+            if piece["slot"] == "fill" and feel in ("breakdown", "pre"):
+                continue  # no drum fill where the drums are out, and a build-up already has its own roll
             s["parts"].append(piece["id"])
 
     def add_piece(self, slot: str, bars: int | None = None) -> dict:

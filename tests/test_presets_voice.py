@@ -386,3 +386,40 @@ def test_lyrics_say_who_sings_each_part(home):
     # a line with a colon that isn't a singer stays as written
     p.apply_lyrics("[Verse 1, Verse lead]\nNote: this stays\nTwo\n")
     assert p.lyric_sheet()[0]["lines"][0] == "Note: this stays"
+
+
+def test_brass_is_played_not_flat():
+    """Trumpets scoop into phrases and get vibrato on long notes, single lines get a second player
+    (stereo), chord stabs don't, and other instruments are left alone."""
+    from mouthmixer.arrange import render
+    from mouthmixer.arrange.arranger import Track
+
+    def cents(inst, notes):
+        x = render.render_track(Track("t", "lead", inst, notes), 120, 3.0, np.random.default_rng(2))
+        f0, _ = V.track_f0(x.mean(axis=0).astype(np.float32), fast=False)
+        t = np.arange(len(f0)) * 0.005
+        c = 1200 * np.log2(np.maximum(f0, 1) / 392.0)
+        return x, t, c, f0
+
+    x, t, c, f0 = cents("trumpet", [(0, 4, 67, 95)])
+    start = c[(t < 0.04) & (f0 > 0)]
+    late = c[(t > 1.2) & (t < 1.9) & (f0 > 0)]
+    assert np.median(start) < -12 and np.ptp(late) > 20  # a scoop, then vibrato
+    assert np.abs(x[0] - x[1]).mean() > 1e-4  # doubled: two players, left and right
+    xp, tp, cp, fp = cents("piano", [(0, 4, 67, 95)])
+    assert np.ptp(cp[(tp > 1.2) & (tp < 1.9) & (fp > 0)]) < 8  # a piano stays put
+    chords = [(b, 0.5, p, 100) for b in (0, 2) for p in (62, 65, 69)]
+    assert render._chordal(chords) and not render._chordal([(0, 4, 67, 95)])
+    stabs = render.render_track(Track("s", "riff", "trumpet", chords), 120, 2.0, np.random.default_rng(1))
+    assert np.abs(stabs[0] - stabs[1]).mean() < 1e-6  # chords aren't doubled (the trumpet itself is mono)
+
+
+def test_fills_stay_out_of_breakdowns_and_builds(home):
+    from mouthmixer.studio import songbook
+
+    song = next(s for s in songbook.songs() if s["title"].startswith("Last Train"))
+    p = Project.create(song["starter"], song["title"])
+    p.apply_lyrics(song["lyrics"])
+    q = p.add_preset("fill_roll")
+    on = [s["name"] for s in p.data["sections"] if q["id"] in s["parts"]]
+    assert "Verse 1" in on and "Bridge" not in on and "Bridge build" not in on
