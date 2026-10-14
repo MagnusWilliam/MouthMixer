@@ -8,3 +8,8 @@ dist/
 /library/
 *.wav
 !tests/data/*.wav
+
+# Reference songs for analysis: never commit copyrighted audio.
+/reference_audio/
+*.flac
+*.mp3
