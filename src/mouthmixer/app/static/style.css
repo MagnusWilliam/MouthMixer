@@ -255,3 +255,6 @@ button.preset.on { outline: 2px solid var(--clean); }
 .karaoke .now .pill.sing { font-size: 13px; }
 .chip .who { margin-left: 4px; }
 .chip .who .dot { width: 8px; height: 8px; margin-left: 1px; }
+
+.tctl .vol-ico { font-size: 13px; }
+.tctl .db { font-size: 11px; min-width: 40px; text-align: right; color: var(--muted); }

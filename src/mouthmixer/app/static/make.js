@@ -9,6 +9,7 @@ const SLOT_COLOR = { beat: "drums", fill: "drums", perc: "perc", bass: "bass", r
   hook: "lead", lead: "lead", bridge: "lead", counter: "counter", intro: "counter", chords: "comp", pad: "pad" };
 
 const GEN_PATTERNS = { drums: 1, bass: 1, comp: 1 };
+const fmtDb = (d) => (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d) + " dB";
 const BUSY_WORD = { "-2": "much simpler", "-1": "simpler", 0: "as written", 1: "busier", 2: "much busier" };
 
 const Make = {
@@ -205,7 +206,8 @@ const Make = {
         <div class="tname">${esc(q.name)}${q.source === "starter" ? ' <span class="tag">starter</span>' : q.source === "preset" ? ' <span class="tag">ready-made</span>' : ' <span class="yours">yours</span>'}</div>
         <div class="trole small muted">${esc(this.proj.slots[q.slot].label)} · ${q.bars} bar${q.bars > 1 ? "s" : ""}${empty ? " · not recorded yet" : ""}${q.busy ? " · " + BUSY_WORD[q.busy] : ""}</div>
         ${pats}${choices}
-        <div class="tctl"><input type="range" min="-18" max="6" step="1" value="${q.gain_db || 0}" title="Volume">
+        <div class="tctl"><span class="vol-ico" title="Volume (dB)">🔊</span><input type="range" min="-18" max="6" step="1" value="${q.gain_db || 0}" title="Volume: drag left for quieter">
+          <span class="db mono">${fmtDb(q.gain_db || 0)}</span>
           <button class="ghost more" title="Takes, notes, variations">⋯</button></div>`;
       el.querySelector(".power").onclick = () => { this.setOn(q.id, !this.on[q.id]); el.classList.toggle("off", !this.on[q.id]); };
       const sel = el.querySelector("select:not(.pat)");
@@ -213,7 +215,7 @@ const Make = {
       const pat = el.querySelector("select.pat");
       if (pat) pat.onchange = async () => this.refresh(await post(this.url(`/pieces/${q.id}`), { pattern: pat.value }));
       const vol = el.querySelector("input[type=range]");
-      vol.oninput = () => { q.gain_db = +vol.value; Eng.setGain(q.id, this.gainOf(q), this.on[q.id]); };
+      vol.oninput = () => { q.gain_db = +vol.value; el.querySelector(".db").textContent = fmtDb(q.gain_db); Eng.setGain(q.id, this.gainOf(q), this.on[q.id]); };
       vol.onchange = () => post(this.url(`/pieces/${q.id}`), { gain_db: q.gain_db });
       el.querySelector(".more").onclick = () => { this.sel = this.sel === q.id ? null : q.id; this.selNote = null; this.renderPieces(); this.renderDetail(); };
       box.appendChild(el);
