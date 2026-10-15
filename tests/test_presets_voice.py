@@ -333,6 +333,8 @@ def test_vocals_land_where_they_were_sung_and_choices_and_nudges_work(home):
     for seed, step in ((3, 2), (4, 3)):  # two takes of the verse with different rhythms
         notes = [(count_in / spb + b, 0.9, 62 + ((b + seed) % 3) * 3) for b in range(0, sec["bars"] * 4 - 2, step)]
         x, truth = S.sing(notes, v["bpm"], pre_roll=0.0, sibilants=0, breaths=False, seed=seed, detune_cents=10)
+        # a real take runs until you press stop: past the end of the section, so it covers all of it
+        x = np.pad(x, (0, max(0, int((count_in + (b_ - a) + 0.5) * 44100) - len(x))))
         b = io.BytesIO()
         sf.write(b, (x * 0.6).astype(np.float32), 44100, format="WAV", subtype="FLOAT")  # sing() is 44.1 kHz
         t = c.post(f"/api/songs/{sid}/takes?start={a - count_in:.4f}&section=Verse%201&track=Verse%20lead&est_ms=0",

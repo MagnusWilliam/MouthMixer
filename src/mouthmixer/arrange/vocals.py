@@ -36,7 +36,7 @@ DEFAULT = {
     "delay_beats": 0.75, "slap_ms": 0, "throws": True, "bandpass": None, "shimmer": 0.0, "octave_layer": 0.0,
     "level_lu": -1.0, "deess_db": 6.0,
     # Switches for each step (the "Processing" tweaks): raw skips everything but level and timing.
-    "raw": False, "highpass": True, "denoise": 0.35, "breaths": True, "compress": 1.0,
+    "raw": False, "highpass": True, "denoise": 0.35, "breaths": True, "compress": 1.0, "tone_match": True,
 }
 PRESETS = {
     "soul": {"label": "Soul / city pop: warm, natural tuning, plate", "strength": 0.6, "retune_ms": 45,
@@ -838,6 +838,22 @@ def resonance(x: np.ndarray, voiced: np.ndarray) -> tuple[float, float]:
     return float(f[band][i]), float((db - smooth)[band][i])
 
 
+# The nine reference songs' separated vocals (docs/REFERENCE_ANALYSIS.md §4): median level of each band
+# against 200-1000 Hz, in dB.
+REF_TONE = {"3-6k": -18.4, "6-10k": -25.0, "10-16k": -28.2}
+
+
+def vocal_tone(x: np.ndarray, voiced: np.ndarray | None = None) -> dict:
+    """Bands against 200-1000 Hz (dB), over the sung part when `voiced` is given."""
+    from scipy.signal import welch
+
+    y = x[voiced[: len(x)]] if voiced is not None and voiced[: len(x)].sum() > SR // 2 else x
+    f, pw = welch(y.astype(np.float64), SR, nperseg=4096)
+    ref = pw[(f >= 200) & (f < 1000)].mean() + 1e-20
+    return {k: round(float(10 * np.log10(pw[(f >= lo) & (f < hi)].mean() / ref + 1e-20)), 1)
+            for k, (lo, hi) in {"3-6k": (3000, 6000), "6-10k": (6000, 10000), "10-16k": (10000, 16000)}.items()}
+
+
 def deess(x: np.ndarray, max_db: float, top: float = 0.15) -> tuple[np.ndarray, float]:
     """Split-band de-esser on 5-10 kHz: only the loudest ~15% of sibilant moments, up to `max_db`."""
     band = _filt(x, _sos("band", [5000, 10000], 2))
@@ -989,6 +1005,23 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
         x = Pedalboard(eq)(x[None], SR)[0]
         did(report, "Brightness", "band-passed (lo-fi)" if p["bandpass"] else
             f"presence {p['presence_db']:+.1f} dB at 3.5 kHz, air {p['air_db']:+.1f} dB above 11 kHz")
+    # 6b match the reference tone (docs/REFERENCE_ANALYSIS.md §4): lift presence and air toward the nine
+    # reference vocals' medians, capped so a dark take doesn't turn to hiss. Not for lo-fi or a flat EQ.
+    if p["tone_match"] and not p["bandpass"] and (p["presence_db"] or p["air_db"]):
+        tone = vocal_tone(x, voiced)
+        lift_p = float(np.clip(REF_TONE["3-6k"] - tone["3-6k"], 0, 4))
+        # an 11 kHz shelf lifts 6-10 kHz by about a third as much: keep that band within 2 dB of the references
+        lift_a = float(np.clip(min(REF_TONE["10-16k"] - tone["10-16k"], 3 * (REF_TONE["6-10k"] + 2 - tone["6-10k"])), 0, 8))
+        fx2 = []
+        if lift_p >= 0.5:
+            fx2.append(PeakFilter(cutoff_frequency_hz=4500, gain_db=lift_p, q=0.7))
+        if lift_a >= 0.5:
+            fx2.append(HighShelfFilter(cutoff_frequency_hz=11000, gain_db=lift_a, q=0.7))
+        if fx2:
+            x = Pedalboard(fx2)(x[None], SR)[0]
+            report["tone_match"] = {"before": tone, "presence_db": round(lift_p, 1), "air_db": round(lift_a, 1)}
+            did(report, "Tone match", f"presence +{lift_p:.1f} dB, air +{lift_a:.1f} dB toward the reference vocals "
+                f"(air was {tone['10-16k']:.0f} dB, references {REF_TONE['10-16k']:.0f})")
     # 7 saturation. 8 riding.
     if p["sat"] > 0:
         x = _saturate(x, p["sat"])
@@ -1693,6 +1726,8 @@ TWEAKS = [
      "options": [["", "as the style sets it"], ["off", "off"], ["light", "light"], ["strong", "strong"]]},
     {"id": "eq", "label": "Brightness (presence and air)", "group": "steps",
      "options": [["", "as the style sets it"], ["off", "off (flat)"], ["bright", "brighter"]]},
+    {"id": "tonematch", "label": "Match the reference vocals' brightness", "group": "steps", "hint": "lifts presence "
+     "and air toward the nine reference songs' vocals (up to +4 / +8 dB)", "options": [["", "on"], ["off", "off"]]},
     {"id": "pitch", "label": "Pitch (notes of the key)", "hint": "higher or lower by notes of the key, so it stays in key "
      "(7 = an octave)", "min": -7, "max": 7, "step": 1, "default": 0},
     {"id": "tone", "label": "Tone", "hint": "bigger and darker (left) or smaller and lighter (right); any change re-voices with WORLD, which softens detail", "min": -30,
@@ -1774,6 +1809,8 @@ def tweak_preset(p: dict, t: dict | None) -> dict:
         p["deess_db"] = {"off": 0.0, "strong": 10.0}[t["deess"]]
     if "compress" in t:
         p["compress"] = {"off": 0.0, "light": 0.5, "strong": 1.5}[t["compress"]]
+    if t.get("tonematch") == "off":
+        p["tone_match"] = False
     if t.get("eq") == "off":
         p["presence_db"], p["air_db"], p["drive_bite"] = 0.0, 0.0, 0.0
     elif t.get("eq") == "bright":

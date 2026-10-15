@@ -91,11 +91,45 @@ at or above 0 dBFS.
 - Master: offer a "loud like the references" master (about -10 LUFS) for listening, alongside the -14 game
   master.
 
+## 4. With stems (Demucs htdemucs on CPU, about 1 minute per song on the Ryzen 9 7900)
+
+Installed 2026-10-15 with the user's OK: PyTorch 2.14 CPU and Demucs 4.1.0 (`pip install .[analysis]`, see
+pyproject). The weights download on first use and are never bundled (their licence is disputed, §2).
+
+| Song | Sung share | Vocal range (MIDI p5-p95) | Vocal vs mix while singing (LU) | Vocal above band 1-4 kHz (dB) | Vocal tone 3-6k / 6-10k / 10-16k (dB vs 200-1000 Hz) | Bass notes per bar |
+|---|---|---|---|---|---|---|
+| A Way of Life | 75% | 57-72 | -5.5 | 7.4 | -15.4 / -31.2 / -34.9 | 7.0 |
+| Burn My Dread | 52% | 53-75 | -3.0 | 8.4 | -16.0 / -21.5 / -28.3 | 4.7 |
+| Color Your Night | 65% | 46-72 | -6.3 | 3.0 | -20.6 / -22.9 / -28.2 | 8.7 |
+| Full Moon Full Life | 69% | 51-72 | -5.0 | 4.6 | -17.7 / -26.8 / -29.7 | 5.6 |
+| It's Going Down Now | 76% | 42-79 | -6.0 | 5.3 | -18.4 / -20.6 / -25.2 | 5.0 |
+| Pull the Trigger | 75% | 47-72 | -4.3 | 6.4 | -16.3 / -25.0 / -27.3 | 9.5 |
+| School Days | 58% | 58-76 | -6.3 | 5.5 | -19.6 / -26.8 / -28.2 | 14.0 |
+| Signs of Love | 73% | 46-68 | -8.6 | -0.2 | -19.6 / -20.9 / -19.7 | 4.1 |
+| Moon's Reaching Out | 62% | 58-73 | -5.6 | -0.6 | -24.1 / -25.2 / -34.2 | 7.0 |
+| **Median** | **69%** | | **-5.6** | **5.3** | **-18.4 / -25.0 / -28.2** | **7.0** |
+| *Last Train v15, your real vocal stems* | 66% | 45-65 | | *7.1* | *-19.3 / -24.8 / **-37.8*** | |
+
+**What this says about the user's vocal:** it is loud enough (7.1 dB above the band where the ear listens,
+against a median of 5.3) and its presence is on target, but **above 10 kHz it is about 10 dB darker than the
+references** (−37.8 against −28.2; the darkest reference is −34.9). That missing air is the most measurable part
+of "muffled". The vocal chain now has a **tone match** step (VOCALS §13): after the EQ it lifts presence and
+air toward these medians, capped at +4 / +8 dB and keeping 6-10 kHz within 2 dB of the references (so "s"
+sounds don't get harsh). On the three Last Train tracks: air −34.8 → −28.8 (verse), −36.1 → −32.3 (chorus);
+the rap is left alone (its 6-10 kHz is already bright from Warmth 75).
+
+Also: the references sing about two-thirds of the time, over a range of about an octave and a half, at about
+4 notes per sung second; basslines play about 7 notes a bar (8th-note lines), School Days 14 (16ths).
+
+**Drum patterns:** read from the drum stem by band-energy rises (kick 30-120 Hz, snare 180-1200 Hz unless it is
+kick spill, hats 7-16 kHz). Densities are reliable; positions are only as good as the beat grid and downbeat,
+and several songs read a 16th late (for example Burn My Dread's kick as `.x...xx..x...xx.`, which is
+`x...xx..x...xx..` moved by one step). School Days (`x...x...x...x...`, 94% of bars) and the 2-and-4 snares
+read cleanly. Better beats (Beat This!, MIT) would fix the positions.
+
 ## 4. Next
 
-- With the user's OK: install Demucs (CPU) and run `--stems` on the nine songs, for vocal level and tone
-  against the band per section, bass movement and drum patterns. Those are the numbers that tell us how loud
-  and bright the user's vocal should sit.
+- Beat This! (MIT, ~80 MB) for downbeats, so drum and bass positions can become pattern presets.
 - More references that would help most: songs in the moods LINE ZERO needs that aren't covered yet (a
   calm daytime track like "Your Affection" or "Beneath the Mask", a battle track from P5 like "Last Surprise"
   or "Life Will Change", and a slow ballad), plus one non-Persona song whose mix the user loves.

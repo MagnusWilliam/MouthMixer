@@ -34,6 +34,9 @@ windows = [
   "pillow>=10",
   "pynput>=1.7",
 ]
+# Reference-song analysis with stems (docs/REFERENCE_ANALYSIS.md). Install PyTorch CPU first:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+analysis = ["demucs>=4.1"]
 dev = ["pytest>=8", "httpx>=0.27"]
 
 [project.scripts]

@@ -321,3 +321,21 @@ def test_pitch_and_breath_tweaks_skip_world():
     rep2 = {}
     V.apply_character(tk.audio, f0, "natural", rep2, tweaks={"tone": 10}, scale=(2, "major"))
     assert "WORLD" in next(s["detail"] for s in rep2["steps"] if s["step"] == "Voice")
+
+
+def test_tone_match_lifts_a_dark_take_toward_the_references():
+    from mouthmixer.arrange.vocals import REF_TONE
+
+    tk, _ = _take(12, sibilants=0.1)
+    dark = V._filt(tk.audio, V._sos("low", 5000, 4))
+    notes = V.notes_in_seconds(LEAD, BPM, SECTIONS)
+    f0, _ = V.track_f0(dark, fast=True)
+    before = V.vocal_tone(dark)
+    rep = {}
+    layers = V.chain(dark, notes, f0, V.preset("soul"), BPM, 2, "major", set(), rep)
+    assert rep["tone_match"]["air_db"] == 8.0  # capped
+    after = V.vocal_tone(layers["lead"][0])
+    assert after["10-16k"] > before["10-16k"] + 6 and after["10-16k"] <= REF_TONE["10-16k"] + 3
+    rep2 = {}
+    V.chain(dark, notes, f0, V.tweak_preset(V.preset("soul"), {"tonematch": "off"}), BPM, 2, "major", set(), rep2)
+    assert "tone_match" not in rep2

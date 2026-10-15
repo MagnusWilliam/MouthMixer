@@ -76,3 +76,31 @@ def test_stems_are_read_when_present(tmp_path):
     rows = r["stems"]["levels_by_section"]
     assert rows and all(abs(row["drums"] + 6) < 1.5 for row in rows if row["drums"] is not None)
     assert "kick" in r["stems"]["drums"]
+
+
+def test_drum_patterns_from_a_known_beat():
+    """Kick on 1 and 3, snare on 2 and 4, hats on 8ths, with spill between bands as in real stems."""
+    bpm, bars = 100.0, 8
+    spb = 60 / bpm
+    n = int(bars * 4 * spb * SR) + SR
+    x = np.zeros(n)
+    rng = np.random.default_rng(1)
+    t = np.arange(int(0.2 * SR)) / SR
+    for beat in range(bars * 4):
+        b = int(beat * spb * SR)
+        if beat % 2 == 0:
+            k = 0.8 * np.sin(2 * np.pi * (50 + 60 * np.exp(-t * 40)) * t) * np.exp(-t * 18)
+            x[b:b + len(k)] += k + 0.02 * rng.normal(0, 1, len(k)) * np.exp(-t * 60)  # a little click
+        else:
+            s = (0.4 * rng.normal(0, 1, len(t)) + 0.3 * np.sin(2 * np.pi * 200 * t)) * np.exp(-t * 20)
+            x[b:b + len(s)] += s
+        for e in (0, 0.5):
+            h = b + int(e * spb * SR)
+            hh = 0.1 * rng.normal(0, 1, 1500) * np.exp(-np.arange(1500) / 300)
+            x[h:h + 1500] += A.np.convolve(hh, [1, -1], mode="same")
+    y = np.stack([x, x]).astype(np.float32)
+    beats = np.arange(bars * 4 + 1) * spb
+    d = A.drum_facts(y, beats, 0)
+    assert d["kick"]["common_bars"][0]["pattern"] == "x.......x......."
+    assert d["snare"]["common_bars"][0]["pattern"] == "....x.......x..."
+    assert d["hats"]["common_bars"][0]["pattern"] == "x.x.x.x.x.x.x.x."

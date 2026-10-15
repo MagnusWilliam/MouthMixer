@@ -286,6 +286,11 @@ is about 130 kbps; stems and mixes are now written at about 280 kbps.
 count-in click bleeding from the headphones (2-8 kHz on the verse take). Noise is now measured above 100 Hz in
 the quietest 300 ms of the count-in, which also stops noise reduction from learning the clicks as "noise".
 
+**Tone match (with the reference stems, REFERENCE_ANALYSIS §4).** The processed vocal's air above 10 kHz was
+about 10 dB under the nine reference vocals. A tone-match step after the EQ lifts presence (4.5 kHz peak) and air
+(11 kHz shelf) toward the references' medians (3-6 kHz −18.4, 10-16 kHz −28.2 dB against 200-1000 Hz), capped at
++4 / +8 dB and keeping 6-10 kHz within 2 dB of the references. It is on by default and has its own switch.
+
 **Every step is switchable and listed.** Voice tweaks have a "Processing" group: raw voice (the takes exactly as
 recorded, only level and timing), low cut, noise reduction (off / light / stronger), breaths, de-esser,
 compression (off / light / style / strong), brightness (off / style / brighter). After "Make this vocal track"

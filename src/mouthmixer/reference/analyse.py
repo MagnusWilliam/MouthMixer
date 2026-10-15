@@ -395,6 +395,24 @@ def bass_facts(x: np.ndarray, beats: np.ndarray, phase: int, ch: list[dict], ton
     return out
 
 
+def band_hits(band: np.ndarray, rise_db: float = 6.0, gap_s: float = 0.07) -> np.ndarray:
+    """Hit times in one frequency band of a drum stem: the band's level rising at least `rise_db` within
+    ~20 ms to a level near the band's loud hits (within 18 dB of its 98th percentile), at most one hit per
+    `gap_s`. Simple band onsets fire on every bit of another drum's spill."""
+    e = 10 * np.log10(np.sum(band.astype(np.float64) ** 2, axis=0) + 1e-12)
+    rise = e - np.r_[np.full(2, e[0]), e[:-2]]
+    loud = e > np.percentile(e, 98) - 18
+    cand = np.flatnonzero((rise >= rise_db) & loud)
+    hits, last = [], -1e9
+    fps = SR / HOP
+    for i in cand:
+        if (i - last) / fps >= gap_s:
+            j = min(len(e) - 1, i + 2)
+            hits.append(i / fps)
+            last = j
+    return np.array(hits) - 1 / fps  # the rise starts a frame earlier
+
+
 def drum_facts(x: np.ndarray, beats: np.ndarray, phase: int) -> dict:
     """Kick, snare and hat onsets (by band) on a 16-step grid per bar; the most common bar pattern of each
     and how busy the hats are."""
@@ -407,10 +425,15 @@ def drum_facts(x: np.ndarray, beats: np.ndarray, phase: int) -> dict:
     if len(starts) < 3:
         return {}
     out = {}
-    for name, lo, hi in (("kick", 30, 150), ("snare", 150, 2500), ("hats", 6000, 16000)):
-        band = S[(freqs >= lo) & (freqs < hi)]
-        env = librosa.onset.onset_strength(S=librosa.amplitude_to_db(band), sr=SR, hop_length=HOP)
-        on = librosa.onset.onset_detect(onset_envelope=env, sr=SR, hop_length=HOP, units="time")
+    level = {n: 10 * np.log10(np.sum(S[(freqs >= lo) & (freqs < hi)].astype(np.float64) ** 2, axis=0) + 1e-12)
+             for n, lo, hi in (("kick", 30, 120), ("snare", 180, 1200))}
+    fps = SR / HOP
+    for name, lo, hi in (("kick", 30, 120), ("snare", 180, 1200), ("hats", 7000, 16000)):
+        on = band_hits(S[(freqs >= lo) & (freqs < hi)])
+        if name == "snare" and len(on):
+            # A kick's attack spills into the snare band but stays well under its own low end.
+            f = np.clip(np.round(on * fps).astype(int) + 3, 0, len(level["kick"]) - 1)
+            on = on[level["snare"][f] > level["kick"][f] - 6]
         pats = []
         for a, b in zip(starts[:-1], starts[1:]):
             grid = np.zeros(16, dtype=int)
