@@ -291,6 +291,22 @@ about 10 dB under the nine reference vocals. A tone-match step after the EQ lift
 (11 kHz shelf) toward the references' medians (3-6 kHz −18.4, 10-16 kHz −28.2 dB against 200-1000 Hz), capped at
 +4 / +8 dB and keeping 6-10 kHz within 2 dB of the references. It is on by default and has its own switch.
 
+**"Still sounds away from the mic" (same day, after the user listened: the new tuning "definitely sounds better").**
+- No room echo to remove: WPE dereverberation (nara_wpe, MIT) changed the takes by under 0.2 dB, so the decay
+  after notes is the voice itself. It was uninstalled again.
+- The chain was lifting the room between words by 16-19 dB (chorus: 45 → 26 dB under the loudest singing):
+  compressor A (peak catcher) about 8 dB, compressor B about 10, because B levelled at the median of the
+  singing. B now levels at the 90th percentile, and a **downward expander after compression** ("Silence between
+  words": 1:2 below the typical singing level −15 dB, at most 18 dB, 3 ms / 120 ms) turns the room back down.
+- **Match EQ** replaces the two-knob tone match: 18 third-octave bands (250 Hz-12.5 kHz) moved 80% of the way
+  to the nine reference vocals' median curve (they agree within 1.5-3 dB there), ±6 dB (+8 from 8 kHz),
+  smoothed across neighbours. On the three Last Train tracks the largest deviation from the references went
+  from 9-11 dB to about 5 dB (what's left at 5-6 kHz comes from saturation and doubles after the EQ).
+- The likeliest cause is the mic, not the processing: the chorus and gang takes are dull and mid-heavy with weak
+  lows, the signature of singing into the top of a side-address mic (off-axis, which also raises the room by
+  about 6 dB relative to the voice). A **mic check** after each take now warns about exactly this; on the user's
+  takes it flags the chorus and gang takes and passes the verse and rap ones.
+
 **Every step is switchable and listed.** Voice tweaks have a "Processing" group: raw voice (the takes exactly as
 recorded, only level and timing), low cut, noise reduction (off / light / stronger), breaths, de-esser,
 compression (off / light / style / strong), brightness (off / style / brighter). After "Make this vocal track"

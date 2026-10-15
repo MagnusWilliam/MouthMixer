@@ -347,7 +347,9 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
              "pipeline": pipe, "dropouts": int(gaps)}
         v_ = record(song_id)["versions"][vi]
         notes = vocals.notes_in_seconds(lead_notes(v_), v_["bpm"], v_["sections"])
-        t["score"] = vocals.score_take(load_take(song_id, t), notes)
+        tk = load_take(song_id, t)
+        t["score"] = vocals.score_take(tk, notes)
+        t["mic_check"] = vocals.mic_check(tk.audio)
         with _lock(song_id):
             items = takes_list(song_id) + [t]
             save_takes(song_id, items)

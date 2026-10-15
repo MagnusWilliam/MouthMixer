@@ -721,7 +721,8 @@ const Sing = {
       this.renderTracks();
       const s = t.score;
       st.textContent = (s.peak_db > -1 ? "That take clipped: lean back a little or turn the mic gain down." :
-        s.peak_db < -24 ? "That take is very quiet: move a little closer or turn the mic gain up." : "") + dropoutNote(gaps);
+        s.peak_db < -24 ? "That take is very quiet: move a little closer or turn the mic gain up." : "") +
+        (t.mic_check ? " " + t.mic_check : "") + dropoutNote(gaps);
       this.renderTakes();
     } catch (e) { busy($("#sg-status"), ""); st.textContent = errText(e); }
   },

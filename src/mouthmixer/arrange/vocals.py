@@ -36,7 +36,7 @@ DEFAULT = {
     "delay_beats": 0.75, "slap_ms": 0, "throws": True, "bandpass": None, "shimmer": 0.0, "octave_layer": 0.0,
     "level_lu": -1.0, "deess_db": 6.0,
     # Switches for each step (the "Processing" tweaks): raw skips everything but level and timing.
-    "raw": False, "highpass": True, "denoise": 0.35, "breaths": True, "compress": 1.0, "tone_match": True,
+    "raw": False, "highpass": True, "denoise": 0.35, "breaths": True, "compress": 1.0, "tone_match": True, "gate": True,
 }
 PRESETS = {
     "soul": {"label": "Soul / city pop: warm, natural tuning, plate", "strength": 0.6, "retune_ms": 45,
@@ -815,6 +815,31 @@ def tame_breaths(x: np.ndarray, f0: np.ndarray, noise_db: float, report: dict) -
     return (x * gain).astype(np.float32)
 
 
+def phrase_gate(x: np.ndarray, report: dict, voiced: np.ndarray | None = None, ratio: float = 2.0,
+                below_db: float = 15.0, depth_db: float = 18.0) -> np.ndarray:
+    """Studio silence: a downward expander after compression. Anything more than `below_db` under the typical
+    singing level is turned down at `ratio` (1:2: 6 dB under the threshold becomes 12 dB under), at most
+    `depth_db`, following a 10 ms level with 3 ms attack and 120 ms release, so word endings fade naturally and
+    the gaps between words get quieter too, not just between phrases.
+    Measured on the user's takes (VOCALS §13): compression lifted the room between words from about 45 to 26 dB
+    under the loudest singing; the reference vocals keep it 53-66 dB under."""
+    from scipy.signal import lfilter
+
+    x = np.asarray(x, dtype=np.float32)
+    env = 20 * np.log10(_env(x, 10) + 1e-9)
+    sung = voiced[: len(x)] if voiced is not None and voiced[: len(x)].sum() > SR // 2 else env > np.percentile(env, 99) - 30
+    thr = float(np.median(env[sung])) - below_db
+    gr = np.clip((thr - env) * (ratio - 1), 0, depth_db)  # dB of reduction wanted
+    # fast to let go (3 ms) when you sing again, slow to close (120 ms) after a word
+    a_dn, a_up = np.exp(-1 / (0.003 * SR)), np.exp(-1 / (0.12 * SR))
+    fast = lfilter([1 - a_dn], [1, -a_dn], gr)
+    slow = lfilter([1 - a_up], [1, -a_up], gr)
+    gr = np.minimum(fast, slow)
+    report["expander_mean_db"] = round(float(np.mean(gr)), 1)
+    did(report, "Silence between words", f"room under {thr:.0f} dBFS turned down 1:{ratio:g}, up to {depth_db:.0f} dB")
+    return (x * 10 ** (-gr / 20)).astype(np.float32)
+
+
 # --------------------------------------------------------------------------------------------------
 # The processing chain
 # --------------------------------------------------------------------------------------------------
@@ -841,6 +866,49 @@ def resonance(x: np.ndarray, voiced: np.ndarray) -> tuple[float, float]:
 # The nine reference songs' separated vocals (docs/REFERENCE_ANALYSIS.md §4): median level of each band
 # against 200-1000 Hz, in dB.
 REF_TONE = {"3-6k": -18.4, "6-10k": -25.0, "10-16k": -28.2}
+# Their median third-octave curve (dB against the 400-1000 Hz bands); only 250 Hz-12.5 kHz is used, where the nine
+# vocals agree (25-75% spread 1.5-3 dB; below 250 Hz each song's high-pass differs by up to 25 dB).
+REF_THIRDS = {250: 4.7, 315: 4.6, 400: 0.9, 500: -0.4, 630: 0.6, 800: 0.7, 1000: -2.2, 1250: -4.5, 1600: -6.4,
+              2000: -8.6, 2500: -11.6, 3150: -12.9, 4000: -14.9, 5000: -22.7, 6300: -25.4, 8000: -22.4, 10000: -22.3,
+              12500: -27.2}
+
+
+def thirds(x: np.ndarray, voiced: np.ndarray | None = None) -> dict:
+    """Third-octave band levels (dB) against the 400-1000 Hz bands, over the sung part."""
+    from scipy.signal import welch
+
+    y = x[voiced[: len(x)]] if voiced is not None and voiced[: len(x)].sum() > SR // 2 else x
+    f, pw = welch(y.astype(np.float64), SR, nperseg=8192)
+    lv = {c: 10 * np.log10(pw[(f >= c / 2 ** (1 / 6)) & (f < c * 2 ** (1 / 6))].mean() + 1e-20) for c in REF_THIRDS}
+    ref = np.mean([lv[c] for c in (400, 500, 630, 800, 1000)])
+    return {c: v - ref for c, v in lv.items()}
+
+
+def mic_check(x: np.ndarray) -> str | None:
+    """A warning when a take sounds like it was sung past the mic rather than into it: the top (3-6 kHz) well
+    under the reference vocals while 1-2 kHz is not (dull and boxy). The user's chorus takes read like this;
+    a side-address mic such as the QuadCast 2 is sung into from the side, not the top."""
+    env = _env(x, 20)
+    sung = env > env.max() * 0.1
+    if sung.sum() < SR:
+        return None
+    th = thirds(x, sung)
+    top = np.mean([th[c] - REF_THIRDS[c] for c in (3150, 4000, 5000)])
+    mid = np.mean([th[c] - REF_THIRDS[c] for c in (1250, 1600, 2000)])
+    if top < -7 and mid > top + 4:
+        return ("This take sounds dull and boxy, as if sung past the mic: sing into the side of the mic with the "
+                "logo (QuadCast: not into the top), 10-20 cm away.")
+    return None
+
+
+def match_eq_gains(x: np.ndarray, voiced: np.ndarray | None = None, amount: float = 0.8) -> dict:
+    """Per third-octave band: the boost or cut (dB) that moves this vocal `amount` of the way to the
+    reference curve, smoothed across neighbours, within ±6 dB (up to +8 dB from 8 kHz, where dark takes miss most)."""
+    have = thirds(x, voiced)
+    cs = list(REF_THIRDS)
+    d = np.array([REF_THIRDS[c] - have[c] for c in cs])
+    d = np.convolve(np.pad(d, 1, mode="edge"), [0.25, 0.5, 0.25], mode="valid")
+    return {c: round(float(np.clip(v * amount, -6, 8 if c >= 8000 else 6)), 1) for c, v in zip(cs, d)}
 
 
 def vocal_tone(x: np.ndarray, voiced: np.ndarray | None = None) -> dict:
@@ -990,9 +1058,15 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
         k = p["compress"]
         ta = _threshold(x, voiced, 0.99) - 4.0 * k / (1 - 1 / p["comp_a"])
         x = Pedalboard([Compressor(threshold_db=ta, ratio=p["comp_a"], attack_ms=2, release_ms=50)])(x[None], SR)[0]
-        tb = _threshold(x, voiced, 0.5) - p["comp_b_db"] * k / (1 - 1 / p["comp_b"])
+        # comp_b_db of levelling at the loud end of the singing (90th percentile), not at its middle: measured
+        # against the reference vocals (VOCALS §13), levelling at the median squashed the quiet half 3 dB more
+        # than theirs and brought the room between words up with it.
+        tb = _threshold(x, voiced, 0.9) - p["comp_b_db"] * k / (1 - 1 / p["comp_b"])
         x = Pedalboard([Compressor(threshold_db=tb, ratio=p["comp_b"], attack_ms=20, release_ms=120)])(x[None], SR)[0]
         did(report, "Compression", f"peaks caught, then about {p['comp_b_db'] * k:.0f} dB of levelling")
+    # 5b studio silence between words and phrases (after compression, which would bring the room back up)
+    if p["gate"]:
+        x = phrase_gate(x, report, voiced)
     # 6 presence + air (rock adds bite at 2 kHz), lo-fi band-pass instead of air.
     eq = [PeakFilter(cutoff_frequency_hz=3500, gain_db=p["presence_db"], q=0.8)] if p["presence_db"] else []
     if p["drive_bite"]:
@@ -1005,23 +1079,19 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
         x = Pedalboard(eq)(x[None], SR)[0]
         did(report, "Brightness", "band-passed (lo-fi)" if p["bandpass"] else
             f"presence {p['presence_db']:+.1f} dB at 3.5 kHz, air {p['air_db']:+.1f} dB above 11 kHz")
-    # 6b match the reference tone (docs/REFERENCE_ANALYSIS.md §4): lift presence and air toward the nine
-    # reference vocals' medians, capped so a dark take doesn't turn to hiss. Not for lo-fi or a flat EQ.
+    # 6b match EQ (docs/REFERENCE_ANALYSIS.md §4-5): third-octave bands from 250 Hz to 12.5 kHz moved toward the
+    # nine reference vocals' median curve, where those vocals agree within about 3 dB. Not for lo-fi or flat EQ.
     if p["tone_match"] and not p["bandpass"] and (p["presence_db"] or p["air_db"]):
-        tone = vocal_tone(x, voiced)
-        lift_p = float(np.clip(REF_TONE["3-6k"] - tone["3-6k"], 0, 4))
-        # an 11 kHz shelf lifts 6-10 kHz by about a third as much: keep that band within 2 dB of the references
-        lift_a = float(np.clip(min(REF_TONE["10-16k"] - tone["10-16k"], 3 * (REF_TONE["6-10k"] + 2 - tone["6-10k"])), 0, 8))
-        fx2 = []
-        if lift_p >= 0.5:
-            fx2.append(PeakFilter(cutoff_frequency_hz=4500, gain_db=lift_p, q=0.7))
-        if lift_a >= 0.5:
-            fx2.append(HighShelfFilter(cutoff_frequency_hz=11000, gain_db=lift_a, q=0.7))
+        gains = match_eq_gains(x, voiced)
+        fx2 = [PeakFilter(cutoff_frequency_hz=c, gain_db=g, q=4.3) for c, g in gains.items() if abs(g) >= 0.5]
         if fx2:
             x = Pedalboard(fx2)(x[None], SR)[0]
-            report["tone_match"] = {"before": tone, "presence_db": round(lift_p, 1), "air_db": round(lift_a, 1)}
-            did(report, "Tone match", f"presence +{lift_p:.1f} dB, air +{lift_a:.1f} dB toward the reference vocals "
-                f"(air was {tone['10-16k']:.0f} dB, references {REF_TONE['10-16k']:.0f})")
+            report["tone_match"] = gains
+            up = {c: g for c, g in gains.items() if g >= 1.5}
+            down = {c: g for c, g in gains.items() if g <= -1.5}
+            fmt = lambda d: ", ".join(f"{c / 1000:g} kHz {g:+.0f}" if c >= 1000 else f"{c} Hz {g:+.0f}" for c, g in d.items())  # noqa: E731
+            did(report, "Match EQ", "toward the reference vocals' tone" + (f"; up: {fmt(up)}" if up else "") +
+                (f"; down: {fmt(down)}" if down else ""))
     # 7 saturation. 8 riding.
     if p["sat"] > 0:
         x = _saturate(x, p["sat"])
@@ -1720,14 +1790,16 @@ TWEAKS = [
     {"id": "denoise", "label": "Noise reduction", "group": "steps", "hint": "removes steady room noise; "
      "stronger settings can make the voice watery", "options": [["", "light"], ["off", "off"], ["normal", "stronger"]]},
     {"id": "breaths", "label": "Breaths turned down", "group": "steps", "options": [["", "on"], ["off", "off"]]},
+    {"id": "gate", "label": "Silence between words", "group": "steps", "hint": "turns the room sound down between "
+     "your words and lines (up to 18 dB), like a studio vocal", "options": [["", "on"], ["off", "off"]]},
     {"id": "deess", "label": "De-esser ('s' sounds)", "group": "steps",
      "options": [["", "as the style sets it"], ["off", "off"], ["strong", "stronger"]]},
     {"id": "compress", "label": "Compression (evens loud and quiet)", "group": "steps",
      "options": [["", "as the style sets it"], ["off", "off"], ["light", "light"], ["strong", "strong"]]},
     {"id": "eq", "label": "Brightness (presence and air)", "group": "steps",
      "options": [["", "as the style sets it"], ["off", "off (flat)"], ["bright", "brighter"]]},
-    {"id": "tonematch", "label": "Match the reference vocals' brightness", "group": "steps", "hint": "lifts presence "
-     "and air toward the nine reference songs' vocals (up to +4 / +8 dB)", "options": [["", "on"], ["off", "off"]]},
+    {"id": "tonematch", "label": "Match EQ (reference vocals' tone)", "group": "steps", "hint": "moves each third-octave "
+     "band toward the nine reference songs' vocals (within ±6 dB)", "options": [["", "on"], ["off", "off"]]},
     {"id": "pitch", "label": "Pitch (notes of the key)", "hint": "higher or lower by notes of the key, so it stays in key "
      "(7 = an octave)", "min": -7, "max": 7, "step": 1, "default": 0},
     {"id": "tone", "label": "Tone", "hint": "bigger and darker (left) or smaller and lighter (right); any change re-voices with WORLD, which softens detail", "min": -30,
@@ -1805,6 +1877,8 @@ def tweak_preset(p: dict, t: dict | None) -> dict:
         p["denoise"] = {"off": 0.0, "normal": 0.6}[t["denoise"]]
     if t.get("breaths") == "off":
         p["breaths"] = False
+    if t.get("gate") == "off":
+        p["gate"] = False
     if "deess" in t:
         p["deess_db"] = {"off": 0.0, "strong": 10.0}[t["deess"]]
     if "compress" in t:

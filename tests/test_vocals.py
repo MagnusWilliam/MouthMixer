@@ -323,19 +323,47 @@ def test_pitch_and_breath_tweaks_skip_world():
     assert "WORLD" in next(s["detail"] for s in rep2["steps"] if s["step"] == "Voice")
 
 
-def test_tone_match_lifts_a_dark_take_toward_the_references():
-    from mouthmixer.arrange.vocals import REF_TONE
-
+def test_match_eq_moves_a_boxy_take_toward_the_reference_vocals():
+    """A take that is dark and mid-heavy (like singing into the top of a side-address mic) moves toward the
+    reference curve band by band, never by more than the caps."""
     tk, _ = _take(12, sibilants=0.1)
-    dark = V._filt(tk.audio, V._sos("low", 5000, 4))
+    boxy = V._filt(tk.audio, V._sos("low", 5000, 4))
+    from pedalboard import PeakFilter, Pedalboard
+
+    boxy = Pedalboard([PeakFilter(cutoff_frequency_hz=1500, gain_db=6, q=1.0)])(boxy[None], V.SR)[0]
     notes = V.notes_in_seconds(LEAD, BPM, SECTIONS)
-    f0, _ = V.track_f0(dark, fast=True)
-    before = V.vocal_tone(dark)
+    f0, _ = V.track_f0(boxy, fast=True)
+    dev = lambda z: np.mean([abs(V.thirds(z)[c] - V.REF_THIRDS[c]) for c in V.REF_THIRDS])  # noqa: E731
+    p = V.tweak_preset(V.preset("soul"), {"eq": "", "gate": "off"})
     rep = {}
-    layers = V.chain(dark, notes, f0, V.preset("soul"), BPM, 2, "major", set(), rep)
-    assert rep["tone_match"]["air_db"] == 8.0  # capped
-    after = V.vocal_tone(layers["lead"][0])
-    assert after["10-16k"] > before["10-16k"] + 6 and after["10-16k"] <= REF_TONE["10-16k"] + 3
+    layers = V.chain(boxy, notes, f0, dict(p, sat=0.0), BPM, 2, "major", set(), rep)
+    gains = rep["tone_match"]
+    assert all(-6 <= g <= (8 if c >= 8000 else 6) for c, g in gains.items())
+    assert gains[12500] > 3  # air up
+    assert dev(layers["lead"][0]) < dev(boxy) - 1.5
     rep2 = {}
-    V.chain(dark, notes, f0, V.tweak_preset(V.preset("soul"), {"tonematch": "off"}), BPM, 2, "major", set(), rep2)
+    V.chain(boxy, notes, f0, V.tweak_preset(p, {"tonematch": "off"}), BPM, 2, "major", set(), rep2)
     assert "tone_match" not in rep2
+
+
+def test_room_between_words_is_turned_down():
+    x, _ = S.sing(LEAD, BPM, pre_roll=0.0, sibilants=0, breaths=False, seed=13, noise_db=-50)
+    f0, _ = V.track_f0(x, fast=True)
+    hop = int(V.FRAME_MS / 1000 * V.SR)
+    voiced = np.repeat(f0 > 0, hop)[: len(x)]
+    voiced = np.pad(voiced, (0, len(x) - len(voiced)))
+    rep = {}
+    y = V.phrase_gate(x, rep, voiced)
+    env_x, env_y = V._env(x, 20), V._env(y, 20)
+    gap = ~np.convolve(voiced, np.ones(int(0.25 * V.SR)), mode="same").astype(bool)  # well away from singing
+    sung = voiced & (env_x > np.percentile(env_x[voiced], 50))
+    assert np.median(20 * np.log10(env_y[gap] / env_x[gap])) < -10  # a room ~30 dB under the singing comes down a lot
+    assert abs(np.median(20 * np.log10(env_y[sung] / env_x[sung]))) < 0.5  # the singing doesn't
+    assert any(st["step"] == "Silence between words" for st in rep["steps"])
+
+
+def test_mic_check_flags_a_take_sung_past_the_mic():
+    tk, _ = _take(14, sibilants=0.2)
+    assert V.mic_check(tk.audio) is None or "side" in V.mic_check(tk.audio)
+    past = V._filt(tk.audio, V._sos("low", 2200, 4))  # off-axis: the top gone, mids kept
+    assert "side of the mic" in V.mic_check(past)
