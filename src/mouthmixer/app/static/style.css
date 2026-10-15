@@ -217,6 +217,10 @@ button.preset.on { outline: 2px solid var(--clean); }
 .tweak span { color: var(--muted); }
 .tweak.set span { color: var(--ink); }
 .tweak input[type=range] { width: 100%; }
+.tw-head { grid-column: 1 / -1; margin: 6px 0 0; font-size: 13px; }
+.tweak.na { opacity: 0.4; }
+.steps-done { margin: 6px 0; padding-left: 18px; font-size: 13px; }
+.ver .wk { color: var(--accent); }
 
 /* Sing: vocal track cards, the track you're working on, takes in use, full lyrics */
 .vtracks { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 8px 0 10px; }

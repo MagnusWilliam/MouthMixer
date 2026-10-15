@@ -35,8 +35,10 @@ placed just before a consonant, never mid-vowel [S].
 
 - **Breaths** turned down 6 dB (range 3-9), never deleted; the breath right before a phrase only 4 dB, so the
   entry stays natural. Done before compression, which would bring them back up. [V]
-- **Noise reduction:** spectral gating with the profile taken from the pre-roll, at most 6-10 dB, skipped
-  when the noise floor is already under -65 dBFS; heavier settings cause "musical noise". [V/U]
+- **Noise reduction:** spectral gating with the profile taken from the quietest 300 ms of the count-in above
+  100 Hz, light by default (prop_decrease 0.35, about 4 dB; "stronger" is 0.6, about 8 dB), skipped when the
+  noise floor is already under -65 dBFS; heavier settings cause "musical noise" and, measured on the user's
+  takes, extra level jumps between syllables (§13). [V/U/M]
 - **Plosives:** a burst under 150 Hz more than 10 dB above the phrase average, within 40 ms of a voiced
   onset, gets a 40-80 ms high-pass at 120 Hz with 10 ms fades. [S/U]
 
@@ -65,9 +67,12 @@ natural correction [V]; Melodyne users set correction strength to 60-80% for nat
 
 **Hard mode** (arcade/hyperpop): instant, 100%, vibrato removed.
 
-**How:** the WORLD vocoder (pyworld: harvest, cheaptrick, d4c) changes pitch with the spectral envelope kept,
-so the voice keeps its character (formants) [S]. WORLD can buzz in unvoiced sounds, so only voiced frames are
-resynthesised and the original is crossfaded back in for consonants and breaths [U].
+**How (since 2026-10-15):** PSOLA (`vocals.psola`): one mark per glottal cycle, two-period Hann grains of the
+recording re-spaced to the new period (and, for timing fixes, read from the time-mapped position). Formants
+stay where they are because the grains are the voice itself, consonants and breaths are the original, and a
+passage that needs no move comes back sample for sample. Tuning **off** skips the tuner entirely. WORLD
+(pyworld) is now used only where it is needed: a new tone (formant), grit, whisper, stacked voices and
+harmonies. Why: §13.
 
 ## 5. The processing chain (in order)
 
@@ -219,7 +224,7 @@ vocal track (in the browser), so the Rap track can be gritty while the Chorus le
 |---|---|
 | Pitch (notes of the key) | moves every sung note up or down by notes of the key (7 = an octave), so the vocal stays in key with the band; the move is smoothed over 60 ms so glides don't step. A plain semitone shift would put a free-sung vocal out of key (measured on synthetic singing: 57% of frames in D minor after +2 semitones, against 77% after +1 key step and 82% before). |
 | Tone | the formant ratio, ±30% (left: bigger and darker; right: smaller and lighter), multiplied onto the character's own |
-| Breathiness | more aperiodicity above 1 kHz (WORLD) |
+| Breathiness | soft 1.5-9 kHz noise following the voice's own 1-4 kHz envelope while you sing (no resynthesis); with a tone change or grit it is WORLD's aperiodicity instead |
 | Grit / rasp | uneven noise bursts above 600 Hz, a little pitch jitter, up to 0.3 saturation |
 | Warmth / drive | the chain's saturation, 0-0.7 |
 | Tuning | off (exactly as sung), gentle (50%, 60 ms), tight (95%, 20 ms), robot (hard snap); default = the style's |
@@ -248,3 +253,45 @@ another (**Use this one**); the pick is sent as `choice` and the comp uses it. T
 the whole track in ms. Takes recorded before the audio-thread capture can sit 50-220 ms late, varying per
 take (measured), and are marked "old recorder". Preview can play any take, optionally over the same
 seconds of the band.
+
+## 13. Measured on the user's real takes (2026-10-15): muffled and choppy
+
+The first local session measured "Last Train, First Light" (72 takes on 5 tracks, the built song's vocal
+stems) before changing anything. Script-level numbers; listening is the user's call.
+
+**Choppy tuning.** WORLD resynthesis with *no* pitch change (strength 0, which is what tuning "off" still ran)
+made the level wobble from -8 to +5 dB between 5 ms frames inside sung notes and roughly doubled the abrupt
+(> 6 dB) level jumps: verse 340 → 711, rap 250 → 684, the cleaner chorus 63 → 69. 685 of the verse's 711 were
+inside voiced sound, not at consonant edges: the pitch tracker's frame jitter (95th percentile 66-126 cents per
+5 ms on these takes) changes WORLD's spectral envelope frame by frame. PSOLA at ratio 1 is exact (0.0 dB change
+in every band, max sample difference 0.003); tuned with the soul preset it keeps the take's own number of
+jumps (verse 341 vs 332 raw, rap 205 vs 224, chorus 62 vs 53) and tunes as far as WORLD did (frames within 25
+cents of the key: 0.59 vs WORLD 0.61 on the verse). After the full chain (compression evens the level) the
+old and new renders of the three tracks measure within 2% of each other in level jumps and frame-to-frame
+spectral change, so how much better it *sounds* in the finished song is for the user's ears.
+
+**Hidden resynthesis.** Small tweaks re-voiced the whole track with WORLD: Breathiness 15 on the Verse lead,
+Pitch -1 and Tone -4 on the Rap. Now pitch moves go through PSOLA and breathiness is shaped noise; only Tone,
+Grit, Whisper and the female/male characters still use WORLD (their hints say so).
+
+**Muffled.** Not mainly the processing: WORLD lost under 1 dB per band above 3 kHz, the chain adds presence
+and air, and the built stems are brighter than the raw takes. The recordings themselves are dark and uneven:
+relative to 200-1000 Hz, the chorus and gang takes sit at -28 dB in 3-6 kHz and -51 to -53 dB in 10-16 kHz (the
+verse take: -24 and -39), and those two takes peak at -0.3 dBFS (near clipping) with a strong low end. That
+pattern fits singing loud and close into the end of the mic: the QuadCast 2 is a side-address mic (sing into
+the side with the logo, 10-20 cm away, not into the top). Also measured: libsndfile's default Vorbis quality
+is about 130 kbps; stems and mixes are now written at about 280 kbps.
+
+**Room noise.** The "-49 dBFS room noise" warnings were mostly 43-59 Hz rumble (the low cut removes it) plus the
+count-in click bleeding from the headphones (2-8 kHz on the verse take). Noise is now measured above 100 Hz in
+the quietest 300 ms of the count-in, which also stops noise reduction from learning the clicks as "noise".
+
+**Every step is switchable and listed.** Voice tweaks have a "Processing" group: raw voice (the takes exactly as
+recorded, only level and timing), low cut, noise reduction (off / light / stronger), breaths, de-esser,
+compression (off / light / style / strong), brightness (off / style / brighter). After "Make this vocal track"
+the result lists every step that ran, in order, with its amount.
+
+**One working version.** Making a vocal track (or taking one out of the song) no longer adds a version each
+time: the first change makes a **working version**, later ones update it in place, and **Save as a version**
+keeps it under a name; the next change starts a new working version from it.
+

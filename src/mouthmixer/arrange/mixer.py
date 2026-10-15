@@ -296,9 +296,11 @@ class Mixer:
             stems[p["role"]] = stems.get(p["role"], 0) + x
         return music, lead, vocal, stems
 
-    def bake(self, extra: dict | None = None, suffix: str = "your mix") -> dict:
+    def bake(self, extra: dict | None = None, suffix: str = "your mix", working: bool = False) -> dict:
         """Mix the unmuted parts (with their volumes) and master it: a new version of the song. With your
-        vocals on, the music makes room for them (VOCALS §5 step 13) and the hummed lead ducks."""
+        vocals on, the music makes room for them (VOCALS §5 step 13) and the hummed lead ducks.
+        `working`: update the song's working version in place when this is it (else start one), so adding
+        vocal tracks one by one doesn't leave a trail of versions; "Save as a version" keeps it."""
         from . import vocals
         from .songwriter import song_summary
 
@@ -320,7 +322,12 @@ class Mixer:
             out = music + lead
         mix = render.master(out)
         verdict = critic.judge(song, mix, stems)
-        idx = next_version_index(self.dir, self.record)
+        self.record = json.loads((self.dir / "song.json").read_text())  # as it is now
+        in_place = working and self.record["versions"][self.version].get("working")
+        if in_place:
+            idx = int(self.record["versions"][self.version]["file"][1:-4])
+        else:
+            idx = next_version_index(self.dir, self.record)
         render.write_audio(mix, self.dir / f"v{idx}.ogg")
         render.write_midi(song, self.dir / f"v{idx}.mid")
         summary = song_summary(song)
@@ -328,15 +335,27 @@ class Mixer:
             t["key"] = p["instrument"]
         new = {**self.v, **summary, "file": f"v{idx}.ogg", "midi": f"v{idx}.mid", "critic": verdict,
                "score": verdict["score"], "title": self.v["title"].split(" · ")[0] + " · " + suffix,
-               "mixed_from": self.version, "mixed_at": time.time()}
+               "mixed_from": self.v.get("mixed_from", self.version) if in_place else self.version,
+               "mixed_at": time.time()}
         new.pop("vocal_stem", None)
+        new.pop("working", None)
         new["vocal_stems"] = [{"track": p.get("track", "Lead"), "file": p["file"]} for p in self.parts
                               if p.get("file") and p["role"] == "vocal" and not p.get("muted")]
         new["audio_parts"] = [{"id": p["id"], "name": p["name"], "role": p["role"], "file": p["file"]}
                               for p in self.parts if p.get("file") and p["role"] != "vocal" and not p.get("muted")]
         new.update(extra or {})
-        self.record = json.loads((self.dir / "song.json").read_text())  # as it is now
-        self.record["versions"].append(new)
+        if working:
+            new["working"] = True
+            new["title"] = new["title"].split(" · ")[0] + " · working version"
+            for v in self.record["versions"]:  # only one working version at a time
+                v.pop("working", None)
+        if in_place:
+            self.record["versions"][self.version] = new
+        else:
+            self.record["versions"].append(new)
+            # The new version starts with this mixer exactly as it is (volumes, sounds, parts switched off).
+            write_json(self.dir / f"mixer-v{len(self.record['versions']) - 1}.json",
+                       {**self.state, "version": len(self.record["versions"]) - 1})
         write_json(self.dir / "song.json", self.record)
         return new
 
@@ -391,7 +410,7 @@ class Mixer:
         extra = {"vocals": report, "vocal_tracks": {**self.v.get("vocal_tracks", {}), track: report}}
         if lyrics:
             extra["lyrics"] = lyrics
-        return self.bake(extra, suffix="with vocals")
+        return self.bake(extra, suffix="with vocals", working=True)
 
 
 def accent_times(vocal: np.ndarray, bpm: float, amount: str = "some") -> list[tuple[float, float]]:

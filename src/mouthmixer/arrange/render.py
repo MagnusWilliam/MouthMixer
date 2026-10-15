@@ -383,7 +383,9 @@ def write_audio(x: np.ndarray, path: Path) -> None:
     import soundfile as sf
 
     # Written in chunks: libsndfile's Vorbis encoder can crash on one long write.
+    # Vorbis at libsndfile's default is ~130 kbps, which dulls cymbals and the top of a voice; 0.2 is ~280 kbps.
     fmt = ("OGG", "VORBIS") if path.suffix == ".ogg" else ("WAV", "PCM_16")
-    with sf.SoundFile(str(path), "w", SR, x.shape[0], format=fmt[0], subtype=fmt[1]) as f:
+    kw = {"compression_level": 0.2} if fmt[0] == "OGG" else {}
+    with sf.SoundFile(str(path), "w", SR, x.shape[0], format=fmt[0], subtype=fmt[1], **kw) as f:
         for i in range(0, x.shape[1], 32768):
             f.write(np.ascontiguousarray(x[:, i : i + 32768].T))

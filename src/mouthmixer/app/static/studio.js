@@ -542,7 +542,7 @@ const Sing = {
     busy($("#sg-status"), `${part.muted ? "Putting" : "Taking"} ${name} ${part.muted ? "back in" : "out of"} the song and saving it…`);
     try {
       await post(songUrl("/mixer/part"), { v: curV(), id: part.id, muted: !part.muted });
-      const r = await post(songUrl("/mixer/save"), { v: curV() });
+      const r = await post(songUrl("/mixer/save"), { v: curV(), working: true });
       Mix.state = null;
       await reloadSong(r.version);
       busy($("#sg-status"), "");
@@ -567,9 +567,20 @@ const Sing = {
     const box = $("#sg-tweaks"); if (!box) return;
     const t = this.getTweaks();
     box.innerHTML = "";
+    const raw = t.process === "raw";
+    let group = null;
     for (const sp of this.tweakSpec || []) {
+      if ((sp.group || "voice") !== group) {
+        group = sp.group || "voice";
+        const h = document.createElement("h4");
+        h.className = "tw-head";
+        h.textContent = group === "steps" ? "Processing steps (switch any of them off)" : "Voice and effects";
+        box.appendChild(h);
+      }
       const el = document.createElement("label");
-      el.className = "tweak" + (sp.id in t ? " set" : "");
+      const na = raw && sp.id !== "process" && sp.id !== "timing";
+      el.className = "tweak" + (sp.id in t ? " set" : "") + (na ? " na" : "");
+      if (na) el.title = "Not used with the raw voice";
       if (sp.options) {
         el.innerHTML = `<span>${esc(sp.label)}</span><select>${sp.options.map(([v, l]) =>
           `<option value="${esc(v)}"${(t[sp.id] ?? "") === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
@@ -577,6 +588,7 @@ const Sing = {
           const cur = this.getTweaks();
           if (e.target.value) cur[sp.id] = e.target.value; else delete cur[sp.id];
           this.setTweaks(cur); el.classList.toggle("set", sp.id in cur);
+          if (sp.id === "process") this.renderTweaks();
         };
       } else {
         const v = t[sp.id] ?? sp.default;
@@ -1005,16 +1017,32 @@ $("#sg-make").onclick = async () => {
     Mix.state = null;
     await reloadSong(r.version);
     await Sing.open();
-    st.innerHTML = `<p><b>Done: version ${r.version + 1}, "${esc(r.title)}".</b> Your vocals are now a part in the Mix tab,
-      so you can turn them up, down or off.</p>
+    const steps = (r.vocals.steps || []).concat(r.vocals.vocal_gain_db != null ?
+      [{ step: "Level", detail: `${r.vocals.vocal_gain_db > 0 ? "+" : ""}${r.vocals.vocal_gain_db} dB to sit with the music` }] : []);
+    st.innerHTML = `<p><b>Done: ${esc(r.vocals.track || "the track")} is in the working version (version ${r.version + 1}).</b>
+      Every vocal track you make goes into this same version; your vocals are parts in the Mix tab, so you can turn them up, down or off.
+      <button id="sg-keep" class="primary">Save as a version</button></p>
       <ul class="checks">${q.checks.map((c) => `<li class="${c.level === "ok" ? "ok" : "warn"}">${esc(c.text)}</li>`).join("")}</ul>
-      <p class="small muted">Moved ${r.vocals.timing_moved} notes in time, lowered ${r.vocals.breaths_lowered} breaths, ` +
-      `vocal ${r.vocals.vocal_gain_db > 0 ? "+" : ""}${r.vocals.vocal_gain_db} dB to sit with the music.</p>`;
+      <details open><summary class="small"><b>What was done to your voice</b>, in order</summary><ol class="steps-done">${
+        steps.map((s) => `<li><b>${esc(s.step)}</b>${s.detail ? ": " + esc(s.detail) : ""}</li>`).join("")}</ol></details>`;
+    $("#sg-keep").onclick = () => keepVersion($("#sg-keep"));
   } catch (e) { busy($("#sg-status"), ""); st.textContent = errText(e); }
   $("#sg-make").disabled = false;
 };
 
 $("#sg-tw-reset").onclick = () => { Sing.setTweaks({}); Sing.renderTweaks(); };
+// "Save as a version": the working version (where vocal tracks collect) is kept under a name of your choice.
+async function keepVersion(btn) {
+  const name = prompt("A name for this version (for example \"first full vocals\"):", "with vocals");
+  if (name === null) return;
+  btn.disabled = true;
+  try {
+    const r = await post(songUrl("/keep_version"), { v: curV(), name });
+    await reloadSong(r.version);
+    btn.textContent = "Saved"; btn.classList.remove("primary");
+  } catch (e) { btn.disabled = false; alert(errText(e)); }
+}
+window.keepVersion = keepVersion;
 // Try the voice and tweaks on a take (the one in use for the chosen section, or any take you click).
 async function previewVoice(takeId, btn) {
   const msg = $("#sg-prev-msg"), au = $("#sg-prev-audio");

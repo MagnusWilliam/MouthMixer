@@ -13,3 +13,6 @@ dist/
 /reference_audio/
 *.flac
 *.mp3
+
+# Listening tests made from the user's recordings: never commit.
+/listening/

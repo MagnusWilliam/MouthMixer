@@ -219,3 +219,105 @@ def test_swapping_a_sound_keeps_chords_clear_of_the_melody():
     assert (0.0, 2.0, 64, 70) in out and (0.0, 2.0, 60, 70) in out
     assert all(not (abs(71 - p) == 1 or (71 > p and (71 - p) % 12 == 1)) for _, _, p, _ in out)
     assert len(out) >= 3  # moved an octave where possible, not just dropped
+
+
+# --- PSOLA tuning, the raw voice and the processing switches (VOCALS §13, measured on the user's takes) ---
+
+def _level_jumps(x, f0):
+    """Abrupt level jumps (> 6 dB between 5 ms frames) inside sung, loud frames."""
+    hop = int(V.FRAME_MS / 1000 * V.SR)
+    n = min(len(x) // hop, len(f0))
+    db = 20 * np.log10(np.sqrt(np.mean(x[:n * hop].reshape(n, hop).astype(np.float64) ** 2, 1)) + 1e-9)
+    sel = (f0[:n] > 0) & (db > db.max() - 30)
+    return int(((np.abs(np.diff(db)) > 6) & sel[1:] & sel[:-1]).sum())
+
+
+def test_psola_leaves_a_voice_alone_when_nothing_moves():
+    tk, _ = _take(5, sibilants=0.4)
+    f0, _ = V.track_f0(tk.audio, fast=False)
+    same = V.psola(tk.audio, f0, np.ones(len(f0)))
+    assert np.array_equal(same, tk.audio.astype(np.float32))
+    forced = V.psola(tk.audio, f0, np.ones(len(f0)), min_cents=-1)  # rebuilt grain by grain, still the same
+    assert np.abs(forced - tk.audio).max() < 0.01
+
+
+def test_psola_moves_pitch_by_the_ratio():
+    tk, _ = _take(6, vibrato_cents=10, sibilants=0)
+    f0, _ = V.track_f0(tk.audio, fast=False)
+    y = V.psola(tk.audio, f0, np.full(len(f0), 2 ** (50 / 1200)))
+    f1, _ = V.track_f0(y, fast=False)
+    both = (f0 > 0) & (f1 > 0)
+    moved = 1200 * np.log2(f1[both] / f0[both])
+    assert abs(np.median(moved) - 50) < 6
+
+
+def test_tuning_off_returns_the_recording_untouched():
+    tk, _ = _take(7)
+    rep = {}
+    y, f0b, f0a = V.tune_to_key(tk.audio, 2, "major", dict(V.preset("soul"), strength=0.0), [], rep)
+    assert np.array_equal(y, tk.audio.astype(np.float32)) and rep["tuned_frames_moved_cents"] == 0
+    assert np.array_equal(f0b, f0a)
+
+
+def test_key_tuning_is_not_choppy():
+    """The user's tuned takes doubled their level jumps with WORLD; PSOLA keeps them at the take's own."""
+    tk, _ = _take(8, detune_cents=40, vibrato_cents=35)
+    rep = {}
+    y, f0b, f0a = V.tune_to_key(tk.audio, 2, "major", V.preset("soul"), [], rep)
+    assert rep["tuned_frames_moved_cents"] > 5
+    assert _level_jumps(y, f0b) <= _level_jumps(tk.audio, f0b) * 1.2 + 5
+    v = (f0a > 0)
+    off = np.abs(V._run_median(np.where(v, 69 + 12 * np.log2(np.maximum(f0a, 1) / 440), np.nan), v, 40)[v] -
+                 V._scale_target(V._run_median(np.where(v, 69 + 12 * np.log2(np.maximum(f0a, 1) / 440), np.nan), v, 40)[v], 2, "major"))
+    assert np.mean(off * 100 <= 25) > 0.8
+
+
+def test_processing_switches_map_to_the_chain():
+    p = V.tweak_preset(V.preset("rock"), {"cleanup": "off", "denoise": "off", "breaths": "off", "deess": "off",
+                                          "compress": "light", "eq": "off"})
+    assert not p["highpass"] and p["denoise"] == 0 and not p["breaths"] and p["deess_db"] == 0
+    assert p["compress"] == 0.5 and p["presence_db"] == 0 and p["air_db"] == 0 and p["drive_bite"] == 0
+    assert V.tweak_preset(V.preset("soul"), {"process": "raw"})["raw"]
+    assert V.clean_tweaks({"denoise": "loud", "process": "raw"}) == {"process": "raw"}  # unknown option dropped
+
+
+def test_raw_voice_is_exactly_the_takes():
+    x, _ = S.sing(LEAD, BPM, pre_roll=1.0, start=4 * 60 / BPM, seed=9)
+    tk = V.Take(x, 4 * 60 / BPM - 1.0, "raw")
+    length = tk.end + 0.5
+    res = V.produce_free([tk], BPM, SECTIONS, 2, "major", "rock", length, tweaks={"process": "raw"},
+                         character="female")
+    raw, _ = V.comp_sections([tk], [(s["name"], s["start"] * 4 * 0.6, (s["start"] + s["bars"]) * 4 * 0.6)
+                                    for s in SECTIONS], length)
+    assert set(res.layers) == {"lead"}
+    assert np.allclose(res.layers["lead"][0] * np.sqrt(2), raw, atol=1e-6)
+    assert res.report["raw"] and res.report["character"] == "natural"
+    assert [s["step"] for s in res.report["steps"]] == ["Raw voice"]
+
+
+def test_every_step_that_ran_is_listed():
+    x, _ = S.sing(LEAD, BPM, pre_roll=1.0, start=4 * 60 / BPM, seed=10, noise_db=-50)
+    tk = V.Take(x, 4 * 60 / BPM - 1.0, "full")
+    res = V.produce_free([tk], BPM, SECTIONS, 2, "major", "soul", tk.end + 0.5)
+    names = [s["step"] for s in res.report["steps"]]
+    for want in ("Low cut", "Noise reduction", "Tuning to the key", "Compression", "Reverb"):
+        assert want in names, names
+    off = V.produce_free([tk], BPM, SECTIONS, 2, "major", "soul", tk.end + 0.5,
+                         tweaks={"denoise": "off", "compress": "off", "tuning": "off"})
+    names = [s["step"] for s in off.report["steps"]]
+    assert "Noise reduction" not in names and "Compression" not in names and "Tuning to the key" not in names
+
+
+def test_pitch_and_breath_tweaks_skip_world():
+    tk, _ = _take(11, vibrato_cents=10, sibilants=0)
+    f0, _ = V.track_f0(tk.audio, fast=False)
+    rep = {}
+    y, layer = V.apply_character(tk.audio, f0, "natural", rep, tweaks={"pitch": 7, "breath": 30}, scale=(2, "major"))
+    voice = next(s["detail"] for s in rep["steps"] if s["step"] == "Voice")
+    assert "PSOLA" in voice and "breath added" in voice and "WORLD" not in voice
+    f1, _ = V.track_f0(y, fast=False)
+    both = (f0 > 0) & (f1 > 0)
+    assert abs(np.median(1200 * np.log2(f1[both] / f0[both])) - 1200) < 30  # 7 notes of the key = an octave
+    rep2 = {}
+    V.apply_character(tk.audio, f0, "natural", rep2, tweaks={"tone": 10}, scale=(2, "major"))
+    assert "WORLD" in next(s["detail"] for s in rep2["steps"] if s["step"] == "Voice")

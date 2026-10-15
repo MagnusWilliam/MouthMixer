@@ -91,6 +91,18 @@ def test_studio_flow(home):
     assert client.get(f"/api/songs/{sid}/stems/{voc['stem']}").status_code == 200
     new = client.get(f"/api/songs/{sid}").json()["record"]["versions"][out["version"]]
     assert new["lyrics"]["chosen"] == 0  # the words travel with the version
+    # Vocal tracks collect in one working version instead of a new version each time.
+    assert new["working"] and "working version" in new["title"]
+    count = len(client.get(f"/api/songs/{sid}").json()["record"]["versions"])
+    raw = client.post(f"/api/songs/{sid}/vocals", json={"v": out["version"], "tweaks": {"process": "raw"}}).json()
+    assert raw["version"] == out["version"] and raw["vocals"]["raw"]
+    assert len(client.get(f"/api/songs/{sid}").json()["record"]["versions"]) == count
+    kept = client.post(f"/api/songs/{sid}/keep_version", json={"v": out["version"], "name": "first vocals"}).json()
+    assert kept["title"].endswith("· first vocals")
+    assert "working" not in client.get(f"/api/songs/{sid}").json()["record"]["versions"][out["version"]]
+    assert client.post(f"/api/songs/{sid}/keep_version", json={"v": out["version"]}).status_code == 400
+    nxt = client.post(f"/api/songs/{sid}/vocals", json={"v": out["version"]}).json()  # a new working version
+    assert nxt["version"] == count
     # Muting the vocals and saving gives a version without them.
     client.post(f"/api/songs/{sid}/mixer/part", json={"v": out["version"], "id": "vocal", "muted": True})
     again = client.post(f"/api/songs/{sid}/mixer/save", json={"v": out["version"]}).json()

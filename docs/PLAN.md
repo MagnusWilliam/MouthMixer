@@ -1158,6 +1158,21 @@ the Make tab says so plainly if the starters can't load.
 - **Next:** the user runs the sync test in Make, builds "Last Train, First Light" from a combo and a few
   ready-made parts, and tries voices with Preview.
 
+**Build status (2026-10-15): first local session, the user's real vocals measured (VOCALS §13).**
+- Measured "Last Train, First Light" (72 takes, the built stems) before changing code. Choppy tuning: WORLD
+  resynthesis, which ran even with tuning off, wobbled the level inside notes and doubled abrupt level jumps.
+  Muffled: mostly the recordings (dark and near clipping on the chorus/gang takes: mic technique), not the
+  chain; room-noise warnings were rumble plus headphone click bleed.
+- Tuning and timing now use **PSOLA** (your own waveform, re-spaced); tuning off returns the take untouched.
+  Pitch and breath tweaks no longer resynthesise; WORLD only for tone, grit, whisper, characters, stacks.
+- **Raw voice** and a switch for every processing step (low cut, noise reduction, breaths, de-esser,
+  compression, brightness); the result lists each step that ran. Noise measured above 100 Hz in the quietest
+  300 ms; noise reduction light by default. Vorbis at ~280 kbps.
+- **One working version** collects vocal tracks (and in/out-of-song changes); **Save as a version** keeps it.
+  New versions start with the mixer exactly as it was (volumes, sounds, parts switched off).
+- **Next:** the user listens (A/B files from this session, then the app after rerunning setup from the repo);
+  reference-song analysis tool (needs Demucs + PyTorch: ask first), female voice research, production pass.
+
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.
 

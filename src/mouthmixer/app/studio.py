@@ -181,7 +181,26 @@ def add_routes(app: FastAPI, lib, settings: config.Settings) -> None:
             if body.get("lead_mode") in ("duck", "mute", "keep"):
                 m.state["lead_mode"] = body["lead_mode"]
                 m.save_state()
-            return new_version(song_id, m.bake())
+            # working: quick changes (a vocal track in or out) update the working version instead of adding one
+            return new_version(song_id, m.bake(working=bool(body.get("working"))))
+
+    @app.post("/api/songs/{song_id}/keep_version")
+    def keep_version(song_id: str, body: dict = Body(default={})):
+        """"Save as a version": the working version becomes an ordinary, kept version (with your name for
+        it); the next vocal change starts a new working version from it."""
+        with _lock(song_id):
+            vi = version_of(song_id, body.get("v"))
+            rec = record(song_id)
+            v = rec["versions"][vi]
+            if not v.get("working"):
+                raise HTTPException(400, "that version is already saved")
+            name = " ".join(str(body.get("name") or "").split())[:60] or "with vocals"
+            v.pop("working", None)
+            v["title"] = v["title"].split(" · ")[0] + " · " + name
+            v["saved_at"] = time.time()
+            mixer.write_json(song_dir(song_id) / "song.json", rec)
+            lib.update_song(song_id, rec, vi)
+        return {"version": vi, "title": v["title"]}
 
     # --- lyrics --------------------------------------------------------------------------------------
     def lyric_view(v: dict) -> dict:

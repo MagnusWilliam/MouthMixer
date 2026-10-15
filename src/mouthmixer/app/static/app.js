@@ -123,7 +123,7 @@ function renderSong() {
   $("#s-parts").innerHTML = `<b>Yours:</b> ${mine.length ? esc(mine.join(", ")) : "the idea it grew from"} ` +
     `<span class="muted">(from ${clips.length} clip${clips.length > 1 ? "s" : ""})</span><br>` +
     `<b>Added:</b> ${esc((v.added || []).join(", "))}`;
-  $("#s-audio").src = `/api/songs/${s.id}/file/${v.file}`;
+  $("#s-audio").src = `/api/songs/${s.id}/file/${v.file}?t=${Math.round(v.mixed_at || 0)}`;  // a working version is rewritten in place
   $("#s-dl-audio").href = `/api/songs/${s.id}/file/${v.file}`;
   $("#s-dl-midi").href = `/api/songs/${s.id}/file/${v.midi}`;
   const vers = $("#s-versions");
@@ -131,11 +131,18 @@ function renderSong() {
   rec.versions.forEach((x, i) => {
     const b = document.createElement("button");
     b.className = "ver" + (i === vi ? " on" : "");
-    b.innerHTML = `<b>${i + 1}</b> ${esc(x.style)} <span class="muted">${Math.round(x.score * 100)}</span>`;
-    b.title = x.describe;
+    b.innerHTML = `<b>${i + 1}</b> ${esc(x.style)} <span class="muted">${Math.round(x.score * 100)}</span>${x.working ? ` <span class="wk">✎ working</span>` : ""}`;
+    b.title = x.working ? "The working version: vocal tracks you make collect here. Save it as a version to keep it." : x.describe;
     b.onclick = async () => { await post(`/api/songs/${s.id}/version`, { version: i }); await selectSong(s.id); };
     vers.appendChild(b);
   });
+  if (v.working && window.keepVersion) {
+    const kb = document.createElement("button");
+    kb.className = "primary"; kb.textContent = "Save as a version";
+    kb.title = "Keep this working version under a name; your next vocal change starts a new working version";
+    kb.onclick = () => window.keepVersion(kb);
+    vers.appendChild(kb);
+  }
   $("#s-summary").textContent = rec.summary + (rec.history ? " " + rec.history.join(" ") : "");
   const d = v.critic.details, sec = v.critic.sections;
   const checks = [

@@ -19,7 +19,7 @@ dependencies = [
   "pedalboard>=0.9",       # effects
   "pyloudnorm>=0.1.1",     # loudness
   # Vocals and lyrics (docs/VOCALS.md)
-  "pyworld>=0.3.4",        # WORLD vocoder: pitch and timing correction that keeps your voice's character
+  "pyworld>=0.3.4",        # WORLD vocoder: voice characters (tone, grit, whisper, stacks); tuning uses PSOLA
   "setuptools<81",         # pyworld imports pkg_resources, which setuptools 81 removes
   "noisereduce>=3.0",      # spectral noise reduction from the take's own room noise
   "pronouncing>=0.2",      # CMU dictionary: syllables and stress for fitting words to notes

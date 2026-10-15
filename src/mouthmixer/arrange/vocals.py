@@ -35,6 +35,8 @@ DEFAULT = {
     "harmony": None, "reverb": 0.18, "room": 0.55, "decay_s": 1.4, "predelay_ms": 30, "delay": 0.12,
     "delay_beats": 0.75, "slap_ms": 0, "throws": True, "bandpass": None, "shimmer": 0.0, "octave_layer": 0.0,
     "level_lu": -1.0, "deess_db": 6.0,
+    # Switches for each step (the "Processing" tweaks): raw skips everything but level and timing.
+    "raw": False, "highpass": True, "denoise": 0.35, "breaths": True, "compress": 1.0,
 }
 PRESETS = {
     "soul": {"label": "Soul / city pop: warm, natural tuning, plate", "strength": 0.6, "retune_ms": 45,
@@ -398,41 +400,72 @@ def _filt(x, sos):
     return sosfiltfilt(sos, x).astype(np.float32)
 
 
+def _quietest(x: np.ndarray, w: int) -> np.ndarray:
+    if len(x) <= w:
+        return x
+    c = np.cumsum(np.r_[0.0, x.astype(np.float64) ** 2])
+    i = int(np.argmin(c[w:] - c[:-w]))
+    return x[i:i + w]
+
+
 def take_noise(takes: list[Take], notes: list[Note]) -> tuple[np.ndarray, float]:
-    """The room noise: the longest lead-in (the count-in, before the first sung note) of any take."""
-    best = np.zeros(1, dtype=np.float32)
+    """The room noise: the quietest 300 ms of the lead-ins (the count-in, before the first sung note),
+    above 100 Hz. Measured on the user's takes (VOCALS §13): most of the "noise" was 43-59 Hz rumble, which
+    the low cut removes anyway, and the count-in also carries the click bleeding from the headphones, so
+    a whole count-in made a wrong profile for noise reduction."""
+    w = int(0.3 * SR)
+    lead_ins = []
     for tk in takes:
         first = min((n.start for n in notes if n.start >= tk.t0), default=tk.end)
         seg = tk.audio[: max(0, int((first - 0.4 - tk.t0) * SR))]
-        if len(seg) > len(best):
-            best = seg
-    if len(best) < SR // 10:  # no lead-in: the quietest 250 ms of the first take
-        x = takes[0].audio
-        w = SR // 4
-        c = np.cumsum(np.r_[0.0, x.astype(np.float64) ** 2])
-        e = (c[w:] - c[:-w]) / w
-        i = int(np.argmin(e)) if len(e) else 0
-        best = x[i:i + w]
+        if len(seg) >= SR // 10:
+            lead_ins.append(_filt(seg, _sos("high", 100)))
+    if lead_ins:
+        cands = [_quietest(s, w) for s in lead_ins]
+    else:  # no lead-in: the quietest 300 ms of the first take
+        cands = [_quietest(_filt(takes[0].audio, _sos("high", 100)), w)]
+    best = min(cands, key=lambda s: float(np.mean(s.astype(np.float64) ** 2)))
     return best, _db(np.sqrt(np.mean(best.astype(np.float64) ** 2)) + 1e-12)
 
 
-def clean(x: np.ndarray, notes: list[Note], noise: np.ndarray, noise_db: float, report: dict) -> np.ndarray:
-    """High-pass, noise reduction from the pre-roll (VOCALS §2), plosive pops near onsets."""
-    lowest = min(n.midi for n in notes)
-    hp = float(np.clip(0.7 * 440 * 2 ** ((lowest - 69) / 12), 70, 150))
-    y = _filt(x, _sos("high", hp))
-    report["highpass_hz"] = round(hp)
-    if noise_db > -65 and len(noise) > SR // 10:
-        import noisereduce as nr
+def did(report: dict, step: str, detail: str = "") -> None:
+    """Note a processing step that ran, in order, for the "What was done to your voice" list."""
+    report.setdefault("steps", []).append({"step": step, "detail": detail})
 
-        # prop_decrease 0.6 is about 8 dB of reduction: enough to lift the room, too little for "musical noise".
-        y = nr.reduce_noise(y=y, sr=SR, y_noise=_filt(noise, _sos("high", hp)), stationary=True,
-                            prop_decrease=0.6, n_fft=2048).astype(np.float32)
-        report["noise_reduction_db"] = 8
-    else:
+
+def denoise(x: np.ndarray, noise: np.ndarray, noise_db: float, amount: float, hp: float | None,
+            report: dict) -> np.ndarray:
+    """Stationary noise reduction from the count-in. `amount` is noisereduce's prop_decrease: 0.35 (light,
+    about 4 dB) is the default since measuring the user's takes (VOCALS §13): 0.6 (about 8 dB) added ~40%
+    more abrupt level jumps between syllables on a quiet verse. Skipped in a quiet room."""
+    if amount <= 0 or noise_db <= -65 or len(noise) <= SR // 10:
         report["noise_reduction_db"] = 0
-    y, pops = fix_plosives(y, notes)
-    report["plosives_fixed"] = pops
+        return x
+    import noisereduce as nr
+
+    ref = _filt(noise, _sos("high", hp)) if hp else noise
+    y = nr.reduce_noise(y=x, sr=SR, y_noise=ref, stationary=True, prop_decrease=amount, n_fft=2048).astype(np.float32)
+    report["noise_reduction_db"] = round(-20 * np.log10(1 - amount))
+    did(report, "Noise reduction", f"about {report['noise_reduction_db']} dB off the room noise ({noise_db:.0f} dBFS)")
+    return y
+
+
+def clean(x: np.ndarray, notes: list[Note], noise: np.ndarray, noise_db: float, report: dict,
+          p: dict | None = None) -> np.ndarray:
+    """High-pass, noise reduction from the pre-roll (VOCALS §2), plosive pops near onsets."""
+    p = p or DEFAULT
+    lowest = min(n.midi for n in notes)
+    hp = float(np.clip(0.7 * 440 * 2 ** ((lowest - 69) / 12), 70, 150)) if p["highpass"] else None
+    y = _filt(x, _sos("high", hp)) if hp else np.asarray(x, dtype=np.float32)
+    report["highpass_hz"] = round(hp) if hp else 0
+    if hp:
+        did(report, "Low cut", f"below {round(hp)} Hz")
+    y = denoise(y, noise, noise_db, p["denoise"], hp, report)
+    if hp:
+        y, pops = fix_plosives(y, notes)
+        report["plosives_fixed"] = pops
+        if pops:
+            did(report, "Pops softened", f"{pops} plosive{'s' if pops > 1 else ''}")
     return y
 
 
@@ -561,10 +594,9 @@ def pitch_curve(f0: np.ndarray, times: np.ndarray, notes: list[Note], onsets: li
 
 
 def correct(x: np.ndarray, notes: list[Note], p: dict, report: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Timing and pitch correction, one sung passage at a time (bounded memory). Returns (audio, f0 before,
-    f0 after) with f0 on the 5 ms grid of song time."""
-    import pyworld as pw
-
+    """Timing and pitch correction, one sung passage at a time (bounded memory), with PSOLA (your own
+    voice, re-spaced; see `psola`). Returns (audio, f0 before, f0 after) with f0 on the 5 ms grid of song
+    time."""
     f0_on, _ = track_f0(x, fast=True)
     f0_all, t_all = track_f0(x, fast=False)
     onsets_all = find_onsets(f0_on, t_all, 0.0, notes)
@@ -583,44 +615,32 @@ def correct(x: np.ndarray, notes: list[Note], p: dict, report: dict) -> tuple[np
         sel = [k for k, n in enumerate(notes) if a <= n.start < b]
         if not sel:
             continue
-        # WORLD analysis of this passage, with the f0 track we already have (resampled to its frames).
+        # This passage's pitch track (resampled to its frames).
         t = np.arange(int(len(seg) / SR / (FRAME_MS / 1000)) + 1) * FRAME_MS / 1000
         f0 = np.interp(t + a, t_all, f0_all)
         f0 = np.where(np.interp(t + a, t_all, (f0_all > 0).astype(float)) > 0.5, f0, 0.0)
-        sp = pw.cheaptrick(seg, f0, t, SR)
-        ap = pw.d4c(seg, f0, t, SR)
         # Time map: output frame time -> input frame time.
         outs, ins = _warp_anchors([onsets_all[k] for k in sel], [corr[k] for k in sel], a, b)
         src_t = np.interp(t + a, outs, ins) - a
         fi = np.clip(src_t / (FRAME_MS / 1000), 0, len(t) - 1)
         i0 = np.floor(fi).astype(int)
         i1 = np.minimum(i0 + 1, len(t) - 1)
-        w = (fi - i0)[:, None]
-        sp_w = sp[i0] * (1 - w) + sp[i1] * w
-        ap_w = ap[i0] * (1 - w) + ap[i1] * w
-        f0_w = np.where((f0[i0] > 0) & (f0[i1] > 0), f0[i0] * (1 - w[:, 0]) + f0[i1] * w[:, 0], f0[np.round(fi).astype(int)])
+        w = fi - i0
+        f0_w = np.where((f0[i0] > 0) & (f0[i1] > 0), f0[i0] * (1 - w) + f0[i1] * w, f0[np.round(fi).astype(int)])
         # Pitch: notes at their corrected onsets.
         on_new = [None if onsets_all[k] is None else onsets_all[k] - (corr[k] or 0.0) for k in sel]
         f0_new, fixes = pitch_curve(f0_w, t + a, [notes[k] for k in sel], on_new, p)
         for f in fixes:
             f["note"] = sel[f["note"]]
         fixes_all += fixes
-        world = pw.synthesize(np.ascontiguousarray(f0_new), np.ascontiguousarray(sp_w), np.ascontiguousarray(ap_w),
-                              SR, FRAME_MS)[: len(seg)]
-        if len(world) < len(seg):
-            world = np.pad(world, (0, len(seg) - len(world)))
-        # Consonants and breaths from the original (time-mapped), voiced sounds from WORLD.
+        both = (f0_w > 0) & (f0_new > 0)
+        shift_c = np.where(both, 1200 * np.log2(np.maximum(f0_new, 1e-6) / np.maximum(f0_w, 1e-6)), 0.0)
+        if p["tune"] == "hard":  # the snap target is steady; keep the tracker's frame jitter out of the move
+            shift_c = np.where(both, _run_median(np.where(both, shift_c, np.nan), both, 4), 0.0)
+        timed = any(corr[k] for k in sel)
         samp_t = np.arange(len(seg)) / SR
-        src_samples = (np.interp(samp_t + a, outs, ins) - a) * SR
-        orig = np.interp(src_samples, np.arange(len(seg)), seg)
-        vmask = np.interp(samp_t, t, (f0_new > 0).astype(float))
-        k = int(0.01 * SR)
-        vmask = _movavg(vmask, k)
-        # Match WORLD's level to the original's in voiced parts.
-        vv = vmask > 0.9
-        if vv.sum() > SR // 20:
-            world *= np.sqrt(np.mean(orig[vv] ** 2) / max(np.mean(world[vv] ** 2), 1e-12))
-        y[ia:ib] = (vmask * world + (1 - vmask) * orig).astype(np.float32)
+        src_samples = (np.interp(samp_t + a, outs, ins) - a) * SR if timed else None
+        y[ia:ib] = psola(seg, f0, 2 ** (shift_c / 1200), src_samples)
         fa, fb = np.searchsorted(t_all, [a, b])
         f0_after[fa:fb] = np.interp(t_all[fa:fb], t + a, f0_new)
         f0_after[fa:fb][np.interp(t_all[fa:fb], t + a, (f0_new > 0).astype(float)) < 0.5] = 0
@@ -653,6 +673,102 @@ def _passages(f0: np.ndarray, t: np.ndarray, gap: float = 0.3, pad: float = 0.12
         else:
             merged.append((s, e))
     return merged
+
+
+# --------------------------------------------------------------------------------------------------
+# Pitch shifting that keeps your voice (PSOLA)
+# --------------------------------------------------------------------------------------------------
+# Measured on the user's real takes (2026-10-15, VOCALS §13): WORLD resynthesis, even with no pitch change
+# at all, made the level wobble -8 to +5 dB from one 5 ms frame to the next inside sung notes (the pitch
+# tracker's jitter changes WORLD's spectral envelope) and about doubled the abrupt level jumps: that is the
+# "choppy" tuning. PSOLA moves pitch by re-spacing the voice's own cycles, so consonants, breath and the
+# top end are the recording itself, and a run that needs no change comes back sample for sample.
+
+def _pitch_marks(seg: np.ndarray, f0: np.ndarray, hop_s: float) -> tuple[np.ndarray, np.ndarray]:
+    """One mark per glottal cycle (source samples) in a voiced run, on the peaks of the signal low-passed
+    just above f0, and the spacing from each mark to the next (the local period)."""
+    from scipy.signal import butter, sosfiltfilt
+
+    fmed = float(np.median(f0))
+    P = SR / np.interp(np.arange(len(seg)) / SR, np.arange(len(f0)) * hop_s, np.clip(f0, fmed / 1.8, fmed * 1.8))
+    lp = sosfiltfilt(butter(2, min(0.45 * SR, 1.5 * fmed), "low", fs=SR, output="sos"), seg) if len(seg) > 15 else seg
+    first = int(P[0])
+    if first >= len(lp):
+        return np.zeros(0, dtype=int), np.zeros(0)
+    marks = [int(np.argmax(lp[:first]))]
+    while True:
+        i = marks[-1]
+        p = P[i]
+        w = int(p * 0.2)
+        lo, hi = max(i + 1, int(i + p) - w), min(len(lp), int(i + p) + w + 1)
+        if lo >= hi:
+            break
+        marks.append(lo + int(np.argmax(lp[lo:hi])))
+    marks = np.array(marks)
+    spacing = np.diff(marks).astype(float)
+    return marks, np.r_[spacing, spacing[-1:]] if len(spacing) else np.zeros(len(marks))
+
+
+def psola(x: np.ndarray, f0: np.ndarray, ratio: np.ndarray, src: np.ndarray | None = None,
+          min_cents: float = 1.0) -> np.ndarray:
+    """Pitch (and optionally timing) change by pitch-synchronous overlap-add.
+    `f0`: 5 ms frames of `x` (Hz, 0 = unvoiced). `ratio`: pitch factor per 5 ms frame of the OUTPUT.
+    `src`: for each output sample, the source sample it comes from (a time map for timing correction);
+    None keeps the timing. Unvoiced sounds are the original (time-mapped); voiced runs are rebuilt from
+    two-period grains of the original and crossfaded in over 10 ms. Without a time map, a run that moves
+    less than `min_cents` anywhere is left exactly as recorded."""
+    x = np.asarray(x, dtype=np.float64)
+    hop_s = FRAME_MS / 1000
+    n_out = len(src) if src is not None else len(x)
+    y = np.interp(src, np.arange(len(x)), x) if src is not None else x.copy()
+    v = f0 > 0
+    runs = np.flatnonzero(np.diff(np.r_[0, v.astype(int), 0])).reshape(-1, 2)
+    fl = int(0.01 * SR)
+    for a, b in runs:
+        if b - a < 4:
+            continue
+        s0, s1 = int(a * hop_s * SR), min(len(x), int(b * hop_s * SR))
+        if src is None:
+            o0, o1 = s0, s1
+            r_run = ratio[a:min(b, len(ratio))]
+            if not len(r_run) or np.max(np.abs(np.log2(np.maximum(r_run, 1e-6)))) * 1200 < min_cents:
+                continue
+        else:
+            o0, o1 = (int(i) for i in np.searchsorted(src, [s0, s1]))
+        if o1 - o0 < 4 * fl // 10:
+            continue
+        marks, spacing = _pitch_marks(x[s0:s1], f0[a:b], hop_s)
+        if len(marks) < 3:
+            continue
+        marks = marks + s0
+        margin = int(spacing.max()) + 2
+        out = np.zeros(o1 - o0 + 2 * margin)
+        ws = np.zeros_like(out)
+        R = np.interp((np.arange(o0, o1) + 0.5) / SR, np.arange(len(ratio)) * hop_s, ratio)
+        t = float(marks[0] if src is None else np.searchsorted(src, marks[0]))
+        while t < o1:
+            ti = int(t)
+            s = src[min(ti, n_out - 1)] if src is not None else t
+            k = int(np.argmin(np.abs(marks - s)))
+            m, p = int(marks[k]), max(2, int(spacing[k]))
+            win = np.hanning(2 * p + 1)[:-1]
+            g = np.zeros(2 * p)
+            lo, hi = max(0, m - p), min(len(x), m + p)
+            g[lo - (m - p):hi - (m - p)] = x[lo:hi]
+            c = int(round(t)) - o0 + margin
+            if 0 <= c - p and c + p <= len(out):
+                out[c - p:c + p] += g * win
+                ws[c - p:c + p] += win
+            t += spacing[k] / max(0.25, R[min(max(ti - o0, 0), len(R) - 1)])
+        z = np.where(ws > 0.15, out / np.maximum(ws, 1e-9), 0.0)[margin:margin + o1 - o0]
+        cover = _movavg((ws[margin:margin + o1 - o0] > 0.15).astype(float), fl // 2)
+        f = min(fl, (o1 - o0) // 4)
+        fade = np.ones(o1 - o0)
+        fade[:f] = np.linspace(0, 1, f)
+        fade[-f:] = np.linspace(1, 0, f)
+        w = fade * cover
+        y[o0:o1] = w * z + (1 - w) * y[o0:o1]
+    return y.astype(np.float32)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -694,6 +810,8 @@ def tame_breaths(x: np.ndarray, f0: np.ndarray, noise_db: float, report: dict) -
                 count += 1
         i = j
     report["breaths_lowered"] = count
+    if count:
+        did(report, "Breaths", f"{count} turned down 4-6 dB")
     return (x * gain).astype(np.float32)
 
 
@@ -842,25 +960,39 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
         report["resonance_cut"] = {"hz": round(f), "db": round(-min(4.0, 1 + prom / 2), 1)}
     if fx:
         x = Pedalboard(fx)(x[None], SR)[0]
+        did(report, "Resonance cut", f"{report['resonance_cut']['db']} dB at {report['resonance_cut']['hz']} Hz")
     # 3 de-esser.
-    x, gr = deess(x, p["deess_db"])
+    gr = 0.0
+    if p["deess_db"] > 0:
+        x, gr = deess(x, p["deess_db"])
+        if gr > 0.5:
+            did(report, "De-esser", f"'s' sounds down up to {gr:.1f} dB")
     report["deess_max_db"] = round(gr, 1)
     # 4-5 two compressors (thresholds from the take's own levels, so the amount of compression is what we want).
-    ta = _threshold(x, voiced, 0.99) - 4.0 / (1 - 1 / p["comp_a"])
-    x = Pedalboard([Compressor(threshold_db=ta, ratio=p["comp_a"], attack_ms=2, release_ms=50)])(x[None], SR)[0]
-    tb = _threshold(x, voiced, 0.5) - p["comp_b_db"] / (1 - 1 / p["comp_b"])
-    x = Pedalboard([Compressor(threshold_db=tb, ratio=p["comp_b"], attack_ms=20, release_ms=120)])(x[None], SR)[0]
+    tb = _threshold(x, voiced, 0.5) - 6.0
+    if p["compress"] > 0:
+        k = p["compress"]
+        ta = _threshold(x, voiced, 0.99) - 4.0 * k / (1 - 1 / p["comp_a"])
+        x = Pedalboard([Compressor(threshold_db=ta, ratio=p["comp_a"], attack_ms=2, release_ms=50)])(x[None], SR)[0]
+        tb = _threshold(x, voiced, 0.5) - p["comp_b_db"] * k / (1 - 1 / p["comp_b"])
+        x = Pedalboard([Compressor(threshold_db=tb, ratio=p["comp_b"], attack_ms=20, release_ms=120)])(x[None], SR)[0]
+        did(report, "Compression", f"peaks caught, then about {p['comp_b_db'] * k:.0f} dB of levelling")
     # 6 presence + air (rock adds bite at 2 kHz), lo-fi band-pass instead of air.
-    eq = [PeakFilter(cutoff_frequency_hz=3500, gain_db=p["presence_db"], q=0.8)]
+    eq = [PeakFilter(cutoff_frequency_hz=3500, gain_db=p["presence_db"], q=0.8)] if p["presence_db"] else []
     if p["drive_bite"]:
         eq.append(PeakFilter(cutoff_frequency_hz=2000, gain_db=p["drive_bite"], q=1.0))
     if p["bandpass"]:
         eq += [HighpassFilter(p["bandpass"][0]), LowpassFilter(p["bandpass"][1])]
     elif p["air_db"]:
         eq.append(HighShelfFilter(cutoff_frequency_hz=11000, gain_db=p["air_db"], q=0.7))
-    x = Pedalboard(eq)(x[None], SR)[0]
+    if eq:
+        x = Pedalboard(eq)(x[None], SR)[0]
+        did(report, "Brightness", "band-passed (lo-fi)" if p["bandpass"] else
+            f"presence {p['presence_db']:+.1f} dB at 3.5 kHz, air {p['air_db']:+.1f} dB above 11 kHz")
     # 7 saturation. 8 riding.
-    x = _saturate(x, p["sat"])
+    if p["sat"] > 0:
+        x = _saturate(x, p["sat"])
+        did(report, "Warmth", f"saturation {p['sat']:.2f}")
     x = ride(x, notes, report)
     lead = _pan(x, 0.0)
     layers = {"lead": lead}
@@ -871,6 +1003,7 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
         d1 = _shift(_pitch_shift(x, 5), 12) * m * g
         d2 = _shift(_pitch_shift(x, -5), 19) * m * g
         layers["doubles"] = _pan(d1, -0.3) + _pan(d2, 0.3)
+        did(report, "Doubles", f"two copies of you left and right, {p.get('double_db', -8):.0f} dB")
         if p["octave_layer"]:
             layers["doubles"] += _pan(_pitch_shift(x, 1200) * m * p["octave_layer"], 0.0)
     # 10 harmonies: a third above on the hook, two voices at ±55%, -9 dB each, high-passed, de-essed harder.
@@ -883,6 +1016,7 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
             h = Pedalboard([Compressor(threshold_db=tb, ratio=p["comp_b"], attack_ms=20, release_ms=120)])(h[None], SR)[0]
             h = h * m * 10 ** (-9 / 20)
             layers["harmony"] = _pan(_shift(h, 8), -0.55) + _pan(_shift(_pitch_shift(h, 6), 15), 0.55)
+            did(report, "Harmony", "a third above on the hook")
     # 11 reverb send (plate-ish), pre-delay, return band-limited. 12 delay send, ducked by the dry vocal.
     bus = layers["lead"] + layers.get("doubles", 0) + layers.get("harmony", 0)
     space = np.zeros_like(bus)
@@ -894,12 +1028,14 @@ def chain(dry: np.ndarray, notes: list[Note], f0_after: np.ndarray, p: dict, bpm
         if p["shimmer"]:
             wet = wet + p["shimmer"] * np.stack([_pitch_shift(c, 1200) for c in wet])
         space += wet
+        did(report, "Reverb", f"{p['decay_s']:.1f} s room, send {p['reverb']:.2f}")
     spb = 60.0 / bpm
     duck = 1 - 0.7 * np.clip(_env(x, 150) / (np.quantile(_env(x, 150)[voiced], 0.9) + 1e-9 if voiced.any() else 1), 0, 1)
     if p["delay"]:
         dl = Pedalboard([Delay(delay_seconds=p["delay_beats"] * spb, feedback=p.get("delay_feedback", 0.2), mix=1.0), HighpassFilter(300),
                          LowpassFilter(5000)])
         space += dl(bus * p["delay"], SR) * duck
+        did(report, "Echo", f"{p['delay_beats']:g}-beat delay, send {p['delay']:.2f}")
         if p["throws"]:
             # A quarter-note "throw" on the last word of each line.
             tm = np.zeros(len(x), dtype=np.float32)
@@ -1093,7 +1229,7 @@ def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], ton
     notes = notes_in_seconds(lead, bpm, sections)
     if not notes:
         raise ValueError("this song has no melody to sing")
-    report: dict = {"preset": p["name"], "preset_label": p["label"]}
+    report: dict = {"preset": p["name"], "preset_label": p["label"], "breaths_lowered": 0}
     scores = [score_take(tk, notes) for tk in takes]
     raw, picks, _ = comp(takes, notes, scores, length, choice)
     report["picks"] = {str(k): v for k, v in picks.items()}
@@ -1104,9 +1240,14 @@ def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], ton
                          "picked (its meter should move), then sing the melody (words or \"la\") after the count-in")
     noise, noise_db = take_noise(takes, notes)
     report["noise_db"] = round(noise_db, 1)
-    x = clean(raw, sung, noise, noise_db, report)
+    if p["raw"]:
+        return _raw_result(raw, noise_db, report, tonic, mode)
+    x = clean(raw, sung, noise, noise_db, report, p)
     y, f0_before, f0_after = correct(x, sung, p, report)
-    y = tame_breaths(y, f0_after, noise_db, report)
+    did(report, "Timing and tuning", f"{report['timing_moved']} notes moved in time, " +
+        ("snapped to the notes" if p["tune"] == "hard" else f"pitch pulled {round(p['strength'] * 100)}% toward the notes"))
+    if p["breaths"]:
+        y = tame_breaths(y, f0_after, noise_db, report)
     y, stack = apply_character(y, f0_after, character, report, tweaks=tweaks, scale=(tonic, mode))
     ch = character_spec(character, tweaks)
     if ch.get("octave") or ch.get("steps") or ch.get("stack") or ch.get("whisper") or ch.get("pa") or ch.get("harmony_voice"):
@@ -1158,6 +1299,20 @@ def produce(takes: list[Take], lead: list, bpm: float, sections: list[dict], ton
 # - rap and spoken sections are not tuned at all, only cleaned and processed;
 # - no timing correction (there's no grid of notes to correct against).
 
+def _raw_result(raw: np.ndarray, noise_db: float, report: dict, tonic: int, mode: str,
+                spans: list | None = None) -> Result:
+    """The raw voice: the chosen takes spliced together exactly as recorded, centred. The only things
+    that happen later are the level against the music and the timing nudge (Mixer.with_vocals)."""
+    f0, _ = track_f0(raw, fast=True)  # only to know where you sing (level matching, the music's pocket)
+    notes = phrase_notes(f0, spans or [])
+    report.update({"character": "natural", "character_label": "Your voice (raw)", "raw": True,
+                   "tuned_frames_moved_cents": 0.0, "breaths_lowered": 0, "timing_moved": 0})
+    did(report, "Raw voice", "exactly as recorded: no clean-up, tuning, voice or effects")
+    layers = {"lead": _pan(np.asarray(raw, dtype=np.float32), 0.0)}
+    report["quality"] = quality_free(raw, raw, f0, notes, [], tonic, mode, noise_db)
+    return Result(layers, np.asarray(raw, dtype=np.float32), f0, report)
+
+
 def comp_sections(takes: list[Take], spans: list[tuple[str, float, float]], length: float,
                   choice: dict[str, str] | None = None) -> tuple[np.ndarray, dict[str, str]]:
     n = int(length * SR)
@@ -1197,61 +1352,37 @@ def _scale_target(midi: np.ndarray, tonic: int, mode: str) -> np.ndarray:
 
 def tune_to_key(x: np.ndarray, tonic: int, mode: str, p: dict, keep: list[tuple[float, float]],
                 report: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Key-based pitch correction with WORLD, passage by passage; `keep` = (start, end) song times left
-    untouched (rap, spoken). Returns (audio, f0 before, f0 after) on the 5 ms grid."""
-    import pyworld as pw
-
+    """Key-based pitch correction with PSOLA; `keep` = (start, end) song times left untouched (rap,
+    spoken). Tuning off (strength 0) returns the audio exactly as it came in. Returns (audio, f0 before,
+    f0 after) on the 5 ms grid."""
     f0_all, t_all = track_f0(x, fast=False)
-    f0_after = f0_all.copy()
-    y = x.copy()
+    hard = p["tune"] == "hard"
+    if not hard and p["strength"] <= 0:
+        report["tuned_frames_moved_cents"] = 0.0
+        return np.asarray(x, dtype=np.float32).copy(), f0_all, f0_all.copy()
     hop = FRAME_MS / 1000
-    moved = []
-    for a, b in _passages(f0_all, t_all):
-        mid = (a + b) / 2
-        if any(k0 <= mid < k1 for k0, k1 in keep):
-            continue
-        ia, ib = int(a * SR), min(len(x), int(b * SR))
-        seg = x[ia:ib].astype(np.float64)
-        if len(seg) < SR // 10:
-            continue
-        t = np.arange(int(len(seg) / SR / hop) + 1) * hop
-        f0 = np.interp(t + a, t_all, f0_all)
-        f0[np.interp(t + a, t_all, (f0_all > 0).astype(float)) < 0.5] = 0
-        v = f0 > 0
-        if v.sum() < 5:
-            continue
-        m = np.full(len(f0), np.nan)
-        m[v] = 69 + 12 * np.log2(f0[v] / 440)
-        # The note being aimed at: a 150 ms running median of the contour, snapped to the scale.
-        smooth = _run_median(m, v, int(0.15 / hop))
-        target = m.copy()
-        target[v] = _scale_target(smooth[v], tonic, mode)
-        dev = np.zeros(len(f0))
-        dev[v] = target[v] - smooth[v]
+    v = f0_all > 0
+    held = np.zeros(len(f0_all), dtype=bool)
+    for k0, k1 in keep:
+        held |= (t_all >= k0) & (t_all < k1)
+    m = np.full(len(f0_all), np.nan)
+    m[v] = 69 + 12 * np.log2(f0_all[v] / 440)
+    # The note being aimed at: a 150 ms running median of the contour, snapped to the scale.
+    smooth = _run_median(m, v, int(0.15 / hop))
+    target = m.copy()
+    target[v] = _scale_target(smooth[v], tonic, mode)
+    if hard:
+        # Snap (vibrato and scoops flattened), against a 20 ms median so the tracker's jitter isn't copied.
+        corr = np.where(v, target - _run_median(m, v, 4), 0.0)
+    else:
+        dev = np.where(v, target - smooth, 0.0)
         dev[np.abs(dev) * 100 <= 10] = 0.0
-        corr = dev * (1.0 if p["tune"] == "hard" else p["strength"])
-        k = max(1, int(max(p["retune_ms"], 5) / 1000 / hop))
-        corr = _movavg(corr, k)
-        new = np.where(v, 440 * 2 ** ((np.nan_to_num(m) + corr - 69) / 12), 0.0)
-        if p["tune"] == "hard":
-            new = np.where(v, 440 * 2 ** ((target - 69) / 12), 0.0)
-        moved += list(np.abs(corr[v]) * 100)
-        sp = pw.cheaptrick(seg, f0, t, SR)
-        ap = pw.d4c(seg, f0, t, SR)
-        world = pw.synthesize(np.ascontiguousarray(new), sp, ap, SR, FRAME_MS)[: len(seg)]
-        if len(world) < len(seg):
-            world = np.pad(world, (0, len(seg) - len(world)))
-        vmask = np.interp(np.arange(len(seg)) / SR, t, v.astype(float))
-        kk = int(0.01 * SR)
-        vmask = _movavg(vmask, kk)
-        vv = vmask > 0.9
-        if vv.sum() > SR // 20:
-            world *= np.sqrt(np.mean(seg[vv] ** 2) / max(np.mean(world[vv] ** 2), 1e-12))
-        y[ia:ib] = (vmask * world + (1 - vmask) * seg).astype(np.float32)
-        fa, fb = np.searchsorted(t_all, [a, b])
-        f0_after[fa:fb] = np.interp(t_all[fa:fb], t + a, new)
-        f0_after[fa:fb][np.interp(t_all[fa:fb], t + a, v.astype(float)) < 0.5] = 0
-    report["tuned_frames_moved_cents"] = round(float(np.median(moved)), 1) if moved else 0.0
+        corr = _movavg(dev * p["strength"], max(1, int(max(p["retune_ms"], 5) / 1000 / hop)))
+    corr[~v | held] = 0.0
+    y = psola(x, f0_all, 2 ** (corr / 12))
+    f0_after = np.where(v, f0_all * 2 ** (corr / 12), 0.0)
+    moved = np.abs(corr[v & ~held]) * 100
+    report["tuned_frames_moved_cents"] = round(float(np.median(moved)), 1) if len(moved) else 0.0
     return y, f0_all, f0_after
 
 
@@ -1299,7 +1430,8 @@ def produce_free(takes: list[Take], bpm: float, sections: list[dict], tonic: int
     section_modes = section_modes or {}
     spb = 60.0 / bpm
     spans = [(sc["name"], sc["start"] * 4 * spb, (sc["start"] + sc["bars"]) * 4 * spb) for sc in sections]
-    report: dict = {"preset": p["name"], "preset_label": p["label"], "mode": "free"}
+    report: dict = {"preset": p["name"], "preset_label": p["label"], "mode": "free", "breaths_lowered": 0,
+                    "timing_moved": 0}
     raw, picks = comp_sections(takes, spans, length, choice)
     # Gang and backing tracks: every other take is sung alongside the chosen one (real takes make width;
     # copies of one take don't).
@@ -1309,20 +1441,26 @@ def produce_free(takes: list[Take], bpm: float, sections: list[dict], tonic: int
     report["picks"] = picks
     noise, noise_db = take_noise(takes, [Note(a, b, 60) for _, a, b in spans])  # the count-in before a section
     report["noise_db"] = round(noise_db, 1)
-    x = _filt(raw, _sos("high", 100))
-    if noise_db > -65 and len(noise) > SR // 10:
-        import noisereduce as nr
-
-        x = nr.reduce_noise(y=x, sr=SR, y_noise=_filt(noise, _sos("high", 100)), stationary=True,
-                            prop_decrease=0.6, n_fft=2048).astype(np.float32)
+    if p["raw"]:
+        return _raw_result(raw, noise_db, report, tonic, mode, spans)
+    x = _filt(raw, _sos("high", 100)) if p["highpass"] else np.asarray(raw, dtype=np.float32)
+    if p["highpass"]:
+        did(report, "Low cut", "below 100 Hz")
+    x = denoise(x, noise, noise_db, p["denoise"], 100 if p["highpass"] else None, report)
     untuned = ("rap", "spoken", "whisper")
     keep = [(a, b) for nm, a, b in spans if section_modes.get(nm) in untuned]
     report["untuned_sections"] = [nm for nm, a, b in spans if section_modes.get(nm) in untuned]
     y, f0_before, f0_after = tune_to_key(x, tonic, mode, p, keep, report)
-    y = tame_breaths(y, f0_after, noise_db, report)
+    if p["tune"] == "hard" or p["strength"] > 0:
+        did(report, "Tuning to the key", ("snapped to the notes" if p["tune"] == "hard" else
+            f"pulled {round(p['strength'] * 100)}% toward the notes, {p['retune_ms']} ms") +
+            f"; median move {report['tuned_frames_moved_cents']} cents" +
+            (f" (not tuned: {', '.join(report['untuned_sections'])})" if report["untuned_sections"] else ""))
+    breaths = (lambda z, r: tame_breaths(z, f0_after, noise_db, r)) if p["breaths"] else (lambda z, r: z)
+    y = breaths(y, report)
     if (character or "natural") != "natural" or clean_tweaks(tweaks):
         # rap/spoken parts keep their own pitch line; the character still applies to them
-        y, stack = apply_character(y, f0_after, character, report, source=tame_breaths(x, f0_after, noise_db, {}),
+        y, stack = apply_character(y, f0_after, character, report, source=breaths(x, {}),
                                    tweaks=tweaks, scale=(tonic, mode))
     else:
         stack = None
@@ -1496,6 +1634,19 @@ def voice_variant(y: np.ndarray, f0: np.ndarray, *, formant: float = 1.0, octave
     return out
 
 
+def _aspirate(x: np.ndarray, f0: np.ndarray, amount: float, seed: int = 0) -> np.ndarray:
+    """Breathiness without resynthesis: soft noise (1.5-9 kHz) that follows the voice's own 1-4 kHz
+    envelope while you sing, about `amount` x 30% of the voice's level."""
+    x = np.asarray(x, dtype=np.float32)
+    hop = int(FRAME_MS / 1000 * SR)
+    v = np.repeat(f0 > 0, hop)[: len(x)].astype(float)
+    v = _movavg(np.pad(v, (0, max(0, len(x) - len(v)))), int(0.02 * SR))
+    env = _env(_filt(x, _sos("band", [1000, 4000], 2)), 10)
+    noise = _filt(np.random.default_rng(seed).normal(0, 1, len(x)).astype(np.float32), _sos("band", [1500, 9000], 2))
+    noise = noise / (np.sqrt(np.mean(noise.astype(np.float64) ** 2)) + 1e-12)
+    return (x + noise * env * v * 0.3 * min(1.0, amount)).astype(np.float32)
+
+
 def _harmony_ratio(f: np.ndarray, steps: int, tonic: int, mode: str) -> np.ndarray:
     """Per frame: how far to move each sung note to land `steps` notes of the key away from it."""
     from . import theory
@@ -1529,12 +1680,25 @@ def _harmony_ratio(f: np.ndarray, steps: int, tonic: int, mode: str) -> np.ndarr
 # Your own voice settings on top of a character (the "Voice tweaks" on the Sing screen). Each one only
 # changes what you move; values are [U] defaults to tune by ear (docs/VOCALS.md §12).
 TWEAKS = [
+    {"id": "process", "label": "Processing", "group": "steps", "hint": "raw voice: your takes exactly as recorded, "
+     "only set to the right level and place in the song (no clean-up, tuning, voice or effects)",
+     "options": [["", "full vocal chain"], ["raw", "raw voice (exactly as recorded)"]]},
+    {"id": "cleanup", "label": "Low cut (rumble, pops)", "group": "steps", "options": [["", "on"], ["off", "off"]]},
+    {"id": "denoise", "label": "Noise reduction", "group": "steps", "hint": "removes steady room noise; "
+     "stronger settings can make the voice watery", "options": [["", "light"], ["off", "off"], ["normal", "stronger"]]},
+    {"id": "breaths", "label": "Breaths turned down", "group": "steps", "options": [["", "on"], ["off", "off"]]},
+    {"id": "deess", "label": "De-esser ('s' sounds)", "group": "steps",
+     "options": [["", "as the style sets it"], ["off", "off"], ["strong", "stronger"]]},
+    {"id": "compress", "label": "Compression (evens loud and quiet)", "group": "steps",
+     "options": [["", "as the style sets it"], ["off", "off"], ["light", "light"], ["strong", "strong"]]},
+    {"id": "eq", "label": "Brightness (presence and air)", "group": "steps",
+     "options": [["", "as the style sets it"], ["off", "off (flat)"], ["bright", "brighter"]]},
     {"id": "pitch", "label": "Pitch (notes of the key)", "hint": "higher or lower by notes of the key, so it stays in key "
      "(7 = an octave)", "min": -7, "max": 7, "step": 1, "default": 0},
-    {"id": "tone", "label": "Tone", "hint": "bigger and darker (left) or smaller and lighter (right)", "min": -30,
+    {"id": "tone", "label": "Tone", "hint": "bigger and darker (left) or smaller and lighter (right); any change re-voices with WORLD, which softens detail", "min": -30,
      "max": 30, "step": 1, "default": 0},
     {"id": "breath", "label": "Breathiness", "min": 0, "max": 100, "step": 5, "default": 0},
-    {"id": "grit", "label": "Grit / rasp", "min": 0, "max": 100, "step": 5, "default": 0},
+    {"id": "grit", "label": "Grit / rasp", "hint": "re-voices with WORLD, which softens detail", "min": 0, "max": 100, "step": 5, "default": 0},
     {"id": "warmth", "label": "Warmth / drive", "min": 0, "max": 100, "step": 5, "default": 15},
     {"id": "tuning", "label": "Tuning", "options": [["", "as the style sets it"], ["off", "off (exactly as sung)"],
                                                    ["gentle", "gentle"], ["tight", "tight"], ["robot", "robot (hard snap)"]]},
@@ -1597,6 +1761,23 @@ def tweak_preset(p: dict, t: dict | None) -> dict:
         p["reverb"], p["room"], p["decay_s"] = 0.45 * v, 0.35 + 0.55 * v, 0.6 + 2.6 * v
     if t.get("fx") == "tape":
         p["bandpass"], p["sat"] = (300, 4000), max(p.get("sat", 0.15), 0.4)
+    # The processing switches.
+    if t.get("process") == "raw":
+        p["raw"] = True
+    if t.get("cleanup") == "off":
+        p["highpass"] = False
+    if "denoise" in t:
+        p["denoise"] = {"off": 0.0, "normal": 0.6}[t["denoise"]]
+    if t.get("breaths") == "off":
+        p["breaths"] = False
+    if "deess" in t:
+        p["deess_db"] = {"off": 0.0, "strong": 10.0}[t["deess"]]
+    if "compress" in t:
+        p["compress"] = {"off": 0.0, "light": 0.5, "strong": 1.5}[t["compress"]]
+    if t.get("eq") == "off":
+        p["presence_db"], p["air_db"], p["drive_bite"] = 0.0, 0.0, 0.0
+    elif t.get("eq") == "bright":
+        p["presence_db"], p["air_db"] = p["presence_db"] + 2.0, p["air_db"] + 2.5
     return p
 
 
@@ -1653,8 +1834,10 @@ def apply_character(y: np.ndarray, f0: np.ndarray, name: str, report: dict,
         report["tweaks"] = clean_tweaks(tweaks)
     main = y
     src = source if source is not None else y
-    revoice = (c.get("formant", 1.0) != 1.0 or c.get("octave") or c.get("steps") or c.get("breath")
-               or c.get("rasp") or c.get("whisper"))
+    # Only a new tone (formant), grit or a whisper needs WORLD; pitch moves go through PSOLA (your formants
+    # stay where they are) and breathiness is shaped noise, so those tweaks keep the recording's detail.
+    revoice = c.get("formant", 1.0) != 1.0 or c.get("rasp") or c.get("whisper")
+    pitched = bool(c.get("octave") or c.get("steps")) and not revoice and not c.get("pa")
     needs = revoice or c.get("stack") or c.get("harmony_voice")
     analysis = world_passages(src, f0) if needs and not c.get("pa") else None
     if c.get("pa"):
@@ -1674,6 +1857,15 @@ def apply_character(y: np.ndarray, f0: np.ndarray, name: str, report: dict,
             from pedalboard import HighShelfFilter, Pedalboard
 
             main = Pedalboard([HighShelfFilter(cutoff_frequency_hz=4000, gain_db=3.0)])(main[None], SR)[0]
+    else:
+        f_main = f0
+        if pitched:
+            ratio = 2.0 ** c.get("octave", 0) * (_harmony_ratio(f0, c["steps"], *scale) if c.get("steps") and scale
+                                                 else 2 ** (c.get("steps", 0) / 7))
+            main = psola(y, f0, np.where(f0 > 0, ratio, 1.0))
+            f_main = f0 * ratio
+        if c.get("breath"):
+            main = _aspirate(main, f_main, c["breath"])
     if c.get("drive"):
         main = _saturate(main, c["drive"])
     layer = None
@@ -1708,6 +1900,11 @@ def apply_character(y: np.ndarray, f0: np.ndarray, name: str, report: dict,
         if layer is not None:
             layer = np.stack([_fx(ch, c["fx"]) for ch in layer])
         report["fx"] = c["fx"]
+    changed = [w for w, on in (("re-voiced with WORLD", revoice), ("pitch moved (PSOLA)", pitched),
+                               ("breath added", c.get("breath") and not revoice), ("PA speaker", c.get("pa")), ("stacked voices", c.get("stack")),
+                               ("harmony voice", hv), ("drive", c.get("drive")), (f"effect: {c.get('fx')}", c.get("fx"))) if on]
+    if changed:
+        did(report, "Voice", f"{c['label']}: {', '.join(changed)}")
     return main.astype(np.float32), layer
 
 
@@ -1744,10 +1941,16 @@ def preview(take: Take, tonic: int, mode: str, preset_name: str | None, characte
     env = _env(x, 20)
     on = np.flatnonzero(env > max(float(env.max()) * 0.1, 1e-4))
     i0 = max(0, int(on[0]) - int(0.1 * SR)) if len(on) else 0
-    seg = _filt(x[i0:i0 + int(seconds * SR)], _sos("high", 100))
+    p = tweak_preset(preset(preset_name), tweaks)
+    seg = x[i0:i0 + int(seconds * SR)]
     if len(seg) < SR // 4:
         raise ValueError("that take is too short to preview")
-    p = tweak_preset(preset(preset_name), tweaks)
+    if p["raw"]:  # exactly as recorded, only brought up to a listening level
+        out = _pan(seg, 0.0)
+        out = (out / (float(np.abs(out).max()) or 1.0) * 0.89).astype(np.float32)
+        return (out, take.t0 + i0 / SR) if with_start else out
+    if p["highpass"]:
+        seg = _filt(seg, _sos("high", 100))
     keep = [(0.0, len(seg) / SR + 1)] if untuned else []
     y, _, f0 = tune_to_key(seg, tonic, mode, p, keep, {})
     main, layer = apply_character(y, f0, character, {}, source=seg, tweaks=tweaks, scale=(tonic, mode))
