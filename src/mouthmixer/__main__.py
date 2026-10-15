@@ -88,6 +88,10 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("file", type=Path)
     sp.add_argument("--labels", type=Path)
     sub.add_parser("demo")
+    rp = sub.add_parser("analyse", help="analyse reference songs (docs/REFERENCE_ANALYSIS.md)")
+    rp.add_argument("target", type=Path, help="an audio file, or a folder of them")
+    rp.add_argument("--stems", action="store_true", help="split into stems first (needs Demucs)")
+    rp.add_argument("--out", type=Path, help="default: <library>/analysis")
     a = ap.parse_args(argv)
 
     if a.cmd in (None, "launch"):
@@ -118,6 +122,11 @@ def main(argv: list[str] | None = None) -> int:
         return _scan(a.file, a.labels)
     elif a.cmd == "demo":
         return _demo()
+    elif a.cmd == "analyse":
+        from . import config
+        from .reference import analyse
+
+        analyse.run(a.target, a.out or config.home() / "analysis", with_stems=a.stems)
     return 0
 
 

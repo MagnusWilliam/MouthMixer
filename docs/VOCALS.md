@@ -295,3 +295,44 @@ the result lists every step that ran, in order, with its amount.
 time: the first change makes a **working version**, later ones update it in place, and **Save as a version**
 keeps it under a name; the next change starts a new working version from it.
 
+
+## 14. A convincing female voice: research and verdict (2026-10-15)
+
+**Why the current one fails.** The "female" character is WORLD with the pitch an octave up and the formants
+×1.17. That moves the numbers that separate voices on average, but not what makes a voice sound female:
+the source (lighter, breathier phonation, head voice), the vibrato and phrasing, the consonant attack. It
+reads as "a guy trying to sound like a girl" because that is what it is.
+
+**What can work: singing voice conversion (SVC)** trained on one real female voice. Options checked for this
+PC (Windows, RX 7900 XT, no CUDA) and for licences that allow a commercial game:
+
+| Option | Code / weights | AMD on Windows | Verdict |
+|---|---|---|---|
+| RVC WebUI | MIT / MIT (base model trained on VCTK) | **DirectML build** (rmvpe.onnx) | first choice |
+| Applio (RVC fork) | MIT, commercial use stated | not documented | good UI; maintenance mode |
+| Seed-VC (singing mode) | GPL-3.0; archived 2025-11 | CPU only | zero-shot audition tool, not for shipping |
+| SoulX-Singer-SVC (2026) | Apache-2.0 (as stated on mirrors) | unknown | watch |
+| so-vits-svc / fork | AGPL "academic only" / no AMD on Windows | | avoid |
+| DDSP-SVC | MIT, but its NSF-HiFiGAN vocoder is CC BY-NC-SA | | avoid for shipping |
+
+**Where the target voice comes from (legally).** Never a real artist without consent. Options: a consenting
+singer (the user's girlfriend, only if she wants to: 15-30 min of dry singing and a short written OK covering
+the game and training), or **VocalSet** (CC BY 4.0: 11 female singers, ~10 h, credit required; technique
+exercises, so the timbre is generic). M4Singer, GTSinger, CSD, Opencpop are non-commercial; avoid.
+
+**How to sing for it** (practitioner settings, unverified): sing lightly in head voice or falsetto near the
+target pitch, then shift 0 to +5 semitones rather than a full octave from chest voice; pitch method RMVPE,
+index rate ~0.3, protect ~0.33; record dry.
+
+**Verdict (honest).** Convincing is possible in 2026 with RVC, but only with all three: a model trained on
+one real female voice, source singing that is already light and high, and moderate settings. An
+octave-shifted chest-voice take through any model still tends to read as male, only less obviously.
+If it falls short: Synthesizer V Basic (free, commercial use allowed, each voice's own licence applies),
+re-key the female parts into the user's range (or a male/female duet with the girlfriend), or use the
+female lines as stacked choir/gang textures where a single convincing voice isn't needed.
+
+**Proposed trial (needs the user's OK: RVC is a separate install, several GB with models).** Train a small
+RVC model on VocalSet's female singers, convert one Last Train chorus sung lightly in head voice, and A/B it
+against the WORLD character. Sources: github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI,
+github.com/IAHispano/Applio, github.com/Plachtaa/seed-vc, zenodo.org/records/1442513 (VocalSet),
+github.com/svc-develop-team/so-vits-svc, github.com/openvpi/vocoders.
