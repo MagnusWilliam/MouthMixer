@@ -62,3 +62,27 @@ def test_every_songbook_spec_has_chords_for_its_style():
             for c in prog:
                 for part in c.split("|"):
                     chord(part)  # parses
+
+
+def test_extension_keeps_the_words_and_reaches_two_minutes():
+    from mouthmixer.studio import songbook
+
+    sb = songbook.get("02-off-the-clock")
+    long = SB.extended_lyrics(sb["lyrics"], 112)
+    words = lambda t: sorted(l for l in t.splitlines() if l and not l.startswith("["))  # noqa: E731
+    assert set(words(long)) == set(words(sb["lyrics"]))  # no new words, only repeats
+    heads = [l for l in long.splitlines() if l.startswith("[")]
+    assert any(h.startswith("[Solo") for h in heads) and heads[0].startswith("[Intro, 8 bars")
+    already = songbook.get("08-return-to-sender")
+    assert SB.extended_lyrics(already["lyrics"], 76) == already["lyrics"]  # long enough already
+
+
+def test_walking_bass_and_soft_night_styles():
+    v = _version([("Verse 1", 4, "verse")], {})
+    spec = dict(SB.SPECS["03-wrong-side-of-midnight"], style="night_trio")
+    song, gains = E.produce(spec, v, seed=2)
+    bass = next(t for t in song.tracks if t.role == "bass").notes
+    assert len(bass) == 16 and all(abs(l - 0.9) < 1e-6 for _, l, _, _ in bass)  # quarter notes
+    assert not [t for t in song.tracks if t.role == "drums"]
+    _, g2 = E.produce(dict(spec, style="night_brushes"), v, seed=2)
+    assert g2["Drums"] <= -7

@@ -140,7 +140,7 @@ def judge(song: Song, mix: np.ndarray | None = None, stems: dict | None = None) 
     s_rhythm = 1.0 if len(drums) >= song.bars * 3 else 0.6
 
     # --- Melody (mostly the user's own; M-rules) --------------------------------------------------------
-    first_a = song.sections[1]
+    first_a = song.sections[1] if len(song.sections) > 1 else song.sections[0]  # a one-section sting
     a_lead = [n for n in lead if first_a[1] * 4 <= n[0] < (first_a[1] + first_a[2]) * 4]
     mel = melody_rules([(s - first_a[1] * 4, l, p, v) for s, l, p, v in a_lead])
 

@@ -466,3 +466,5 @@ for _k, _t, _rv in (("persona_city", "Persona city pop", 0.45), ("persona_night"
                     ("persona_boss", "Persona boss orchestra", 0.55), ("persona_ballad", "Persona ending ballad", 0.75),
                     ("persona_dungeon", "Persona labyrinth pulse", 0.6)):
     PACKS[_k] = dict(PACKS["persona_acid_jazz"]) | {"title": _t, "describe": _t + " (studio/engine.py)", "reverb": _rv}
+PACKS["persona_hideout"] = dict(PACKS["persona_acid_jazz"]) | {"title": "LINE ZERO hideout (lo-fi)",
+                                                               "describe": "lo-fi Rhodes hideout", "reverb": 0.5, "vinyl": True}

@@ -63,6 +63,8 @@ SAMPLED: dict[str, dict] = {
                         "family": "strings", "range": (36, 76)},
     "sfz:trumpet": {"src": ("folder", f"{VSCO}/Brass/Trumpet/sus", ""), "gm": "trumpet", "family": "brass",
                     "range": (54, 84)},
+    "sfz:trumpet_harmon": {"src": ("folder", f"{VSCO}/Brass/Trumpet/harmonM-sus", ""), "gm": "muted_trumpet",
+                           "family": "brass", "range": (52, 84)},
     "sfz:trumpet_stac": {"src": ("folder", f"{VSCO}/Brass/Trumpet/stac", ""), "gm": "trumpet", "family": "brass",
                          "range": (54, 84)},
     "sfz:trombone": {"src": ("folder", f"{VSCO}/Brass/Tenor Trombone/sus", ""), "gm": "trombone", "family": "brass",
@@ -300,6 +302,11 @@ def post_fx(key: str, x: np.ndarray, rng) -> np.ndarray:
         x = Pedalboard([Chorus(rate_hz=0.8, depth=0.18, mix=0.3), Distortion(drive_db=4), Gain(-3.5),
                         PeakFilter(cutoff_frequency_hz=300, gain_db=-4.0, q=0.8),
                         PeakFilter(cutoff_frequency_hz=1200, gain_db=2.0, q=0.8)])(x.astype(np.float32), SR)
+    elif key == "sfz:piano" or SAMPLED.get(key, {}).get("family") in ("strings", "brass"):
+        # Salamander and the VSCO sections are recorded wide (the VSCO violins even have more side than middle,
+        # which thins out on mono speakers); in a band mix they sit nearer the middle: 60% width
+        mid, side = x.mean(axis=0), (x[0] - x[1]) / 2
+        x = np.stack([mid + 0.6 * side, mid - 0.6 * side])
     elif key == "sfz:guitar_clean":
         x = Pedalboard([HighpassFilter(110), Distortion(drive_db=6), Gain(-5),
                         PeakFilter(cutoff_frequency_hz=2400, gain_db=3, q=0.9)])(x, SR)

@@ -90,3 +90,112 @@ def make(songbook_id: str, lib, seed: int = 11) -> tuple[str, int]:
     record = json.loads((d / "song.json").read_text())
     lib.update_song(sid, record, vi)
     return sid, vi
+
+
+def _blocks(lyrics: str) -> tuple[str, list[tuple[str, list[str]]]]:
+    """(title line, [(header, lines)]) from a songbook lyric sheet."""
+    title, blocks = "", []
+    for raw in lyrics.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            blocks.append((line[1:-1], []))
+        elif blocks:
+            blocks[-1][1].append(line)
+        else:
+            title = title or line
+    return title, blocks
+
+
+def extended_lyrics(lyrics: str, bpm: float, min_seconds: float = 130.0, force: bool = False) -> str:
+    """The same words in a longer form (the user asked for vocal songs of at least two minutes): an 8-bar
+    intro (unless it's a battle cold open), an instrumental Solo before the last chorus, the chorus once more
+    at the end and an 8-bar outro; more solos until the song is long enough. Never new words."""
+    from .project import Project  # noqa: F401  (apply_lyrics' rules decide the bar counts)
+
+    title, blocks = _blocks(lyrics)
+    chorus = next((b for b in blocks if b[0].lower().startswith(("chorus", "hook"))), None)
+    pre = next((b for b in blocks if b[0].lower().startswith("pre")), None)
+    out = []
+    for h, lines in blocks:
+        low = h.lower()
+        if low.startswith("intro") and not any(w in low for w in ("shout", "hit", "fast")) and "bars" not in low:
+            h = h.split(",")[0] + ", 8 bars" + ("," + ",".join(h.split(",")[1:]) if "," in h else "")
+        if low.startswith(("outro", "ending")) and "bars" not in low:
+            h = h.split(",")[0] + ", 8 bars" + ("," + ",".join(h.split(",")[1:]) if "," in h else "")
+        out.append((h, lines))
+    last = max((i for i, (h, _) in enumerate(out) if h.lower().startswith(("chorus", "hook", "final"))), default=len(out) - 1)
+    extra = [("Solo, 8 bars", [])]
+    out = out[:last] + extra + out[last:]
+    if chorus:
+        end = next((i for i, (h, _) in enumerate(out) if h.lower().startswith(("outro", "ending"))), len(out))
+        out = out[:end] + [(chorus[0], chorus[1])] + out[end:]
+    if not any(h.lower().startswith(("outro", "ending")) for h, _ in out):
+        out.append(("Outro, 8 bars", []))
+
+    def text(blocks_):
+        return title + "\n\n" + "\n\n".join("[" + h + "]\n" + "\n".join(ls) for h, ls in blocks_)
+
+    def seconds(blocks_):
+        bars = 0
+        for h, ls in blocks_:
+            import re as _re
+
+            m = _re.search(r"(\d+)\s*bars?", h)
+            if m:
+                bars += int(m.group(1))
+            elif not ls:
+                bars += 8
+            else:
+                bars += next(b for b in (4, 8, 12, 16) if b >= min(max(4, len(ls) * (1 if h.lower().startswith("rap") and bpm >= 110 else 2)), 16))
+        return bars * 4 * 60 / bpm
+
+    if seconds(blocks) >= min_seconds and not force:  # long enough already: the song as written
+        return lyrics
+    k = 2
+    while seconds(out) < min_seconds and k < 5 and chorus:
+        at = max(i for i, (h, _) in enumerate(out) if h.lower().startswith(("chorus", "hook", "final")))
+        more = [(f"Solo {k}, 8 bars", [])] + ([pre] if pre else []) + [(chorus[0], chorus[1])]
+        out = out[:at] + more + out[at:]
+        k += 1
+    return text(out)
+
+
+def extend(songbook_id: str, lib, style: str | None = None, label: str | None = None, seed: int = 11) -> tuple[str, int]:
+    """A longer version (at least two minutes) of a produced songbook song, optionally in another style (the
+    Wrong Side of Midnight alternatives), added to the same song as a new version."""
+    import json
+
+    from . import engine, songbook
+    from .production import add_version
+    from .project import Project, _feels
+
+    sb = songbook.get(songbook_id)
+    spec = dict(SPECS[songbook_id])
+    if style:
+        spec["style"] = style
+    st = engine.STYLES[spec["style"]]
+    sid = next(r["id"] for r in lib.list_songs(["new", "kept", "tossed"]) if r["title"].startswith(sb["title"] + " ·")
+               and json.loads((lib.song_dir(r["id"]) / "song.json").read_text())["versions"][-1].get("spec", {})
+               .get("production", "").startswith("engine:"))
+    d = lib.song_dir(sid)
+    record = json.loads((d / "song.json").read_text())
+    pid = record["versions"][0].get("spec", {}).get("project") or record.get("project")
+    p = Project.load(pid)
+    bpm = spec.get("bpm", st["bpm"])
+    p.apply_lyrics(extended_lyrics(sb["lyrics"], bpm))
+    if sum(s_["bars"] for s_ in p.data["sections"]) * 4 * 60 / bpm < 120:  # the estimate was short: measure, force
+        p.apply_lyrics(extended_lyrics(sb["lyrics"], bpm, 150, force=True))
+    p.save()
+    start, secs = 0, []
+    for s in p.data["sections"]:
+        secs.append({"name": s["name"], "start": start, "bars": s["bars"]})
+        start += s["bars"]
+    base = {**record["versions"][0], "sections": secs, "section_feels": _feels(p.data["sections"], p.st.get("mood", "")),
+            "lyric_sheet": p.lyric_sheet()}
+    song, gains = engine.produce(spec, base, seed)
+    title = sb["title"] + " · " + st["title"] + (f" ({label})" if label else " (long)")
+    vi = add_version(d, song, gains, title, base, {"spec": {**base.get("spec", {}), "production": f"engine:{spec['style']}:long"}})
+    lib.update_song(sid, json.loads((d / "song.json").read_text()), vi)
+    return sid, vi

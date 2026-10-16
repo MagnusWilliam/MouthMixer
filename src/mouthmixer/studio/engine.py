@@ -17,7 +17,9 @@ from ..arrange.arranger import Track
 from .production import bass_line, build_song, chord, clear_of, grid, humanise, n, swing, tones, upper
 
 PACK_OF = {"citypop": "persona_city", "night_jazz": "persona_night", "battle_rush": "persona_battle",
-           "bossa": "persona_bossa", "boss_choir": "persona_boss", "ballad": "persona_ballad", "dungeon": "persona_dungeon"}
+           "bossa": "persona_bossa", "boss_choir": "persona_boss", "ballad": "persona_ballad", "dungeon": "persona_dungeon",
+           "lost_car": "persona_night", "sad": "persona_ballad", "hideout": "persona_hideout", "results": "persona_city",
+           "night_brushes": "persona_night", "night_trio": "persona_night", "night_lofi": "persona_hideout"}
 
 DRUM = {"kick": 36, "snare": 38, "side": 37, "hat": 42, "pedal": 44, "open": 46, "ride": 51, "bell": 53,
         "crash": 49, "crash2": 57, "t1": 50, "t2": 48, "t3": 45, "t4": 41}
@@ -65,6 +67,7 @@ STYLES: dict[str, dict] = {
         },
     },
     "night_jazz": {
+        "transitions": False,
         "title": "Persona night jazz", "bpm": 86, "tonic": 9, "mode": "minor", "swing": 0.62,  # A minor
         "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
         "lead_colour": "sfz:tenor_sax", "guitar": None, "brass": False, "organ": "synth:organ_soft",
@@ -102,6 +105,7 @@ STYLES: dict[str, dict] = {
         },
     },
     "bossa": {
+        "transitions": False,
         "title": "Persona rain bossa", "bpm": 132, "tonic": 2, "mode": "major",  # D major
         "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "nylon_guitar", "pad": "sfz:violins",
         "lead_colour": "flute", "guitar": None, "brass": False, "organ": None, "rim": True,
@@ -139,6 +143,7 @@ STYLES: dict[str, dict] = {
         },
     },
     "ballad": {
+        "transitions": False,
         "title": "Persona ending ballad", "bpm": 76, "tonic": 5, "mode": "major",  # F major
         "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "sfz:violins",
         "lead_colour": "sfz:harp", "guitar": None, "brass": False, "organ": None,
@@ -155,6 +160,7 @@ STYLES: dict[str, dict] = {
         },
     },
     "dungeon": {
+        "transitions": False,
         "title": "Persona labyrinth pulse", "bpm": 120, "tonic": 6, "mode": "minor",  # F# minor
         "kit": "kit:muldjord", "bass": "synth:sub_bass", "comp": "synth:pluck", "pad": "synth:super_pad",
         "lead_colour": "sfz:violins_pizz", "guitar": None, "brass": False, "organ": None,
@@ -167,6 +173,78 @@ STYLES: dict[str, dict] = {
         },
     },
 }
+# Wrong Side of Midnight, softer (the user found the night-jazz drums overpowering): three alternatives.
+STYLES["night_brushes"] = dict(STYLES["night_jazz"]) | {
+    "title": "night jazz, brushes", "kit": "kit:brush", "bass": "acoustic_bass", "comp": "sfz:piano", "drum_gain": -7,
+    "feels": {k: dict(v, bass="walk" if v["bass"] == "lean" else v["bass"]) for k, v in STYLES["night_jazz"]["feels"].items()},
+}
+STYLES["night_trio"] = dict(STYLES["night_jazz"]) | {
+    "title": "night jazz, piano trio", "bass": "acoustic_bass", "comp": "sfz:piano", "organ": None,
+    "feels": {k: dict(v, drums=None, bass="walk" if v["bass"] == "lean" else v["bass"],
+                      layers=set(v["layers"]) - {"organ"}) for k, v in STYLES["night_jazz"]["feels"].items()},
+}
+STYLES["night_lofi"] = dict(STYLES["night_jazz"]) | {
+    "title": "night jazz, lo-fi", "bpm": 80, "swing": 0.58, "comp": "sfz:rhodes", "lead_colour": "vibraphone",
+    "drum_gain": -9, "organ": None,
+    "feels": {k: dict(v, drums=("x......x..x.....", "....x.......x...", "x.x.x.x.x.x.x.x.") if v["drums"] else None,
+                      layers=set(v["layers"]) - {"organ"}) for k, v in STYLES["night_jazz"]["feels"].items()},
+}
+
+# Instrumental cues for LINE ZERO's scenes (studio/cues.py; AUDIO_PLAN section 3.2).
+STYLES["lost_car"] = {
+    "transitions": False,
+    "title": "LINE ZERO Lost Car", "bpm": 72, "tonic": 2, "mode": "minor", "swing": 0.6,  # D minor, slow swing
+    "kit": "kit:brush", "bass": "acoustic_bass", "comp": "sfz:rhodes", "pad": "sfz:violins",
+    "lead_colour": "celesta", "guitar": None, "brass": False, "organ": None, "ride": True,
+    "feels": {
+        "intro": {"drums": None, "bass": "pedal", "comp": "whole", "layers": {"clock"}},
+        "verse": {"drums": ("x.........x.....", "............g...", "x..xx..xx..xx..x"), "bass": "lean",
+                  "comp": "charleston", "layers": {"clock"}},
+        "lift": {"drums": ("x.........x.....", "....g.......x...", "x..xx..xx..xx..x"), "bass": "lean", "comp": "half",
+                 "layers": {"clock", "pad", "low_strings"}},
+        "outro": {"drums": None, "bass": "pedal", "comp": "whole", "layers": {"clock"}},
+    },
+}
+STYLES["sad"] = {
+    "transitions": False,
+    "title": "LINE ZERO sad", "bpm": 66, "tonic": 2, "mode": "minor",
+    "kit": "kit:muldjord", "bass": None, "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "sfz:cellos", "guitar": None, "brass": False, "organ": None,
+    "feels": {
+        "intro": {"drums": None, "bass": None, "comp": "ballad", "layers": set()},
+        "verse": {"drums": None, "bass": None, "comp": "ballad", "layers": set()},
+        "lift": {"drums": None, "bass": None, "comp": "ballad", "layers": {"pad"}},
+        "outro": {"drums": None, "bass": None, "comp": "whole", "layers": set()},
+    },
+}
+STYLES["hideout"] = {
+    "transitions": False,
+    "title": "LINE ZERO hideout", "bpm": 90, "tonic": 5, "mode": "major", "swing": 0.56,  # F major, lo-fi
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
+    "lead_colour": "vibraphone", "guitar": None, "brass": False, "organ": None,
+    "feels": {
+        "intro": {"drums": None, "bass": None, "comp": "whole", "layers": set()},
+        "verse": {"drums": ("x......xx.x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "lean", "comp": "stab",
+                  "layers": set()},
+        "lift": {"drums": ("x......xx.x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "lean", "comp": "half",
+                 "layers": {"pad"}},
+        "outro": {"drums": None, "bass": "pedal", "comp": "whole", "layers": set()},
+    },
+}
+STYLES["results"] = {
+    "title": "LINE ZERO results", "bpm": 100, "tonic": 5, "mode": "major",  # F major, light funk
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
+    "lead_colour": "sfz:trumpet_harmon", "guitar": "sfz:guitar_clean", "brass": True, "organ": None,
+    "feels": {
+        "verse": {"drums": ("x.....x...x.....", "....x.......x...", "xxxxxxoxxxxxxxox"), "bass": "funk", "comp": "city",
+                  "layers": {"guitar", "perc"}},
+        "lift": {"drums": ("x.....x.x.......", "....X.......X...", "xxxxxxoxxxxxxxox"), "bass": "funk", "comp": "city",
+                 "layers": {"guitar", "perc", "congas", "brass"}},
+        "sting": {"drums": ("x...............", "................", "................"), "bass": "pedal", "comp": "whole",
+                  "layers": set()},
+    },
+}
+
 # Feels a style doesn't spell out borrow from the nearest one.
 FALLBACK_FEEL = {"lift": "verse", "final": "lift", "pre": "verse", "rap": "verse", "breakdown": "verse",
                  "outro": "intro", "hits_end": "final", "intro": "verse", "verse": "lift", "build": "pre"}
@@ -313,9 +391,16 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
     secs = [(s["name"], s["start"], s["bars"]) for s in version["sections"]]
     feels = dict(zip([s["name"] for s in version["sections"]], version.get("section_feels") or ["verse"] * len(secs)))
     feels = {k: ("lift" if v in ("chorus", "lift") else v) for k, v in feels.items()}
+    feels.update(spec.get("feels", {}))  # instrumental cues name their own feels (a sting, a lift...)
+    for nm_ in feels:  # an instrumental solo (added to make a song long enough): the whole band
+        if nm_.lower().startswith("solo"):
+            feels[nm_] = "final"
     bars: list[str] = []
     for name, start, length in secs:
-        prog = spec["chords"].get(name) or spec["chords"].get(_kind(name, feels[name])) or spec["chords"]["verse"]
+        kind = _kind(name, feels[name])
+        prog = (spec["chords"].get(name) or spec["chords"].get(kind)
+                or spec["chords"].get({"final": "chorus", "pre": "verse"}.get(kind, ""))  # a final chorus is a chorus
+                or spec["chords"].get("verse") or next(iter(spec["chords"].values())))
         bars += [prog[i % len(prog)] for i in range(length)]
     total_bars = len(bars)
 
@@ -329,7 +414,7 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
     clear = lambda notes: clear_of(notes, mel, chord_at)  # noqa: E731
     parts: dict[str, list] = {k: [] for k in ("drums", "perc", "bass", "ghost", "comp", "pad", "low", "brass_hi", "brass_lo",
                                               "guitar_l", "guitar_r", "organ", "colour", "choir", "ostinato", "timpani",
-                                              "rim", "fx_rev", "fx_boom")}
+                                              "rim", "fx_rev", "fx_boom", "perc_gm", "theme")}
     prev_v = None
     for si, (name, start, length) in enumerate(secs):
         fs = feel_spec(style, feels[name])
@@ -360,7 +445,19 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
         # bass
         if fs["bass"]:
             bstyle = fs["bass"]
-            if bstyle in ("bossa", "eighths", "pulse"):
+            if bstyle == "walk":  # quarter notes: root, chord tones, a chromatic step into the next root
+                for i, nm in enumerate(sec_bars):
+                    b = (b0 + i) * 4
+                    cur = nm.split("|")[0]
+                    root, ints, _, _ = chord(cur)
+                    nxt = bars[min(b0 + i + 1, total_bars - 1)].split("|")[0]
+                    r = 33 + (root - 33) % 12
+                    nr = 33 + (chord(nxt)[0] - 33) % 12
+                    third, fifth = r + ints[1], r + ints[2]
+                    line = [r, third if rng.random() < 0.6 else fifth, fifth if rng.random() < 0.5 else r + 12,
+                            nr - 1 if rng.random() < 0.6 else nr + 1]
+                    parts["bass"] += [(b + j, 0.9, p, 96 if j == 0 else 84) for j, p in enumerate(line)]
+            elif bstyle in ("bossa", "eighths", "pulse"):
                 for i, nm in enumerate(sec_bars):
                     root = chord(nm.split("|")[0])[0]
                     r = 33 + (root - 33) % 12
@@ -436,17 +533,31 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
                 r = 55 + (root - 55) % 12
                 fig = [r, r + 7, r + 8, r + 7] if mode == "minor" else [r, r + 7, r + 9, r + 7]
                 parts["ostinato"] += [(b + j * 0.5, 0.4, fig[j % 4], 92 if j % 2 == 0 else 76) for j in range(8)]
+            if "clock" in L:  # a ticking clock: a soft wood block on every beat, a deeper tock on 1
+                parts["perc_gm"] += [(b + j, 0.1, 77 if j == 0 else 76, 54 if j == 0 else 40) for j in range(4)]
             if "timpani" in L and i % 2 == 0:
                 parts["timpani"] += [(b, 1.0, 36 + (root - 36) % 12, 104), (b + 3.5, .4, 36 + (root - 36) % 12, 88)]
         # the hook motif (the song's own) on its colour instrument: intro, chorus answers, outro
         hook = spec.get("hook")
-        if hook and ("lead_colour" in L or "motif" in L or "answers" in L):
+        if hook and ("lead_colour" in L or "motif" in L or "answers" in L or name.lower().startswith("solo")):
             for i in range(0, length, 4 if "answers" not in L else 2):
                 b = (b0 + i) * 4 + (4 if "answers" in L else 0)
                 parts["colour"] += [(b + s_, l_, n(p) if isinstance(p, str) else p, 92) for s_, l_, p in hook
                                     if b + s_ < b1 * 4]
+        # an instrumental cue's themes: a phrase per section kind, repeated through the section
+        themes = spec.get("themes") or {}
+        th = themes.get(name) or themes.get(_kind(name, feels[name]))
+        if th:
+            phrase_beats = max(4.0, 4 * np.ceil(max(s_ + l_ for s_, l_, _ in th) / 4))
+            k = 0
+            while k * phrase_beats < length * 4:
+                for s_, l_, p in th:
+                    at = b0 * 4 + k * phrase_beats + s_
+                    if at < b1 * 4:
+                        parts["theme"].append((at, l_, n(p) if isinstance(p, str) else p, 96))
+                k += 1
         # transitions into big sections
-        if big_next and si + 1 < len(secs):
+        if big_next and si + 1 < len(secs) and style.get("transitions", True):
             nb = secs[si + 1][1] * 4
             parts["fx_rev"].append((nb - 3.5, 3.5, 49, 100))
             parts["fx_boom"].append((nb, 2.0, 36, 110))
@@ -466,7 +577,8 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
         ("Percussion", "perc", "kit:latin", humanise(parts["perc"], rng, 6), 0.25),
         ("Rim clicks", "perc", "kit:jazz", humanise(parts["rim"], rng, 5), -0.15),
         ("Bass", "bass", style["bass"], humanise(parts["bass"], rng, 4), 0.0),
-        ("Bass ghost notes", "bass", "sfz:bass_ghost", humanise(parts["ghost"], rng, 4), 0.0),
+        ("Bass ghost notes", "bass", "sfz:bass_ghost",
+         humanise(parts["ghost"], rng, 4) if str(style["bass"]).startswith("sfz:bass") else [], 0.0),
         ("Keys", "comp", style["comp"], clear(humanise(parts["comp"], rng, 5)), -0.1),
         ("Strings", "pad", style["pad"], clear(humanise(parts["pad"], rng, 3)), -0.35),
         ("Low strings", "pad", "sfz:cellos", humanise(parts["low"], rng, 3), 0.3),
@@ -479,14 +591,19 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
         ("Choir", "pad", "choir", clear(humanise(parts["choir"], rng, 3)), 0.0),
         ("String ostinato", "riff", "sfz:violins_spic", clear(humanise(parts["ostinato"], rng, 4)), -0.3),
         ("Timpani", "timpani", "timpani", humanise(parts["timpani"], rng, 4), 0.0),
+        ("Theme", "counter" if sheet else "lead", spec.get("theme_inst") or style["lead_colour"],
+         clear(humanise(parts["theme"], rng, 4)) if sheet else humanise(parts["theme"], rng, 4), 0.05),
+        ("Clock", "perc", "kit:standard", parts["perc_gm"], 0.4),
         ("Reverse cymbals", "fx", "sfx:reverse_crash", parts["fx_rev"], 0.0),
         ("Boom", "fx", "sfx:boom", parts["fx_boom"], 0.0),
     ]
     sw = style.get("swing", 0.5)
     tracks = [Track(nm, role, inst, swing(sorted(notes), sw), pan=pan) for nm, role, inst, notes, pan in tr if notes]
-    gains = {"Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
+    gains = {"Theme": 0, "Clock": -6, "Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
              "Low strings": -3, "Organ / pad": -3, "Guitar left": -3, "Guitar right": -3, "Hook": 1, "Choir": -2,
              "String ostinato": -1, "Reverse cymbals": -2, "Boom": -3}
+    if style.get("drum_gain") is not None:
+        gains["Drums"] = style["drum_gain"]
     song = build_song(spec.get("pack", PACK_OF[spec["style"]]), bpm, tonic, mode, secs, bars, tracks, seed)
     return song, gains
 
