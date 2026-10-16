@@ -61,6 +61,50 @@ SPECS = {
         "hook": [(0, .75, "D5"), (.75, .75, "F5"), (1.5, 1, "G5"), (2.5, .5, "F5"), (3, .5, "E5"), (3.5, 1, "F5"),
                  (4.5, 2.5, "E5")],
     },
+    # The era songs of LINE ZERO's rotation (AUDIO_PLAN 3.2b), each in a distinct Persona sound.
+    "09-second-platform": {
+        "style": "p3_urban",  # B minor, 96: boom-bap, piano loop, string stabs, scratches
+        "chords": {"intro": ["Bm9", "Gmaj7", "Bm9", "Gmaj7"],
+                   "verse": ["Bm9", "Gmaj7", "Em9", "F#7#5#9"],
+                   "pre": ["Gmaj7", "A6/9", "F#m7", "Bm9"],
+                   "chorus": ["Gmaj7", "A", "F#m7", "Bm9", "Gmaj7", "A", "Em9", "F#7#5#9"],
+                   "bridge": ["Em9", "F#m7", "Gmaj7", "F#7sus4|F#7"],
+                   "outro": ["Bm9", "Gmaj7", "Bm9", "Bm9"]},
+        "hook": [(0, .5, "F#5"), (.5, .5, "D5"), (1, 1, "B4"), (2.5, .5, "C#5"), (3, 1, "D5")],
+    },
+    "10-hold-the-door": {
+        "style": "p4_jpop",  # E major, 120: piano 8ths, crunchy guitars, the royal-road chorus
+        "chords": {"intro": ["Emaj7", "B", "C#m7", "Amaj7"],
+                   "verse": ["Emaj7", "C#m7", "Amaj7", "B"],
+                   "pre": ["C#m7", "G#m7", "Amaj7", "B7sus4|B"],
+                   "chorus": ["Amaj7", "B", "G#m7", "C#m7", "Amaj7", "B", "E", "E"],
+                   "bridge": ["F#m7", "G#m7", "Amaj7", "B7sus4|B"],
+                   "outro": ["Amaj7", "B", "E", "E"]},
+        "hook": [(0, .5, "B4"), (.5, .5, "E5"), (1, .5, "F#5"), (1.5, 1.5, "G#5"), (3, .5, "F#5"), (3.5, .5, "E5")],
+        "hits": ["hold the door"],
+    },
+    "11-off-the-rails": {
+        "style": "p5_heavy",  # G minor, 166: organ, distorted guitar, brass, driving 16ths
+        "chords": {"intro": ["Gm9", "D7#5#9"],
+                   "chorus": ["Ebmaj7", "F", "Dm7", "Gm9"],
+                   "rap": ["Gm9", "Ebmaj7", "Cm9", "D7#5#9"],
+                   "pre": ["Cm9", "Dm7", "Ebmaj7", "D7#5#9"],
+                   "bridge": ["Ebmaj7", "Dm7", "Cm9", "D7sus4"],
+                   "outro": ["Gm9", "Gm9", "Gm9", "Gm9"]},
+        "hook": [(0, .5, "G4"), (.5, .5, "Bb4"), (1, .5, "C5"), (1.5, 1, "D5"), (3, .5, "C5"), (3.5, .5, "Bb4")],
+        "hits": ["off the rails", "slow down"],
+    },
+    "12-punch-the-ticket": {
+        "style": "anthem",  # A minor, 140: band, organ, strings, choir on the hook
+        "chords": {"intro": ["Am9", "Fmaj7", "G", "E7#5#9"],
+                   "verse": ["Am9", "Fmaj7", "C", "G"],
+                   "pre": ["Dm9", "Fmaj7", "G", "E7#5#9"],
+                   "chorus": ["Fmaj7", "G", "Em7", "Am9", "Fmaj7", "G", "C", "E7#5#9"],
+                   "bridge": ["Fmaj7", "Em7", "Dm9", "E7sus4|E"],
+                   "outro": ["Am9", "Fmaj7", "Am9", "Am9"]},
+        "hook": [(0, 1, "A4"), (1, 1, "C5"), (2, 1, "E5"), (3, .5, "D5"), (3.5, .5, "C5"), (4, 2, "B4")],
+        "hits": ["here we go"],
+    },
 }
 
 
@@ -76,7 +120,10 @@ def make(songbook_id: str, lib, seed: int = 11) -> tuple[str, int]:
     sb = songbook.get(songbook_id)
     spec = SPECS[songbook_id]
     p = Project.create(sb["starter"], sb["title"])
-    p.apply_lyrics(sb["lyrics"])
+    bpm = spec.get("bpm", engine.STYLES[spec["style"]]["bpm"])
+    p.apply_lyrics(extended_lyrics(sb["lyrics"], bpm))  # vocal songs run at least two minutes (the user's ask)
+    if sum(s_["bars"] for s_ in p.data["sections"]) * 240 / bpm < 120:
+        p.apply_lyrics(extended_lyrics(sb["lyrics"], bpm, 150, force=True))
     p.data["songbook"] = {k: sb.get(k, "") for k in ("id", "slot", "voices", "hits", "notes")}
     p.save()
     built = p.build(lib)

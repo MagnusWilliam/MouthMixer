@@ -28,3 +28,14 @@ def test_synth_presets_pitch_and_release():
         assert np.abs(y[:, int(1.3 * SR):]).max() < 0.02, name  # silent after the release
     lead = SY.synth([(0.0, 0.8, 69, 110)], 1.0, "saw_lead")
     assert abs(_peak_hz(lead[0, 2000:30000], 200, 900) - 440) < 6
+
+
+def test_chip_voices_and_kit():
+    sq = SY.chip([(0.0, 0.5, 69, 110)], 1.0, "square")
+    assert abs(_peak_hz(sq[0, :20000], 200, 900) - 440) < 6
+    assert set(np.unique(np.sign(sq[0, 100:4000]))) <= {-1.0, 0.0, 1.0}  # a raw pulse wave, no filter
+    tri = SY.chip([(0.0, 0.5, 45, 110)], 1.0, "triangle")
+    d = np.abs(np.diff(tri[0, :4000]))
+    assert np.mean(d > 0.05 * np.abs(tri[0, :4000]).max()) < 0.2  # flat stretches between jumps: stepped, NES-like
+    kit = SY.chip_drums([(0.0, 0.2, 36, 110), (0.5, 0.2, 38, 110), (1.0, 0.1, 42, 90)], 1.5)
+    assert np.isfinite(kit).all() and np.abs(kit[:, :SR // 4]).max() > 0.05

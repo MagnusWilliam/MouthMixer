@@ -76,7 +76,7 @@ SAMPLED: dict[str, dict] = {
                  "range": (34, 77)},
 }
 SYNTH_KEYS = {f"synth:organ_{k}": ("organ", k) for k in synths.ORGANS} | \
-    {f"synth:{k}": ("synth", k) for k in synths.SYNTHS}
+    {f"synth:{k}": ("synth", k) for k in synths.SYNTHS} | {f"synth:chip_{k}": ("chip", k) for k in synths.CHIPS}
 # Drum kits on General MIDI drum notes.
 KITS = {
     "kit:muldjord": {"src": "MuldjordKit/MuldjordKit SFZ+FLAC-20201018/MuldjordKit 20201018.sfz", "gm": "kit:room",
@@ -221,7 +221,7 @@ def instrument(key: str) -> sampler.Instrument | None:
 
 # Transition effects (docs/PERSONA_PRODUCTION.md rule 14): a reverse cymbal swelling into the note's end and a
 # sub boom on its start. Notes: (start, length, key, velocity); the swell ends where the note ends.
-SFX = {"sfx:reverse_crash", "sfx:boom"}
+SFX = {"sfx:reverse_crash", "sfx:boom", "sfx:scratch", "kit:chip"}
 
 
 def sfx(key: str, notes_sec, total_sec: float, rng) -> np.ndarray:
@@ -241,6 +241,35 @@ def sfx(key: str, notes_sec, total_sec: float, rng) -> np.ndarray:
             end = int((s + l) * SR)
             a = max(0, end - m)
             out[:, a:end] += seg[:, m - (end - a):]
+    elif key == "kit:chip":
+        return synths.chip_drums(notes_sec, total_sec, rng)
+    elif key == "sfx:scratch":
+        # a record scratch (Persona 3's DJ colour): a brass stab dragged forward and back on a turntable curve.
+        # The note's key picks the move: 60 a baby scratch (forward-back), 62 a chirp (forward, cut), 64 a scribble.
+        src = instrument("sfz:trumpet_stac")
+        if src is not None:
+            r = max((r for r in src.regions if r.center >= 60), key=lambda r: (r.hivel, -abs(r.center - 64)))
+            smp = sampler.load_sample(r.sample).mean(axis=0)[: int(0.5 * SR)]
+        else:
+            smp = rng.normal(0, 0.3, int(0.5 * SR)) * np.exp(-np.arange(int(0.5 * SR)) / SR * 6)
+        for s, l, k, v in notes_sec:
+            m = int(min(l, 0.6) * SR)
+            t = np.linspace(0, 1, m)
+            if k == 62:
+                pos = 0.25 * np.sin(np.pi * t / 2) ** 2
+                gate = (t < 0.7).astype(float)
+            elif k == 64:
+                pos = 0.18 * (t + 0.04 * np.sin(2 * np.pi * 12 * t))
+                gate = (np.sin(2 * np.pi * 14 * t) > -0.3).astype(float)
+            else:
+                pos = 0.22 * np.sin(np.pi * t)
+                gate = np.ones(m)
+            idx = np.clip(pos * len(smp), 0, len(smp) - 2)
+            seg = np.interp(idx, np.arange(len(smp)), smp) * gate * (v / 127)
+            seg *= np.minimum(1, np.abs(np.gradient(pos)) * SR / 4 + 0.05)  # quieter where the record slows down
+            a = int(s * SR)
+            e = min(n, a + m)
+            out[:, a:e] += seg[: e - a][None, :] * 1.6
     elif key == "sfx:boom":
         for s, l, _, v in notes_sec:
             m = min(int(max(l, 1.2) * SR), n - int(s * SR))
@@ -277,6 +306,8 @@ def render(key: str, notes_sec: list[tuple[float, float, int, int]], total_sec: 
         kind, preset = SYNTH_KEYS[key]
         if kind == "organ":
             return synths.organ(notes_sec, total_sec, preset, rng)
+        if kind == "chip":
+            return synths.chip(notes_sec, total_sec, preset, rng)
         return synths.synth(notes_sec, total_sec, preset, rng)
     inst = instrument(key)
     if key in KITS:

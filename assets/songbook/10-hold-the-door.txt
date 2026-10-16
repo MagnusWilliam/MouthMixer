@@ -1,0 +1,54 @@
+title: Hold the Door
+slot: City daytime theme, era 3 (Stops 6-7): slower, determined, hopeful
+starter: daily_poprock
+voices: Verse lead = your voice | Chorus lead = your voice, full | Gang = joins on "Hold the door!" | Harmony = the final chorus
+hits: some: on "Hold the door!"
+notes: Persona 4-style bright J-pop rock: piano 8ths, crunchy guitars, synth strings, a royal-road chorus (IV-V-iii-vi). The chorus is the AUDIO_PLAN draft. It answers Last Train: the train is leaving, and this time the singer keeps it open for everyone else.
+---
+Hold the Door
+
+[Intro]
+
+[Verse 1, Verse lead]
+Seven stops and I lost count of the names,
+every platform painted grey the same.
+But the light at the end isn't out just yet,
+I can hear it humming in the rain.
+
+[Pre-Chorus, Verse lead]
+Step by step, the doors begin to close,
+I put my hand in the gap and I hold.
+
+[Chorus, Chorus lead + Gang]
+Gang: Hold the door, just one more stop,
+I didn't come this far to let it drop.
+If the whole world forgets my face,
+I'll be the light in the empty place.
+
+[Verse 2, Verse lead]
+Every seat still warm from someone gone,
+every window keeps a little song.
+I don't need the map, I know the way,
+I've been walking it with you all along.
+
+[Pre-Chorus, Verse lead]
+Step by step, the doors begin to close,
+I put my hand in the gap and I hold.
+
+[Chorus, Chorus lead + Gang]
+Gang: Hold the door, just one more stop,
+I didn't come this far to let it drop.
+If the whole world forgets my face,
+I'll be the light in the empty place.
+
+[Bridge, Chorus lead]
+Call the names out one by one,
+every voice another sun.
+If they cannot see us, let them hear,
+we were here, we were here.
+
+[Final Chorus, Chorus lead + Gang + Harmony]
+Gang: Hold the door, just one more stop,
+I didn't come this far to let it drop.
+If the whole world forgets my face,
+Gang: I'll be the light in the empty place!

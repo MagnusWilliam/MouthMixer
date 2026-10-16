@@ -1,0 +1,47 @@
+title: Off the Rails
+slot: Regular battle theme, eras 2-3: heavier and more urgent than Pull the Brake!
+starter: battle_rush
+voices: Rap = Deeper male | Chorus lead = your voice with Raspy (or Female lead) | Gang = every "Off the rails!" | Ad-libs = "Go!", "Let's go!"
+hits: yes: on "Off the rails!" and "slow down!"
+notes: Persona 5-style battle rock: organ, distorted guitar, brass, driving 16ths. Hits from the first second. The chorus is the AUDIO_PLAN draft; the rap is the only long text.
+---
+Off the Rails
+
+[Intro, gang shout]
+Gang: Off the rails!
+
+[Chorus, Chorus lead + Gang]
+No timetable, no turning round,
+we run the line till it hits the ground.
+Gang: Off the rails and we don't slow down!
+Gang: Off the rails and we don't slow down!
+
+[Rap Verse, Rap]
+Signal's red but we're reading it green,
+crew in the cab and the brakes are clean.
+You froze the clocks and you stole the names,
+we light the tunnel like a box of flames.
+Every face that you tried to erase
+is riding with me in this exact same place.
+Lean in the curve, let the sparks fly high,
+Ad-libs: last car, first strike, let's go!
+
+[Pre-Chorus, Chorus lead]
+Hold on tight, the floor is shaking,
+every bolt is near to breaking.
+
+[Chorus, Chorus lead + Gang]
+No timetable, no turning round,
+we run the line till it hits the ground.
+Gang: Off the rails and we don't slow down!
+Gang: Off the rails and we don't slow down!
+
+[Bridge, Chorus lead]
+No more stations, no more waiting,
+no more doors we keep debating.
+
+[Final Chorus, Chorus lead + Gang]
+No timetable, no turning round,
+we run the line till it hits the ground.
+Gang: Off the rails and we don't slow down!
+Gang: Off the rails and we won't slow down!

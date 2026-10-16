@@ -19,7 +19,9 @@ from .production import bass_line, build_song, chord, clear_of, grid, humanise, 
 PACK_OF = {"citypop": "persona_city", "night_jazz": "persona_night", "battle_rush": "persona_battle",
            "bossa": "persona_bossa", "boss_choir": "persona_boss", "ballad": "persona_ballad", "dungeon": "persona_dungeon",
            "lost_car": "persona_night", "sad": "persona_ballad", "hideout": "persona_hideout", "results": "persona_city",
-           "night_brushes": "persona_night", "night_trio": "persona_night", "night_lofi": "persona_hideout"}
+           "night_brushes": "persona_night", "night_trio": "persona_night", "night_lofi": "persona_hideout",
+           "p3_urban": "persona_city", "p4_jpop": "persona_city", "p5_heavy": "persona_battle", "anthem": "persona_boss",
+           "velvet": "persona_ballad", "chip_city": "persona_city", "chip_swing": "persona_night", "hope": "persona_boss"}
 
 DRUM = {"kick": 36, "snare": 38, "side": 37, "hat": 42, "pedal": 44, "open": 46, "ride": 51, "bell": 53,
         "crash": 49, "crash2": 57, "t1": 50, "t2": 48, "t3": 45, "t4": 41}
@@ -188,6 +190,127 @@ STYLES["night_lofi"] = dict(STYLES["night_jazz"]) | {
     "drum_gain": -9, "organ": None,
     "feels": {k: dict(v, drums=("x......x..x.....", "....x.......x...", "x.x.x.x.x.x.x.x.") if v["drums"] else None,
                       layers=set(v["layers"]) - {"organ"}) for k, v in STYLES["night_jazz"]["feels"].items()},
+}
+
+# Distinct Persona sounds (the user: "more unique, more distinct Persona sounds"; PERSONA_PRODUCTION §7).
+STYLES["p3_urban"] = {  # Persona 3 (Reload): boom-bap breaks, piano loop, string stabs, record scratches
+    "title": "Persona 3 urban", "bpm": 96, "tonic": 11, "mode": "minor", "swing": 0.56,  # B minor
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "sfz:violins_spic", "guitar": None, "brass": False, "organ": None,
+    "feels": {
+        "intro": {"drums": None, "bass": None, "comp": "stab", "layers": {"scratch"}},
+        "verse": {"drums": ("x......xx.x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "halftime", "comp": "stab",
+                  "layers": {"scratch"}},
+        "pre": {"drums": ("x......xx.x.....", "....x.......x...", "xxxxxxxxxxxxxxxx"), "bass": "halftime", "comp": "half",
+                "layers": {"pad"}},
+        "lift": {"drums": ("x......xx.x...x.", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "lean", "comp": "push",
+                 "layers": {"pad", "low_strings", "scratch", "lead_colour"}},
+        "breakdown": {"drums": None, "bass": "pedal", "comp": "whole", "layers": {"pad"}},
+        "outro": {"drums": ("x......xx.x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "halftime", "comp": "stab",
+                  "layers": {"scratch"}},
+    },
+}
+STYLES["p4_jpop"] = {  # Persona 4: bright J-pop rock: piano 8ths, crunchy guitar, synth strings, disco hats
+    "title": "Persona 4 J-pop rock", "bpm": 120, "tonic": 4, "mode": "major",  # E major
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "synth:super_pad",
+    "lead_colour": "synth:saw_lead", "guitar": "sfz:guitar_clean", "brass": False, "organ": None,
+    "feels": {
+        "intro": {"drums": ("x.......x.......", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "eighths", "comp": "eighths",
+                  "layers": {"power", "lead_colour"}},
+        "verse": {"drums": ("x.......x.x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "eighths", "comp": "half",
+                  "layers": {"guitar"}},
+        "pre": {"drums": ("x...x...x...x...", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "eighths", "comp": "eighths",
+                "layers": {"pad", "guitar"}},
+        "lift": {"drums": ("x...x...x...x...", "....X.......X...", "..x...x...x...x."), "bass": "eighths", "comp": "eighths",
+                 "layers": {"pad", "power", "low_strings"}},
+        "final": {"drums": ("x...x...x...x...", "....X.......X...", "..x...x...x...x."), "bass": "eighths", "comp": "eighths",
+                  "layers": {"pad", "power", "low_strings", "lead_colour"}},
+        "breakdown": {"drums": None, "bass": "pedal", "comp": "half", "layers": {"pad"}},
+    },
+}
+STYLES["p5_heavy"] = {  # Persona 5 boss/battle rock: organ, distorted guitar, brass, driving 16ths
+    "title": "Persona 5 battle rock", "bpm": 166, "tonic": 7, "mode": "minor",  # G minor
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
+    "lead_colour": "sfz:trumpet", "guitar": "sfz:guitar_clean", "brass": True, "organ": "synth:organ_rock",
+    "feels": {
+        "intro": {"drums": ("x.x...x.x.x...x.", "....X.......X...", "x.x.x.x.x.x.x.x."), "bass": "funk", "comp": "stab",
+                  "layers": {"brass", "organ", "power"}},
+        "verse": {"drums": ("x.x...x...x...x.", "....X.......X...", "x.x.x.x.x.x.x.x."), "bass": "funk", "comp": "stab",
+                  "layers": {"organ"}},
+        "rap": {"drums": ("x......xx.x.....", "........X.......", "x.x.x.x.x.x.x.x."), "bass": "halftime", "comp": "offbeat",
+                "layers": {"guitar"}},
+        "pre": {"drums": ("x...x...x...x...", "....x.......x...", "xxxxxxxxxxxxxxxx"), "bass": "funk", "comp": "half",
+                "layers": {"pad", "organ", "power"}},
+        "lift": {"drums": ("x.x...x.x.x...x.", "....X.......X...", "xxxxxxoxxxxxxxox"), "bass": "funk", "comp": "stab",
+                 "layers": {"brass", "organ", "power", "pad", "congas"}},
+        "final": {"drums": ("x.x...x.x.x...x.", "....X.......X...", "xxxxxxoxxxxxxxox"), "bass": "funk", "comp": "stab",
+                  "layers": {"brass", "organ", "power", "pad", "congas", "lead_colour"}},
+    },
+}
+STYLES["anthem"] = {  # the departure-day anthem: rock band, organ, strings and a gang/choir on the hook
+    "title": "Persona anthem", "bpm": 140, "tonic": 9, "mode": "minor",  # A minor
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "choir", "guitar": "sfz:guitar_clean", "brass": True, "organ": "synth:organ_rock",
+    "feels": {
+        "intro": {"drums": ("x.......x.......", "....X.......X...", "x.x.x.x.x.x.x.x."), "bass": "eighths", "comp": "half",
+                  "layers": {"organ", "power"}},
+        "verse": {"drums": ("x.....x.x.......", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "push", "comp": "stab",
+                  "layers": {"guitar"}},
+        "pre": {"drums": ("x...x...x...x...", "....x.......x...", "xxxxxxxxxxxxxxxx"), "bass": "eighths", "comp": "half",
+                "layers": {"pad", "organ"}},
+        "lift": {"drums": ("x.....x.x.x.....", "....X.......X...", "xxxxxxoxxxxxxxox"), "bass": "eighths", "comp": "half",
+                 "layers": {"pad", "organ", "power", "choir", "brass", "low_strings"}},
+        "final": {"drums": ("x.....x.x.x.....", "....X.......X...", "xxxxxxoxxxxxxxox"), "bass": "eighths", "comp": "half",
+                  "layers": {"pad", "organ", "power", "choir", "brass", "low_strings", "timpani"}},
+        "breakdown": {"drums": None, "bass": "pedal", "comp": "ballad", "layers": {"pad", "choir"}},
+    },
+}
+STYLES["velvet"] = {  # the Velvet Room idea: piano arpeggios, organ, a wordless soprano (here: the Hum)
+    "title": "Velvet piano and soprano", "bpm": 80, "tonic": 1, "mode": "minor", "transitions": False,  # C# minor
+    "arp_range": (64, 83),
+    "kit": "kit:muldjord", "bass": None, "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "sfz:harp", "guitar": None, "brass": False, "organ": "synth:organ_soft",
+    "feels": {
+        "intro": {"drums": None, "bass": None, "comp": "arp", "layers": set()},
+        "verse": {"drums": None, "bass": None, "comp": "arp", "layers": {"pad"}},
+        "lift": {"drums": None, "bass": None, "comp": "arp", "layers": {"pad", "low_strings"}},
+    },
+}
+# Undertale-inspired (Toby Fox research, PERSONA_PRODUCTION §8): chip voices over a real groove, motifs reused.
+STYLES["chip_city"] = {  # Stop 3 AFTER HOURS: chiptune and city pop (Soren's song in chip)
+    "title": "chip city pop", "bpm": 128, "tonic": 5, "mode": "major",  # F major
+    "kit": "kit:muldjord", "bass": "synth:chip_triangle", "comp": "sfz:rhodes", "pad": "synth:super_pad",
+    "lead_colour": "synth:chip_square", "guitar": None, "brass": False, "organ": None,
+    "feels": {
+        "intro": {"drums": None, "bass": "lean", "comp": "city", "layers": set()},
+        "verse": {"drums": ("x.....x...x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "funk", "comp": "city",
+                  "layers": {"chipkit"}},
+        "lift": {"drums": ("x.....x.x.......", "....X.......X...", "xxxxxxoxxxxxxxox"), "bass": "funk", "comp": "city",
+                 "layers": {"chipkit", "pad"}},
+    },
+}
+STYLES["chip_swing"] = {  # a swung shop/menu tune: walking bass, Rhodes, the melody on square + vibraphone
+    "title": "chip swing", "bpm": 102, "tonic": 10, "mode": "major", "swing": 0.64, "transitions": False,  # Bb
+    "kit": "kit:brush", "bass": "acoustic_bass", "comp": "sfz:rhodes", "pad": "sfz:violins",
+    "lead_colour": "vibraphone", "guitar": None, "brass": False, "organ": None, "ride": True,
+    "feels": {
+        "verse": {"drums": ("x.......x.......", "....x.......x...", "x..xx..xx..xx..x"), "bass": "walk", "comp": "charleston",
+                  "layers": set()},
+        "lift": {"drums": ("x.......x.......", "....x.......x...", "x..xx..xx..xx..x"), "bass": "walk", "comp": "charleston",
+                 "layers": {"chipkit"}},
+    },
+}
+STYLES["hope"] = {  # the finale: band + chip lead, earlier motifs stacked as melody and countermelody
+    "title": "hope finale", "bpm": 140, "tonic": 0, "mode": "major",  # C major
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "synth:chip_square", "guitar": "sfz:guitar_clean", "brass": True, "organ": "synth:organ_gospel",
+    "feels": {
+        "intro": {"drums": None, "bass": None, "comp": "arp", "layers": set()},
+        "verse": {"drums": ("x.......x.x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "bass": "push", "comp": "push",
+                  "layers": {"pad", "chipkit"}},
+        "lift": {"drums": ("x.....x.x.x.....", "....X.......X...", "xxxxxxoxxxxxxxox"), "bass": "push", "comp": "push",
+                 "layers": {"pad", "low_strings", "organ", "power", "brass", "timpani", "chipkit"}},
+    },
 }
 
 # Instrumental cues for LINE ZERO's scenes (studio/cues.py; AUDIO_PLAN section 3.2).
@@ -414,7 +537,8 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
     clear = lambda notes: clear_of(notes, mel, chord_at)  # noqa: E731
     parts: dict[str, list] = {k: [] for k in ("drums", "perc", "bass", "ghost", "comp", "pad", "low", "brass_hi", "brass_lo",
                                               "guitar_l", "guitar_r", "organ", "colour", "choir", "ostinato", "timpani",
-                                              "rim", "fx_rev", "fx_boom", "perc_gm", "theme")}
+                                              "rim", "fx_rev", "fx_boom", "perc_gm", "theme", "theme2",
+                                              "power", "scratch", "chip")}
     prev_v = None
     for si, (name, start, length) in enumerate(secs):
         fs = feel_spec(style, feels[name])
@@ -474,7 +598,16 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
                 parts["bass"] += m
                 parts["ghost"] += g
         # comping
-        if fs["comp"]:
+        if fs["comp"] == "arp":  # broken chords in 8ths, up and back down (the Velvet Room piano)
+            for i, nm in enumerate(sec_bars):
+                b = (b0 + i) * 4
+                lo_, hi_ = style.get("arp_range", (55, 74))
+                v = upper(nm.split("|")[0], prev_v, lo_, hi_)
+                prev_v = v
+                root = chord(nm.split("|")[0])[0]
+                seq = [lo_ - 12 + (root - lo_) % 12] + v + v[::-1][1:-1]
+                parts["comp"] += [(b + k * 0.5, 0.9, seq[k % len(seq)], 74 if k % 4 == 0 else 62) for k in range(8)]
+        elif fs["comp"]:
             for i, nm in enumerate(sec_bars):
                 b = (b0 + i) * 4
                 for s_, l_ in RHYTHMS[fs["comp"]]:
@@ -533,6 +666,14 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
                 r = 55 + (root - 55) % 12
                 fig = [r, r + 7, r + 8, r + 7] if mode == "minor" else [r, r + 7, r + 9, r + 7]
                 parts["ostinato"] += [(b + j * 0.5, 0.4, fig[j % 4], 92 if j % 2 == 0 else 76) for j in range(8)]
+            if "power" in L:  # distorted power chords: root and fifth in driving 8ths, palm-muted except on 1
+                r = 40 + (root - 40) % 12
+                parts["power"] += [(b + k * 0.5, 0.4 if k else 0.9, p, 100 if k % 2 == 0 else 84) for k in range(8)
+                                   for p in (r, r + 7, r + 12)]
+            if "scratch" in L and i % 2 == 1:  # Persona 3's DJ: a scratch on the last beat of every second bar
+                parts["scratch"] += [(b + 3, 0.45, 60, 100), (b + 3.5, 0.4, 62 if i % 4 == 1 else 64, 92)]
+            if "chipkit" in L:  # the noise-channel hats and a triangle kick under the real kit
+                parts["chip"] += grid("x.......x.......", b, 36, 90) + grid("..x...x...x...x.", b, 42, 70, length=0.05)
             if "clock" in L:  # a ticking clock: a soft wood block on every beat, a deeper tock on 1
                 parts["perc_gm"] += [(b + j, 0.1, 77 if j == 0 else 76, 54 if j == 0 else 40) for j in range(4)]
             if "timpani" in L and i % 2 == 0:
@@ -555,6 +696,14 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
                     at = b0 * 4 + k * phrase_beats + s_
                     if at < b1 * 4:
                         parts["theme"].append((at, l_, n(p) if isinstance(p, str) else p, 96))
+                k += 1
+        th2 = (spec.get("themes2") or {}).get(name) or (spec.get("themes2") or {}).get(_kind(name, feels[name]))
+        if th2:
+            pb = max(4.0, 4 * np.ceil(max(s_ + l_ for s_, l_, _ in th2) / 4))
+            k = 0
+            while k * pb < length * 4:
+                parts["theme2"] += [(b0 * 4 + k * pb + s_, l_, n(p) if isinstance(p, str) else p, 88) for s_, l_, p in th2
+                                    if b0 * 4 + k * pb + s_ < b1 * 4]
                 k += 1
         # transitions into big sections
         if big_next and si + 1 < len(secs) and style.get("transitions", True):
@@ -593,13 +742,17 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
         ("Timpani", "timpani", "timpani", humanise(parts["timpani"], rng, 4), 0.0),
         ("Theme", "counter" if sheet else "lead", spec.get("theme_inst") or style["lead_colour"],
          clear(humanise(parts["theme"], rng, 4)) if sheet else humanise(parts["theme"], rng, 4), 0.05),
+        ("Countermelody", "counter", spec.get("theme2_inst") or "sfz:violins", humanise(parts["theme2"], rng, 4), -0.2),
+        ("Power guitar", "arp", "distortion_guitar", clear(humanise(parts["power"], rng, 5)), 0.45),
+        ("Scratches", "fx", "sfx:scratch", parts["scratch"], 0.2),
+        ("Chip drums", "perc", "kit:chip", humanise(parts["chip"], rng, 3), 0.0),
         ("Clock", "perc", "kit:standard", parts["perc_gm"], 0.4),
         ("Reverse cymbals", "fx", "sfx:reverse_crash", parts["fx_rev"], 0.0),
         ("Boom", "fx", "sfx:boom", parts["fx_boom"], 0.0),
     ]
     sw = style.get("swing", 0.5)
     tracks = [Track(nm, role, inst, swing(sorted(notes), sw), pan=pan) for nm, role, inst, notes, pan in tr if notes]
-    gains = {"Theme": 0, "Clock": -6, "Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
+    gains = {"Theme": 0, "Clock": -6, "Countermelody": -3, "Power guitar": -4, "Scratches": -2, "Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
              "Low strings": -3, "Organ / pad": -3, "Guitar left": -3, "Guitar right": -3, "Hook": 1, "Choir": -2,
              "String ostinato": -1, "Reverse cymbals": -2, "Boom": -3}
     if style.get("drum_gain") is not None:

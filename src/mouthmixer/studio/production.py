@@ -167,7 +167,7 @@ def clear_of(notes: list, melody: list, chord_at) -> list:
     rub, or is dropped. The 9ths and 7ths stay everywhere the singer isn't leaning on the note next to them."""
     out = []
     for s, l, p, v in notes:
-        mel = [m for m in melody if m[0] < s + l and m[0] + m[1] > s]
+        mel = [m for m in melody if m[0] - 0.15 < s + l and m[0] + m[1] + 0.15 > s]  # swing can move notes 0.1 beat
 
         def rubs(q):
             return any(abs(m[2] - q) == 1 or (q < m[2] and (m[2] - q) % 12 == 1 and m[2] - q > 12) for m in mel)

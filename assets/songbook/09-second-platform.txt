@@ -1,0 +1,54 @@
+title: Second Platform
+slot: City daytime theme, era 2 (midpoint to Stop 5): still groovy, now bittersweet
+starter: night_hiphop
+voices: Verse lead = your voice | Chorus lead = Female lead (or your voice, Breathy) | Backing = "ooh" under the bridge
+hits: no
+notes: Persona 3-style city song: a boom-bap break, a piano loop, string stabs and record scratches. Written for the forgetting in Act 2: the singer keeps reaching for someone the city has erased. The chorus hook is the AUDIO_PLAN draft ("Same streets, different light").
+---
+Second Platform
+
+[Intro]
+
+[Verse 1, Verse lead]
+Morning train, the same two coffees,
+one for me and one for who?
+Ticket stub inside my jacket,
+written in a hand I almost knew.
+
+[Pre-Chorus, Verse lead]
+Every corner feels like I've been here before,
+every echo knocks on a different door.
+
+[Chorus, Chorus lead]
+Same streets, different light,
+I know your name but I can't place the night.
+Keep on moving, keep it close,
+the things you forget are the things that matter most.
+
+[Verse 2, Verse lead]
+Photo booth on the second platform,
+four small frames and one is blank.
+Someone laughing right beside me,
+I turn around and there is no one there to thank.
+
+[Pre-Chorus, Verse lead]
+Every corner feels like I've been here before,
+every echo knocks on a different door.
+
+[Chorus, Chorus lead]
+Same streets, different light,
+I know your name but I can't place the night.
+Keep on moving, keep it close,
+the things you forget are the things that matter most.
+
+[Bridge, Chorus lead]
+If the city takes the names away,
+I will write them on the windows every day.
+Breathe on the glass and they come back,
+one more letter on the morning track.
+
+[Final Chorus, Chorus lead]
+Same streets, different light,
+I know your name and I'll find you by tonight.
+Keep on moving, hold it close,
+the things you forget are the things that matter most.

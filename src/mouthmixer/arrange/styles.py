@@ -444,11 +444,15 @@ def _register_sampled() -> None:
         INSTRUMENTS[key] = (-1, gm[1], lo, hi, spec["family"], 1.0)
     organ = INSTRUMENTS["drawbar_organ"]
     for key, (kind, _) in SYNTH_KEYS.items():
-        INSTRUMENTS[key] = (-1, organ[1] if kind == "organ" else 81, 24, 96, "keys" if kind == "organ" else "synth", 1.0)
+        INSTRUMENTS[key] = (-1, organ[1] if kind == "organ" else 80 if kind == "chip" else 81, 24, 96,
+                            "keys" if kind == "organ" else "synth", 1.0)
     for key, spec in SAMPLED_KITS.items():
         KITS[key[4:]] = KITS[spec["gm"][4:]]
     for key in SFX:
-        INSTRUMENTS[key] = (-1, 119, 0, 127, "fx", 1.0)
+        if key.startswith("kit:"):
+            KITS[key[4:]] = KITS["electronic"]
+        else:
+            INSTRUMENTS[key] = (-1, 119, 0, 127, "fx", 1.0)
 
 
 _register_sampled()

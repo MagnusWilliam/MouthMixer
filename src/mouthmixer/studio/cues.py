@@ -16,6 +16,10 @@ MOTIFS = {
     # B: the crew's warm 4-bar phrase (F major)
     "B": [(0, 1.5, "A4"), (1.5, .5, "C5"), (2, 1, "D5"), (3, 1, "C5"), (4, 1.5, "A4"), (5.5, .5, "G4"), (6, 2, "F4"),
           (8, 1, "G4"), (9, 1, "A4"), (10, 1, "C5"), (11, 1, "F5"), (12, 1.5, "E5"), (13.5, .5, "D5"), (14, 2, "C5")],
+    # S: Soren's song, the busker's arpeggios over Fmaj7-E7-Am7-Gm7 C7 (from LINE ZERO's CityAmbient code), F major
+    "S": [(k * 0.5 + bar * 4, 0.45, 65 + semis) for bar, row in enumerate(
+        [[0, 4, 7, 11, 12, 11, 7, 4], [-1, 3, 6, 9, 11, 9, 6, 3], [4, 7, 11, 14, 16, 14, 11, 7], [2, 5, 9, 12, 7, 11, 14, 11]])
+        for k, semis in enumerate(row)],
     # L0: the Line 0 call: a falling minor third and the ticket punch (ka-CHK) as a 16th pickup (C minor)
     "L0": [(0, .75, "Eb5"), (.75, .25, "C5"), (1, .5, "C5"), (1.5, .5, "D5"), (2, .75, "Eb5"), (2.75, .25, "C5"),
            (3, 1, "G5"), (4, .75, "F5"), (4.75, .25, "Eb5"), (5, .5, "D5"), (5.5, .5, "C5"), (6, 1.5, "D5")],
@@ -26,7 +30,8 @@ def _shift(phrase, semis=0, stretch=1.0, drop=()):
     """A motif moved by semitones, slowed by `stretch`, with some notes left out (the forgetting)."""
     from .production import n
 
-    return [(s * stretch, l * stretch, n(p) + semis) for i, (s, l, p) in enumerate(phrase) if i not in drop]
+    return [(s * stretch, l * stretch, (n(p) if isinstance(p, str) else p) + semis) for i, (s, l, p) in enumerate(phrase)
+            if i not in drop]
 
 
 CUES = {
@@ -84,6 +89,43 @@ CUES = {
                    "chorus": ["Bbmaj7", "Am7", "Gm9", "C9"]},
         "themes": {"chorus": "B"},
     },
+    # Distinct Persona sounds and Undertale-inspired cues (PERSONA_PRODUCTION sections 7-8)
+    "velvet": {
+        "title": "The Waiting Platform (Velvet Room style)", "style": "velvet", "theme_inst": "voice_oohs",
+        "form": [("Intro", 4), ("Verse", 8), ("Chorus", 8), ("Verse 2", 8)],
+        "feels": {"Intro": "intro", "Verse": "verse", "Chorus": "lift", "Verse 2": "verse"},
+        "chords": {"intro": ["C#m9", "Amaj7", "C#m9", "G#7#5#9"], "verse": ["C#m9", "Amaj7", "F#m9", "G#7#5#9"],
+                   "chorus": ["Amaj7", "B", "G#m7", "C#m9"]},
+        "themes": {"verse": ("H", 11, 1.5, ()), "chorus": ("H", 11, 1.5, ())},  # a wordless soprano, high, sings the Hum
+    },
+    "stop3_after_hours": {
+        "title": "Stop 3: After Hours (chip city pop)", "style": "chip_city", "theme_inst": "synth:chip_square",
+        "theme2_inst": "sfz:rhodes",
+        "form": [("Intro", 4), ("Verse", 8), ("Chorus", 8), ("Verse 2", 8)],
+        "feels": {"Intro": "intro", "Verse": "verse", "Chorus": "lift", "Verse 2": "verse"},
+        "chords": {"intro": ["Fmaj7", "E7", "Am7", "Gm7|C7"], "verse": ["Fmaj7", "E7", "Am7", "Gm7|C7"],
+                   "chorus": ["Bbmaj7", "C", "Am7", "Dm9"]},
+        "themes": {"verse": ("S", 12, 1.0, ()), "chorus": "B"},  # Soren's song on the square wave, an octave up
+        "themes2": {"chorus": ("B", -12, 1.0, ())},  # chip + real: the Rhodes doubles it an octave down
+    },
+    "shop": {
+        "title": "Shop (swing)", "style": "chip_swing", "theme_inst": "synth:chip_square", "theme2_inst": "vibraphone",
+        "form": [("Verse", 8), ("Chorus", 8)], "feels": {"Verse": "verse", "Chorus": "lift"},
+        "chords": {"verse": ["Bbmaj7", "Gm7", "Cm7", "F7"], "chorus": ["Ebmaj7", "Dm7", "Cm7", "F7sus4|F7"]},
+        "themes": {"verse": ("B", 5, 1.0, ()), "chorus": ("B", 5, 0.5, ())},  # the Bond theme, then at double speed
+        "themes2": {"verse": ("B", -7, 1.0, ())},
+    },
+    "finale_hope": {
+        "title": "Finale: First Light (hope)", "style": "hope", "theme_inst": "synth:chip_square",
+        "theme2_inst": "sfz:violins",
+        "form": [("Intro", 4), ("Verse", 8), ("Chorus", 16), ("Verse 2", 8), ("Final Chorus", 16)],
+        "feels": {"Intro": "intro", "Verse": "verse", "Chorus": "lift", "Verse 2": "verse", "Final Chorus": "lift"},
+        "chords": {"intro": ["Fmaj7", "G", "Fmaj7", "G"], "verse": ["Cmaj7", "Am7", "Fmaj7", "G"],
+                   "chorus": ["Fmaj7", "G", "Em7", "Am9", "Fmaj7", "G", "Cmaj7", "Cmaj7"]},
+        # every motif comes home: the Bond theme leads, the Hum answers as a countermelody, Soren's song in the verse
+        "themes": {"verse": ("S", 7, 1.0, ()), "chorus": ("B", 7, 1.0, ()), "final": ("B", 7, 1.0, ())},
+        "themes2": {"chorus": ("H", -5, 2.0, ()), "final": ("H", -5, 2.0, ())},
+    },
 }
 
 
@@ -100,6 +142,11 @@ def resolved(cue: dict) -> dict:
         else:
             out[k] = v
     spec["themes"] = out
+    out2 = {}
+    for k, v in (cue.get("themes2") or {}).items():
+        out2[k] = (_shift(MOTIFS[v]) if isinstance(v, str) else
+                   _shift(MOTIFS[v[0]], v[1], v[2], v[3]) if isinstance(v, tuple) else v)
+    spec["themes2"] = out2
     return spec
 
 

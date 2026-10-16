@@ -1,0 +1,54 @@
+title: Punch the Ticket
+slot: Departure day anthem: the day you go to finish a Stop
+starter: battle_funk
+voices: Verse lead = your voice | Chorus lead = your voice, full | Gang = the whole crew on the chorus | Backing = choir on the final chorus
+hits: some: on "here we go!"
+notes: A Persona-style anthem (think the big late-game songs): rock band, organ, strings and a choir on the hook, A minor, 140. The chorus is the AUDIO_PLAN draft. It plays when the crew sets out, so it has to feel like a decision.
+---
+Punch the Ticket
+
+[Intro]
+
+[Verse 1, Verse lead]
+Woke up early with the city still asleep,
+laces tight and a promise left to keep.
+Every friend I've got is standing at the gate,
+we've been ready, now we're done with wait.
+
+[Pre-Chorus, Verse lead]
+Clock hits zero and the lights go low,
+one more breath and then we go.
+
+[Chorus, Chorus lead + Gang]
+Today's the day, we punch the ticket,
+every door that's locked, we're gonna kick it.
+One way out and it's straight on through,
+Gang: last stop's waiting, so here we go!
+
+[Verse 2, Verse lead]
+Took the long way, now the long way's home,
+never walked a single mile alone.
+If the dark comes knocking, let it see,
+every one of us is holding the key.
+
+[Pre-Chorus, Verse lead]
+Clock hits zero and the lights go low,
+one more breath and then we go.
+
+[Chorus, Chorus lead + Gang]
+Today's the day, we punch the ticket,
+every door that's locked, we're gonna kick it.
+One way out and it's straight on through,
+Gang: last stop's waiting, so here we go!
+
+[Bridge, slow, then building, Chorus lead]
+Write our names along the line,
+every station, every sign.
+If tomorrow doesn't know us,
+we will make it, we will show it.
+
+[Final Chorus, Chorus lead + Gang + Backing]
+Today's the day, we punch the ticket,
+every door that's locked, we're gonna kick it.
+One way out and it's straight on through,
+Gang: last stop's waiting, so here we go!

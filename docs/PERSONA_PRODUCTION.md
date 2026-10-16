@@ -140,3 +140,55 @@ All six measured before going in: 0 half-step rubs between melody and band, guid
 crest 11.9-12.4 dB). They are short (38-56 bars, about a minute to a minute and a half): the songbook wrote
 them as game cues.
 
+## 6. Instrumental cues for LINE ZERO (2026-10-15, later)
+
+From LINE ZERO's AUDIO_PLAN 3.2 (read, not changed): the minimum viable set minus what the vocal songs already
+cover. `studio/cues.py`, each added to the app as "LINE ZERO cue: ...":
+
+| Cue | Scene | Style | Motifs |
+|---|---|---|---|
+| Boss battle | every boss | boss orchestra, C minor 150 | L0 (the Line 0 call: falling minor third + the ticket-punch 16th) on trumpet |
+| The Lost Car | the Conductor's car | slow swing 72, brushes, upright, Rhodes, a ticking clock | H on harmon-muted trumpet (brass = memory) |
+| Victory | after a battle (sting) | Rhodes chord + muted trumpet | B's tail |
+| Results | the rank screen | light funk 100 | B |
+| Mind the Gap | Stop exploration | labyrinth pulse 120 | T (H inverted, on a click) in pizzicato; H with notes 5-6 missing on celesta |
+| Sad (soft) | grief, flashbacks | piano + cello 66 | H slowed to half speed |
+| The Hideout | the base | lo-fi Rhodes, vinyl 90 | B |
+| The Waiting Platform | a Velvet Room-style space | piano arpeggios, strings, a high wordless soprano 80 | H |
+| Stop 3: After Hours | the arcade Stop | chip + city pop 128 | S (Soren's song, from the game code) on a square wave |
+| Shop | city shops | swung chip + vibraphone 102 | B, then B at double speed |
+| Finale: First Light | the hope finale | band + chip lead 140 | B leads, H answers as a countermelody, S in the verse |
+
+**H and B are drafts** (the audio plan leaves both to the user); they live in `cues.MOTIFS` and change everywhere at
+once. Still to make: bond, title (instrumental), tension, station, menu, game over, the seven Stop themes, line0_ride,
+ward, assault_sting; loop-point export for Roblox (the cues end on a chord that leads back to bar 1, but the files
+still have a mastering fade).
+
+## 7. Distinct Persona sounds, longer songs, softer night jazz (the user's notes)
+
+- **"The drums on Wrong Side of Midnight are too overpowering":** three alternatives, all 2:00+: soft brushes
+  (a brushed kit 7 dB down, walking upright bass, piano), a piano trio (no drums), lo-fi (a quiet kit 9 dB down,
+  Rhodes, vibraphone, vinyl).
+- **"Vocal songs at least 2 minutes":** `songbook_productions.extended_lyrics` keeps the words and lengthens the
+  form (8-bar intro, instrumental Solo sections with the hook on the lead instrument, the chorus again, an 8-bar
+  outro); `make` now does it for every new song.
+- **"More distinct Persona sounds":** four new styles and four new songs with original lyrics built on the audio
+  plan's hook drafts (assets/songbook 09-12):
+  - *Second Platform*: Persona 3 urban (boom-bap, piano loop, string stabs, record scratches; B minor 96)
+  - *Hold the Door*: Persona 4 J-pop rock (piano 8ths, crunchy guitars, synth strings, the royal-road chorus; E 120)
+  - *Off the Rails*: Persona 5 battle rock (organ, distorted guitar, brass, 16ths; G minor 166)
+  - *Punch the Ticket*: the anthem (band, organ, strings, choir on the hook; A minor 140)
+- New sounds: record scratches (a brass stab dragged on a turntable curve), distorted power chords, broken-chord
+  piano.
+
+## 8. Undertale (Toby Fox) influence
+
+Research (sources in the session's research report; techniques only): Fox made the score in FL Studio with free
+soundfonts and SNES-era samples, said "made using free soundfonts and synths"; strong short motifs reused across
+many tracks (the main theme leads 13 tracks) and transformed (slower and simpler for sad, double speed for battle,
+swing for comedy, one theme's notes in another's rhythm); minor-modal loops (i-iv-VII-III), borrowed bVI/bVII in
+major; chip voices layered over real instruments; a final "hope" theme that stacks the earlier motifs.
+Applied: chip voices (pulse, square, a 16-step triangle, a noise-channel kit) in `arrange/synths.py`; the shop
+cue swings the Bond theme and doubles it at double speed; Stop 3 puts Soren's song on a square wave over a city-pop
+band; the finale stacks B over H; every cue quotes the same small set of motifs, the way Fox's score does.
+

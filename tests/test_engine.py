@@ -86,3 +86,39 @@ def test_walking_bass_and_soft_night_styles():
     assert not [t for t in song.tracks if t.role == "drums"]
     _, g2 = E.produce(dict(spec, style="night_brushes"), v, seed=2)
     assert g2["Drums"] <= -7
+
+
+def test_new_styles_and_cues_produce():
+    from mouthmixer.studio import cues as C
+
+    for name in ("p3_urban", "p4_jpop", "p5_heavy", "anthem"):
+        v = _version([("Intro", 4, "intro"), ("Verse 1", 8, "verse"), ("Chorus", 8, "lift")],
+                     {"Verse 1": ["one two three four five six seven", "eight nine ten"],
+                      "Chorus": ["here we go again tonight", "never slowing down"]})
+        spec = dict(SB.SPECS["09-second-platform"], style=name)
+        song, _ = E.produce(spec, v, seed=4)
+        roles = {t.name for t in song.tracks}
+        assert "Drums" in roles and "Guide melody (for singing)" in roles, name
+        if name == "p3_urban":
+            assert "Scratches" in roles
+        if name in ("p4_jpop", "p5_heavy"):
+            assert "Power guitar" in roles
+    for cid in ("velvet", "stop3_after_hours", "shop", "finale_hope"):
+        cue = C.resolved(C.CUES[cid])
+        start, secs = 0, []
+        for nm, bars in C.CUES[cid]["form"]:
+            secs.append({"name": nm, "start": start, "bars": bars})
+            start += bars
+        base = {"sections": secs, "section_feels": [C.CUES[cid]["feels"][nm] for nm, _ in C.CUES[cid]["form"]], "lyric_sheet": []}
+        song, _ = E.produce(cue, base, seed=4)
+        names = {t.name for t in song.tracks}
+        assert "Theme" in names, cid
+        if C.CUES[cid].get("themes2"):
+            assert "Countermelody" in names, cid  # two motifs stacked (the Undertale finale move)
+
+
+def test_soren_motif_comes_from_the_game_code():
+    from mouthmixer.studio import cues as C
+
+    s = C.MOTIFS["S"]
+    assert len(s) == 32 and s[0] == (0.0, 0.45, 65) and s[8][2] == 64  # Fmaj7 starts on F, E7 on E

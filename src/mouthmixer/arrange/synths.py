@@ -185,3 +185,66 @@ def synth(notes, total_sec: float, preset: str = "saw_lead", rng=None) -> np.nda
         d = int(0.007 * SR)
         return np.stack([out, np.r_[np.zeros(d), out[:-d]] * 0.63 + out * 0.37]).astype(np.float32)
     return np.stack([out, out]).astype(np.float32)
+
+
+# --------------------------------------------------------------------------------------------------
+# Chip voices (the NES/SNES-style colours Toby Fox mixes with real instruments; docs/PERSONA_PRODUCTION.md §7)
+# --------------------------------------------------------------------------------------------------
+CHIPS = {"pulse": 0.25, "square": 0.5, "thin": 0.125, "triangle": None}
+
+
+def chip(notes, total_sec: float, voice: str = "pulse", rng=None) -> np.ndarray:
+    """A chip voice: naive (aliasing on purpose) pulse waves with a duty cycle, or a 4-bit stepped triangle;
+    a short decay to a sustain, a little delayed vibrato on long notes, no filter."""
+    n = int(total_sec * SR)
+    out = np.zeros(n)
+    duty = CHIPS[voice]
+    for start, length, key, vel in notes:
+        a = int(start * SR)
+        if a >= n:
+            continue
+        m = min(int((length + 0.03) * SR), n - a)
+        t = np.arange(m) / SR
+        f = _hz(key) * 2 ** (0.18 / 12 * np.sin(2 * np.pi * 6 * t) * np.clip((t - 0.25) / 0.2, 0, 1))
+        ph = np.cumsum(f / SR) % 1.0
+        if duty is None:
+            tri = 1 - 4 * np.abs(ph - 0.5)
+            x = np.round(tri * 7.5) / 7.5  # 16 steps, like the NES triangle
+        else:
+            x = np.where(ph < duty, 1.0, -1.0)
+        env = np.minimum(1.0, 0.55 + 0.45 * np.exp(-t / 0.08))
+        off = int(length * SR)
+        if off < m:
+            env[off:] *= np.linspace(1, 0, m - off)
+        out[a:a + m] += x * env * (0.3 + 0.7 * vel / 127) * 0.22
+    return np.stack([out, out]).astype(np.float32)
+
+
+def chip_drums(notes, total_sec: float, rng=None) -> np.ndarray:
+    """A chip kit on GM drum notes: kick = a fast-falling triangle, snare = noise burst + tone, hats = short
+    high noise (the NES noise channel)."""
+    rng = rng or np.random.default_rng(0)
+    n = int(total_sec * SR)
+    out = np.zeros(n)
+    for start, length, key, vel in notes:
+        a = int(start * SR)
+        if a >= n:
+            continue
+        g = 0.3 + 0.7 * vel / 127
+        if key in (35, 36):
+            m = min(int(0.16 * SR), n - a)
+            t = np.arange(m) / SR
+            f = 50 + 180 * np.exp(-t * 45)
+            ph = np.cumsum(f / SR) % 1
+            x = (1 - 4 * np.abs(ph - 0.5)) * np.exp(-t * 14)
+        elif key in (38, 40, 37):
+            m = min(int(0.18 * SR), n - a)
+            t = np.arange(m) / SR
+            x = (rng.choice([-1.0, 1.0], m) * 0.7 + 0.3 * np.sign(np.sin(2 * np.pi * 190 * t))) * np.exp(-t * 18)
+        else:
+            m = min(int((0.25 if key == 46 else 0.04) * SR), n - a)
+            t = np.arange(m) / SR
+            x = rng.choice([-1.0, 1.0], m) * np.exp(-t * (8 if key == 46 else 60)) * 0.5
+            x = np.repeat(x[::3], 3)[:m]  # the noise channel's coarse sample rate
+        out[a:a + m] += x * g * 0.35
+    return np.stack([out, out]).astype(np.float32)
