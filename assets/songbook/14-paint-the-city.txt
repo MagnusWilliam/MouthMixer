@@ -1,0 +1,60 @@
+title: Paint the City
+slot: Night in the city, free time (inspired by Color Your Night)
+starter: daily_citypop
+voices: Verse lead = your voice, smooth | Chorus lead = your voice, full | Rap = a friend or you, relaxed | Backing = an "ooh" under the final chorus
+hits: none
+notes: Night city-pop disco in Db major, 96: four kicks a bar, a funk bass, Rhodes, strings, a tenor sax answering the hook. Chords move every two beats (vi to V, ii to iii), like the reference. Easy, warm, never shouting.
+---
+Paint the City
+
+[Intro]
+
+[Verse 1, Verse lead]
+Neon on the river and the bridges glow,
+every window telling stories that we'll never know.
+Got nowhere to be until the morning light,
+so I'm taking all my colours out tonight.
+
+[Pre-Chorus, Verse lead]
+Turn the corner, there you are,
+leaning on a streetlight like a movie star.
+
+[Chorus, Chorus lead]
+We can paint the city any shade we like,
+violet on the rooftops, gold on every bike.
+Nobody is watching, so we take our time,
+paint the city, you and I.
+
+[Rap, Rap]
+Late train rolling and the beat's in the tracks,
+we got pockets full of change and we're not looking back.
+Corner shop is open and the music's on low,
+every block's a canvas, so we let it all show.
+
+[Verse 2, Verse lead]
+Little café singing out an old refrain,
+silver on the sidewalk from the evening rain.
+If tomorrow's heavy, we can let it wait,
+there's a colour left for every friend we make.
+
+[Pre-Chorus, Verse lead]
+Turn the corner, there you are,
+leaning on a streetlight like a movie star.
+
+[Chorus, Chorus lead]
+We can paint the city any shade we like,
+violet on the rooftops, gold on every bike.
+Nobody is watching, so we take our time,
+paint the city, you and I.
+
+[Bridge, Verse lead]
+When the colours fade and the sun comes through,
+I'll remember every one I shared with you.
+
+[Final Chorus, Chorus lead + Backing]
+We can paint the city any shade we like,
+violet on the rooftops, gold on every bike.
+Nobody is watching, so we take our time,
+paint the city, you and I.
+
+[Outro]

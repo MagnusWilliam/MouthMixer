@@ -106,3 +106,22 @@ def test_match_tone_moves_the_mix_toward_the_references():
     y, g = render.match_tone(boxy)
     assert g["low_mid"] < 0 and band_shares(y.mean(0))["low_mid"] < before - 1
     assert all(abs(v) <= 3.0 for v in g.values())
+
+
+def test_match_tone_follows_one_reference_and_reads_saved_analyses(tmp_path, monkeypatch):
+    import json
+
+    from mouthmixer import config
+
+    rng = np.random.default_rng(0)
+    x = (rng.normal(0, 0.1, (2, 44100 * 2))).astype(np.float32)
+    dark = {k: v for k, (_, v) in render.REF_BANDS.items()} | {"air": -30.0, "presence": -25.0}
+    _, g = render.match_tone(x, limit_db=40, target=dark)
+    _, g0 = render.match_tone(x, limit_db=40)
+    assert g["air"] < g0["air"] and g["presence"] < g0["presence"]  # a darker reference pulls the top down
+    monkeypatch.setattr(config, "home", lambda: tmp_path)
+    assert render.ref_bands(["nope"]) is None  # no analyses on this machine: the default target
+    for slug, air in (("a", -20.0), ("b", -10.0)):
+        (tmp_path / "analysis" / slug).mkdir(parents=True)
+        (tmp_path / "analysis" / slug / "analysis.json").write_text(json.dumps({"bands_db": dark | {"air": air}}))
+    assert render.ref_bands(["a", "b"])["air"] == -15.0

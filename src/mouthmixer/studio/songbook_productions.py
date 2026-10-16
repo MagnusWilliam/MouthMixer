@@ -105,6 +105,88 @@ SPECS = {
         "hook": [(0, 1, "A4"), (1, 1, "C5"), (2, 1, "E5"), (3, .5, "D5"), (3.5, .5, "C5"), (4, 2, "B4")],
         "hits": ["here we go"],
     },
+    # Inspired by the user's reference folder (PERSONA_PRODUCTION section 9). Original chords and hooks built from
+    # each reference's measured favourite moves (reference/analyse.py); nothing copied.
+    "13-hollow-hour": {  # Burn My Dread: the flat II (Gb), iv7 to bvii7
+        "style": "ref_dread",
+        "chords": {"intro": ["Fm9", "Gbmaj7", "Fm9", "Gbmaj7"],
+                   "verse": ["Fm9", "Gbmaj7", "Bbm9|Ebm7", "Dbmaj7|C7#5#9"],
+                   "pre": ["Bbm9", "Ebm7", "Abmaj7", "C7sus4|C7#5#9"],
+                   "chorus": ["Dbmaj7", "Gbmaj7", "Bbm9|Ebm7", "Fm9", "Dbmaj7", "Gbmaj7", "Bbm9|C7#5#9", "Fm9"],
+                   "rap": ["Fm9", "Fm9|Gbmaj7", "Bbm9", "Bbm9|C7#5#9"],
+                   "bridge": ["Gbmaj7", "Abmaj7", "Bbm9", "C7sus4|C7"],
+                   "outro": ["Fm9", "Gbmaj7", "Fm9", "Fm9"]},
+        "hook": [(0, 1, "C5"), (1, .5, "Db5"), (1.5, 1.5, "C5"), (3, .5, "Ab4"), (3.5, .5, "G4")],
+    },
+    "14-paint-the-city": {  # Color Your Night: vi7 to V, ii7 to iii7, IVmaj7 to II7, two beats a chord
+        "style": "ref_colour",
+        "chords": {"intro": ["Gbmaj7|Fm7", "Ebm7|Ab", "Gbmaj7|Fm7", "Bbm7|Ab"],
+                   "verse": ["Dbmaj7|Ebm7", "Fm7|Bbm7", "Gbmaj7|Fm7", "Ebm7|Ab"],
+                   "pre": ["Gbmaj7", "F7", "Bbm7|Ab", "Gbmaj7|Ab7sus4"],
+                   "chorus": ["Gbmaj7|Eb7", "Fm7|Bbm7", "Gbmaj7|Ab", "Dbmaj7", "Gbmaj7|Eb7", "Fm7|Bbm7", "Ebm7|Ab7sus4",
+                              "Dbmaj7"],
+                   "rap": ["Bbm7|Ab", "Ebm7|Fm7", "Bbm7|Ab", "Gbmaj7|F7"],
+                   "bridge": ["Bbm7", "Fm7", "Gbmaj7", "Ab7sus4|Ab"],
+                   "outro": ["Gbmaj7|Fm7", "Ebm7|Ab", "Dbmaj7", "Dbmaj7"]},
+        "hook": [(0, .5, "Ab4"), (.5, .5, "Bb4"), (1, 1, "Db5"), (2.5, .5, "C5"), (3, 1, "Ab4")],
+    },
+    "15-high-tide": {  # Full Moon Full Life: iii7 to VI7 to ii7, IVmaj7 to Imaj7, bVImaj7 to vi7
+        "style": "ref_tide",
+        "chords": {"intro": ["Dmaj7", "E", "C#m7", "F#m7"],
+                   "verse": ["Amaj7|E", "F#m7|C#m7", "Dmaj7|Amaj7", "Bm7|E"],
+                   "pre": ["Dmaj7", "E", "C#m7|F#7", "Bm7|E7sus4"],
+                   "chorus": ["Dmaj7|C#m7", "F#7|Bm7", "Dmaj7|E", "Amaj7", "Dmaj7|C#m7", "F#7|Bm7", "Fmaj7|E7sus4", "Amaj7"],
+                   "rap": ["F#m7", "Dmaj7", "Bm7", "E7sus4|E"],
+                   "bridge": ["Fmaj7", "F#m7", "Dmaj7", "E7sus4|E"],
+                   "outro": ["Dmaj7", "E", "Amaj7", "Amaj7"]},
+        "hook": [(0, .5, "E5"), (.5, .5, "F#5"), (1, 1, "A5"), (2, .5, "G#5"), (2.5, .5, "F#5"), (3, 1, "E5")],
+        "hits": ["high tide"],
+    },
+    "16-down-to-the-wire": {  # It's Going Down Now: bIIImaj7, bVImaj7 to v7, the half-step slide IImaj7 to bIIImaj7
+        "style": "ref_wire",
+        "chords": {"intro": ["Dm9", "Fmaj7|Am7", "Bbmaj7|Am7", "Gm9|A7#5#9"],
+                   "verse": ["Dm9", "Fmaj7|Am7", "Bbmaj7|Am7", "Gm9|A7sus4"],
+                   "pre": ["Bbmaj7|Am7", "Gm9|Fmaj7", "Emaj7|Fmaj7", "Gm9|A7#5#9"],
+                   "chorus": ["Bbmaj7", "Am7", "Gm9", "Dm9", "Bbmaj7", "Am7", "Emaj7|Fmaj7", "Gm9|A7#5#9"],
+                   "rap": ["Dm9", "Dm9|Fmaj7", "Gm9", "Am7|A7#5#9"],
+                   "bridge": ["Bbmaj7", "Am7", "Gm9", "A7sus4|A7#5#9"],
+                   "outro": ["Dm9", "Bbmaj7", "A7#5#9", "Dm9"]},
+        "hook": [(0, .5, "D5"), (.5, .5, "F5"), (1, .5, "A5"), (1.5, 1, "G5"), (3, .5, "F5"), (3.5, .5, "E5")],
+        "hits": ["down to the wire", "take it"],
+    },
+    "17-safety-off": {  # Pull the Trigger + A Way of Life: bIIImaj7 to IIsus4 to i7; Imaj7 and bVImaj7 in the outro
+        "style": "ref_safety",
+        "chords": {"intro": ["Em9", "Gmaj7|F#7sus4", "Em9", "Cmaj7|B7#5#9"],
+                   "verse": ["Em9", "Gmaj7|F#7sus4", "Em9|Am7", "Cmaj7|Bm7"],
+                   "pre": ["Am7", "Bm7", "Cmaj7", "B7sus4|B7#5#9"],
+                   "chorus": ["Cmaj7", "Bm7", "Em9", "Gmaj7|F#7sus4", "Cmaj7", "Bm7", "Am7|B7sus4", "Em9"],
+                   "rap": ["Em9|Gmaj7", "F#7sus4|Em9", "Cmaj7|Bm7", "Am7|B7sus4"],
+                   "bridge": ["Cmaj7", "D", "Bm7", "F#7sus4|B7sus4"],
+                   "outro": ["Cmaj7", "Emaj7", "Cmaj7", "Emaj7"]},
+        "hook": [(0, 1, "B4"), (1, .5, "D5"), (1.5, 1, "E5"), (3, .5, "D5"), (3.5, .5, "B4")],
+    },
+    "18-lunchbell": {  # School Days + Signs of Love: major sevenths sliding up a step, Vmaj7 to iii7, ii7 to IVmaj7
+        "style": "ref_lunch",
+        "chords": {"intro": ["Amaj7|G#m7", "F#m7|Emaj7", "Amaj7|G#m7", "F#maj7|B7sus4"],
+                   "verse": ["Emaj7|G#m7", "Amaj7|G#m7", "F#m7|Amaj7", "Bmaj7|G#m7"],
+                   "pre": ["F#maj7", "G#maj7", "Amaj7|G#m7", "F#m7|B7sus4"],
+                   "chorus": ["Amaj7|G#m7", "F#m7|Emaj7", "Amaj7|G#m7", "F#m7|B7sus4", "Amaj7|G#m7", "C#m7|F#maj7",
+                              "F#m7|B7sus4", "Emaj7"],
+                   "bridge": ["C#m7", "G#m7", "Amaj7", "B7sus4|B"],
+                   "outro": ["Amaj7|G#m7", "F#m7|B7sus4", "Emaj7", "Emaj7"]},
+        "hook": [(0, .5, "B4"), (.5, .5, "E5"), (1, .5, "G#5"), (1.5, 1, "F#5"), (3, .5, "E5"), (3.5, .5, "D#5")],
+    },
+    "19-reach-for-the-stars": {  # When the Moon's Reaching Out Stars: ii7 and iii7 into IVmaj7, IIsus4 to vi7, bVIImaj7
+        "style": "ref_moon",
+        "chords": {"intro": ["Ebmaj7|Dm7", "Cm7|F7sus4", "Ebmaj7|Dm7", "Gm7|C7sus4"],
+                   "verse": ["Bbmaj7|Gm7", "Cm7|Ebmaj7", "Dm7|Ebmaj7", "C7sus4|Gm7"],
+                   "pre": ["Ebmaj7", "Dm7|Gm7", "Cm7|Ebmaj7", "F7sus4|F7"],
+                   "chorus": ["Ebmaj7|Dm7", "Cm7|Ebmaj7", "Gm7|Bbmaj7", "Abmaj7|F7sus4", "Ebmaj7|Dm7", "Cm7|Ebmaj7",
+                              "Gm7|C7sus4", "Ebmaj7|F7sus4"],
+                   "bridge": ["Gm7", "Dm7", "Ebmaj7", "F7sus4|F7"],
+                   "outro": ["Ebmaj7|Dm7", "Cm7|F7sus4", "Bbmaj7", "Bbmaj7"]},
+        "hook": [(0, .5, "F5"), (.5, .5, "G5"), (1, 1, "Bb5"), (2.5, .5, "A5"), (3, 1, "G5")],
+    },
 }
 
 
@@ -113,6 +195,7 @@ def make(songbook_id: str, lib, seed: int = 11) -> tuple[str, int]:
     engine and add it as a version. Returns (song id, version index)."""
     import json
 
+    from ..arrange import render
     from . import engine, songbook
     from .production import add_version
     from .project import Project
@@ -133,7 +216,8 @@ def make(songbook_id: str, lib, seed: int = 11) -> tuple[str, int]:
     base = record["versions"][-1]
     song, gains = engine.produce(spec, base, seed)
     title = sb["title"] + " · " + engine.STYLES[spec["style"]]["title"] + " (base)"
-    vi = add_version(d, song, gains, title, base, {"spec": {**base.get("spec", {}), "production": f"engine:{spec['style']}"}})
+    vi = add_version(d, song, gains, title, base, {"spec": {**base.get("spec", {}), "production": f"engine:{spec['style']}"}},
+                     tone_target=render.ref_bands(engine.STYLES[spec["style"]].get("refs", [])))
     record = json.loads((d / "song.json").read_text())
     lib.update_song(sid, record, vi)
     return sid, vi
@@ -214,6 +298,7 @@ def extend(songbook_id: str, lib, style: str | None = None, label: str | None = 
     Wrong Side of Midnight alternatives), added to the same song as a new version."""
     import json
 
+    from ..arrange import render
     from . import engine, songbook
     from .production import add_version
     from .project import Project, _feels
@@ -243,6 +328,7 @@ def extend(songbook_id: str, lib, style: str | None = None, label: str | None = 
             "lyric_sheet": p.lyric_sheet()}
     song, gains = engine.produce(spec, base, seed)
     title = sb["title"] + " · " + st["title"] + (f" ({label})" if label else " (long)")
-    vi = add_version(d, song, gains, title, base, {"spec": {**base.get("spec", {}), "production": f"engine:{spec['style']}:long"}})
+    vi = add_version(d, song, gains, title, base, {"spec": {**base.get("spec", {}), "production": f"engine:{spec['style']}:long"}},
+                     tone_target=render.ref_bands(st.get("refs", [])))
     lib.update_song(sid, json.loads((d / "song.json").read_text()), vi)
     return sid, vi

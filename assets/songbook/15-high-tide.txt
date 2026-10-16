@@ -1,0 +1,60 @@
+title: High Tide
+slot: Main daytime theme: going out with the crew (inspired by Full Moon Full Life)
+starter: daily_poprock
+voices: Verse lead = your voice | Chorus lead = your voice, full and bright | Rap = spoken, quick | Gang = the crew on "high tide!"
+hits: some: on "high tide"
+notes: A bright J-rock song in A major, 96 in straight 16ths: piano, clean and power guitars, strings on top. The chorus leans on the reference's warm moves (F#7 into Bm, F into F#m). Big, hopeful, singable.
+---
+High Tide
+
+[Intro]
+
+[Verse 1, Verse lead]
+Morning on the harbour and the gulls are loud,
+I can hear my name called somewhere in the crowd.
+Yesterday was heavy but it washed away,
+there's a different kind of light on us today.
+
+[Pre-Chorus, Verse lead]
+Feel the water rising underneath our feet,
+every heart around me keeping the same beat.
+
+[Chorus, Chorus lead + Gang]
+High tide, carry us further,
+over every wall that we built in the dark.
+High tide, nothing can hold us,
+every wave we ride is a brand new start.
+
+[Rap, Rap]
+Shoes untied and the sky's wide open,
+words we never said but we know they're spoken.
+Seven stops behind and the eighth one's waiting,
+nobody's scared and nobody's hesitating.
+
+[Verse 2, Verse lead]
+We were only strangers on a crowded train,
+now I'd follow every one of you through rain.
+If the moon is full, we'll let it light the way,
+there's a little bit of courage left to say.
+
+[Pre-Chorus, Verse lead]
+Feel the water rising underneath our feet,
+every heart around me keeping the same beat.
+
+[Chorus, Chorus lead + Gang]
+High tide, carry us further,
+over every wall that we built in the dark.
+High tide, nothing can hold us,
+every wave we ride is a brand new start.
+
+[Bridge, Verse lead]
+And if the water pulls me under,
+I know your hands will find me there.
+
+[Final Chorus, Chorus lead + Gang]
+High tide, carry us further,
+over every wall that we built in the dark.
+High tide, nothing can hold us,
+every wave we ride is a brand new start.
+
+[Outro]

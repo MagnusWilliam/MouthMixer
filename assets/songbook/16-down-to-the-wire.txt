@@ -1,0 +1,56 @@
+title: Down to the Wire
+slot: Battle theme: Stop fights (inspired by It's Going Down Now)
+starter: battle_jazz
+voices: Verse lead = your voice, punchy | Chorus lead = your voice, full | Rap = fast, on the 8ths | Gang = everyone on "down to the wire!"
+hits: some: on "down to the wire" and "take it"
+notes: Acid-jazz battle in D minor at 166: organ, brass, Rhodes, a restless funk bass that walks around the root. The chords slide by half steps (E to F, Bb to A) like the reference. Keep the verses tight and rhythmic.
+---
+Down to the Wire
+
+[Intro]
+
+[Verse 1, Verse lead]
+Lights cut out and the floor starts shaking,
+every rule in the book is breaking.
+Eyes up, hands up, nobody's leaving,
+this is the part that we all believe in.
+
+[Pre-Chorus, Verse lead]
+Count it in, one, two, three,
+watch the whole room turn to me.
+
+[Chorus, Chorus lead + Gang]
+Down to the wire, we're not slowing,
+feel the fire, keep it going.
+If you want it, come and take it,
+down to the wire, we're gonna make it!
+
+[Rap, Rap]
+Quick step, side step, never stand still,
+cards on the table and I'm playing for the thrill.
+You got a plan but my crew got the timing,
+every single beat and every single line in.
+
+[Verse 2, Verse lead]
+Knock me down and I'm back up grinning,
+every round's a brand new beginning.
+Hold the line and don't look over,
+we're one punch away from it being over.
+
+[Pre-Chorus, Verse lead]
+Count it in, one, two, three,
+watch the whole room turn to me.
+
+[Chorus, Chorus lead + Gang]
+Down to the wire, we're not slowing,
+feel the fire, keep it going.
+If you want it, come and take it,
+down to the wire, we're gonna make it!
+
+[Final Chorus, Chorus lead + Gang]
+Down to the wire, we're not slowing,
+feel the fire, keep it going.
+If you want it, come and take it,
+down to the wire, we're gonna make it!
+
+[Outro]

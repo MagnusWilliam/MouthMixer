@@ -1,0 +1,60 @@
+title: Hollow Hour
+slot: The hour between days: the Line 0 run (inspired by Burn My Dread)
+starter: night_hiphop
+voices: Verse lead = your voice, low and close | Chorus lead = your voice | Rap = spoken, on the beat
+hits: none
+notes: Dark trip-hop in F minor, 98: a piano loop, strings, a sub bass, scratches. The flat-II chord (Gb) is the dread colour the reference leans on. Sing the verses almost spoken; open up only in the chorus.
+---
+Hollow Hour
+
+[Intro]
+
+[Verse 1, Verse lead]
+Every clock in the city stops at twelve,
+and the silence has a sound all by itself.
+Streetlights hum a note they never learned,
+and the platform waits for those who don't return.
+
+[Pre-Chorus, Verse lead]
+Hold your breath, the doors are open wide,
+nobody else can see the other side.
+
+[Chorus, Chorus lead]
+In the hollow hour I am wide awake,
+every shadow knows the name I'd never take.
+If the night is swallowing the light,
+I will walk it, I will walk it to the end of the line.
+
+[Rap, Rap]
+Count the cars, one, two, three, the fourth is never lit,
+tickets in my pocket with a date that doesn't fit.
+Faces in the window but the seats are all empty,
+I don't flinch, I don't run, let the dark come and tempt me.
+
+[Verse 2, Verse lead]
+There's a door that only opens when you're gone,
+and a voice that knows the words to every song.
+I could stay asleep and let it pass me by,
+but I've seen too many friends forget to try.
+
+[Pre-Chorus, Verse lead]
+Hold your breath, the doors are open wide,
+nobody else can see the other side.
+
+[Chorus, Chorus lead]
+In the hollow hour I am wide awake,
+every shadow knows the name I'd never take.
+If the night is swallowing the light,
+I will walk it, I will walk it to the end of the line.
+
+[Bridge, Verse lead]
+When the morning comes, they won't remember,
+only I will know how long it took.
+
+[Final Chorus, Chorus lead]
+In the hollow hour I am wide awake,
+every shadow knows the name I'd never take.
+If the night is swallowing the light,
+I will walk it, I will walk it to the end of the line.
+
+[Outro]

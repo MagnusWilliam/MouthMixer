@@ -25,7 +25,7 @@ out.
 Everything is on `main` of `magnuswilliam/mouthmixer`, 141 tests passing. Highlights (details in PLAN §14):
 - **Make** (main workflow): starter beats per mood, ready-made parts (`studio/presets.py`: 20 beats,
   13 basslines, 10 chord rhythms, 12 groove combos, 38 phrases), section feels, freeze-and-drop, song board,
-  lyrics with `[Section, singers, N bars]` headers and `Gang:` line tags, songbook (8 LINE ZERO songs),
+  lyrics with `[Section, singers, N bars]` headers and `Gang:` line tags, songbook (19 songs: LINE ZERO songs 01-12, reference-inspired 13-19),
   favourites, recording as a side option (audio-thread capture, sync test).
 - **Sing**: vocal track cards, take choice per section, voice characters (WORLD vocoder), voice tweaks,
   preview with band, timing nudge, full lyrics view.

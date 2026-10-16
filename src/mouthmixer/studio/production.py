@@ -210,11 +210,13 @@ def swing(notes: list, amount: float) -> list:
     return out
 
 
-def add_version(song_dir, song: Song, gains: dict, title: str, base: dict | None = None, extra: dict | None = None) -> int:
+def add_version(song_dir, song: Song, gains: dict, title: str, base: dict | None = None, extra: dict | None = None,
+                tone_target: dict | None = None) -> int:
     """Put a produced song into an app song as a new version: summary, mixer state (levels and pans from
     `gains` and the tracks), stems through the app's mixer, the match-EQ'd master and the critic's verdict.
     `base`: the version the words and section feels come from (default: the newest with a lyric sheet, or the
-    newest). Backs up song.json first. Returns the version index."""
+    newest). `tone_target`: band shares to match the master toward (default: all the references). Backs up
+    song.json first. Returns the version index."""
     import json
     import shutil
     import time
@@ -249,7 +251,7 @@ def add_version(song_dir, song: Song, gains: dict, title: str, base: dict | None
     sng = m.song(False)
     _, n_ = render.song_length(sng)
     music, lead, _, stems = m._stems(n_)
-    out, _ = render.match_tone(music + lead, amount=0.9, limit_db=4.0)
+    out, _ = render.match_tone(music + lead, amount=0.9, limit_db=4.0, target=tone_target)
     mix = render.master(out)
     verdict = critic.judge(sng, mix, stems)
     render.write_audio(mix, song_dir / f"v{idx_file}.ogg")

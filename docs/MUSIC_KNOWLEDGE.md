@@ -348,3 +348,4 @@ to 50-85%: the user loved three options that were rejected for leaps").
 | 2026-10-15 | mix tone (opt-in per style) | mix-bus match EQ toward the nine references' band shares, 90% of the way, at most 4 dB (`render.match_tone`, style flag `match_tone`) | the hand-produced band measured 3.6 dB heavy at 250-500 Hz |
 
 | 2026-10-15 | A4 instrument range | ambience tracks (`fx:` textures) are skipped, like drum kits | they are noise beds with one placeholder note, not pitched parts; the check crashed on `fx:room` |
+| 2026-10-15 | mix tone target per style | a style may name `refs`; the master match EQ aims at their average band shares instead of the nine-song median (same 90%, 4 dB limit) | the reference-inspired songs differ by up to 6 dB from the median (Color Your Night is dark, School Days is sub-heavy) |

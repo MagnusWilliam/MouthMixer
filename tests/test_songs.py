@@ -59,7 +59,7 @@ def test_lyrics_lay_out_the_song(home):
 
 def test_songbook_songs_all_start_and_fit():
     songs = songbook.songs()
-    assert len(songs) == 12
+    assert len(songs) == 19
     for s in songs:
         assert s["starter"] in starters.STARTERS and s["lyrics"].count("[") >= 3 and s["voices"]
 
@@ -169,7 +169,7 @@ def test_api_songbook_and_vocal_options(home):
 
     c = TestClient(create_app(start_worker=False))
     sb = c.get("/api/songbook").json()
-    assert len(sb) == 12
+    assert len(sb) == 19
     p = c.post("/api/projects", json={"songbook": sb[0]["id"]}).json()
     assert p["songbook"]["voices"] and p["lyrics"]["sheet"] and p["title"] == sb[0]["title"]
     o = c.get("/api/vocal_options").json()

@@ -48,6 +48,8 @@ RHYTHMS = {
     "eighths": [(i * 0.5, 0.4) for i in range(8)],
     "ballad": [(0, 1.9), (2, 0.9), (3, 0.9)],
     "pulse": [(i * 1.0, 0.5) for i in range(4)],
+    "skank": [(i + 0.5, 0.25) for i in range(4)],  # off-beat 8th stabs (disco)
+    "clav": [(0, .2), (0.75, .2), (1.5, .2), (2.25, .2), (2.75, .2), (3.5, .2)],  # syncopated 16ths (funk)
 }
 
 STYLES: dict[str, dict] = {
@@ -315,6 +317,100 @@ STYLES["hope"] = {  # the finale: band + chip lead, earlier motifs stacked as me
                  "layers": {"pad", "low_strings", "organ", "power", "brass", "timpani", "chipkit"}},
     },
 }
+
+# Inspired by the user's reference folder (PERSONA_PRODUCTION section 9): each takes its reference's measured tempo,
+# groove (straight or swung), drum and bass density and favourite chord colours; chords, hooks and words are new.
+def _f(drums=None, bass=None, comp=None, layers=()):
+    return {"drums": drums, "bass": bass, "comp": comp, "layers": set(layers)}
+
+
+HAT8, HAT16 = "x.x.x.x.x.x.x.x.", "xxxxxxxxxxxxxxxx"
+STYLES["ref_dread"] = {"refs": ["burn-my-dread"],  # Burn My Dread: dark trip-hop, piano loop and strings, the flat-II colour, 98 straight 16ths
+    "title": "midnight trip-hop", "bpm": 98, "tonic": 5, "mode": "minor",  # F minor
+    "kit": "kit:muldjord", "bass": "synth:sub_bass", "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "sfz:cellos", "guitar": None, "brass": False, "organ": None,
+    "feels": {"intro": _f(None, None, "stab", ["pad"]),
+              "verse": _f(("x.....xx..x.....", "....x.......x..x", HAT16), "halftime", "stab", ["scratch"]),
+              "pre": _f(("x.....xx..x.....", "....x.......x...", HAT8), "halftime", "half", ["pad"]),
+              "lift": _f(("x.....xx..x...x.", "....x.......x..x", HAT16), "lean", "push", ["pad", "low_strings", "scratch"]),
+              "rap": _f(("x......xx.x.....", "........x.......", HAT8), "halftime", "offbeat", ["scratch"]),
+              "breakdown": _f(None, "pedal", "whole", ["pad"])}}
+STYLES["ref_colour"] = {"refs": ["color-your-night"],  # Color Your Night: night city-pop disco, four kicks a bar, Rhodes, strings, sax
+    "title": "night city disco", "bpm": 96, "tonic": 1, "mode": "major",  # Db major
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
+    "lead_colour": "sfz:tenor_sax", "guitar": "sfz:guitar_clean", "brass": True, "organ": None,
+    "feels": {"intro": _f(("x.......x.......", "....x.......x...", "x.x.x.o.x.x.x.o."), "lean", "city", ["lead_colour"]),
+              "verse": _f(("x.....x...x....x", "....x.......x...", "x.x.x.o.x.x.x.o."), "funk", "city", ["guitar"]),
+              "pre": _f(("x.....x...x....x", "....x.......x...", HAT16), "lean", "half", ["pad", "guitar"]),
+              "lift": _f(("x.....x...x....x", "....X.......X...", "x.x.x.o.x.x.x.o."), "funk", "city",
+                         ["pad", "guitar", "brass", "congas"]),
+              "final": _f(("x.....x...x....x", "....X.......X...", "x.x.x.o.x.x.x.o."), "funk", "city",
+                          ["pad", "guitar", "brass", "congas", "lead_colour"]),
+              "rap": _f(("x......xx.x.....", "....x.......x...", HAT8), "funk", "clav", ["guitar"]),
+              "breakdown": _f(None, "pedal", "whole", ["pad"])}}
+STYLES["ref_tide"] = {"refs": ["full-moon-full-life"],  # Full Moon Full Life: bright J-rock in straight 16ths, piano and guitars, strings on top
+    "title": "full-moon J-rock", "bpm": 96, "tonic": 9, "mode": "major",  # A major
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "synth:saw_lead", "guitar": "sfz:guitar_clean", "brass": False, "organ": None,
+    "feels": {"intro": _f(("x..x..x...x..x..", "....x.......x...", HAT16), "push", "eighths", ["power", "lead_colour"]),
+              "verse": _f(("x..x......x.....", "....x.......x...", HAT16), "push", "half", ["guitar"]),
+              "pre": _f(("x...x...x...x...", "....x.......x...", HAT16), "eighths", "eighths", ["pad", "guitar"]),
+              "lift": _f(("x..x..x...x..x..", "....X.......X...", HAT16), "push", "eighths", ["pad", "power", "low_strings"]),
+              "final": _f(("x..x..x...x..x..", "....X.......X...", HAT16), "push", "eighths",
+                          ["pad", "power", "low_strings", "lead_colour"]),
+              "rap": _f(("x......xx.x.....", "....x.......x...", HAT16), "halftime", "stab", ["guitar"]),
+              "breakdown": _f(None, "pedal", "half", ["pad"])}}
+STYLES["ref_wire"] = {"refs": ["it-s-going-down-now"],  # It's Going Down Now: acid-jazz battle at 166, organ, brass, a restless bass
+    "title": "acid-jazz battle", "bpm": 166, "tonic": 2, "mode": "minor",  # D minor
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
+    "lead_colour": "sfz:trumpet", "guitar": "sfz:guitar_clean", "brass": True, "organ": "synth:organ_jazz",
+    "feels": {"intro": _f(("x.....x...x.....", "....X.......X...", HAT8), "funk", "stab", ["brass", "organ"]),
+              "verse": _f(("x.....x...x.....", "....x.......x...", HAT8), "funk", "clav", ["organ"]),
+              "pre": _f(("x...x...x...x...", "....x.......x...", HAT16), "funk", "half", ["pad", "organ"]),
+              "lift": _f(("x.....x.x.x.....", "....X.......X...", "xxxxxxoxxxxxxxox"), "funk", "stab",
+                         ["brass", "organ", "pad", "congas", "power"]),
+              "final": _f(("x.....x.x.x.....", "....X.......X...", "xxxxxxoxxxxxxxox"), "funk", "stab",
+                          ["brass", "organ", "pad", "congas", "power", "lead_colour"]),
+              "rap": _f(("x......xx.x.....", "........X.......", HAT8), "halftime", "offbeat", ["scratch", "guitar"]),
+              "breakdown": _f(None, "pedal", "whole", ["pad", "organ"])}}
+STYLES["ref_safety"] = {"refs": ["pull-the-trigger", "a-way-of-life"],  # Pull the Trigger + A Way of Life: swung boom-bap, worn Rhodes, muted trumpet, vinyl
+    "title": "swung boom-bap", "bpm": 94, "tonic": 4, "mode": "minor", "swing": 0.64,  # E minor
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes_tape", "pad": "sfz:violins",
+    "lead_colour": "sfz:trumpet_harmon", "guitar": None, "brass": False, "organ": None,
+    "feels": {"intro": _f(None, "pedal", "push", ["lead_colour"]),
+              "verse": _f(("x......xx.x.....", "....x.......x...", HAT8), "lean", "push", ["scratch"]),
+              "pre": _f(("x......xx.x.....", "....x.......x...", HAT16), "lean", "half", ["pad"]),
+              "lift": _f(("x......xx.x...x.", "....x.......x...", HAT8), "lean", "push", ["pad", "low_strings", "scratch"]),
+              "rap": _f(("x......xx.x.....", "....x.......x...", HAT8), "halftime", "offbeat", ["scratch"]),
+              "breakdown": _f(None, "pedal", "whole", ["pad", "lead_colour"])}}
+STYLES["ref_lunch"] = {"refs": ["school-days", "signs-of-love"],  # School Days + Signs of Love: four on the floor, octave disco bass, all major sevenths
+    "title": "school-day disco funk", "bpm": 118, "tonic": 4, "mode": "major",  # E major
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "synth:saw_lead", "guitar": "sfz:guitar_clean", "brass": True, "organ": None,
+    "feels": {"intro": _f(("x...x...x...x...", "....x.......x...", "x.o.x.o.x.o.x.o."), "disco", "skank", ["lead_colour"]),
+              "verse": _f(("x...x...x...x...", "....x.......x...", "x.o.x.o.x.o.x.o."), "disco", "skank", ["guitar"]),
+              "pre": _f(("x...x...x...x...", "....x.......x..x", HAT16), "disco", "half", ["pad", "guitar"]),
+              "lift": _f(("x...x...x...x...", "....X.......X...", "x.o.x.o.x.o.x.o."), "disco", "skank",
+                         ["pad", "guitar", "brass", "perc"]),
+              "final": _f(("x...x...x...x...", "....X.......X...", "x.o.x.o.x.o.x.o."), "disco", "skank",
+                          ["pad", "guitar", "brass", "perc", "lead_colour"]),
+              "breakdown": _f(("x...x...x...x...", "................", "................"), "pedal", "whole", ["pad"])}}
+STYLES["ref_moon"] = {"refs": ["when-the-moon-s-reaching-out-stars-reload"],  # When the Moon's Reaching Out Stars (Reload): a swung shuffle, piano, a high melodic bass
+    "title": "moonlit shuffle", "bpm": 120, "tonic": 10, "mode": "major", "swing": 0.65,  # Bb major
+    "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano", "pad": "sfz:violins",
+    "lead_colour": "vibraphone", "guitar": "sfz:guitar_clean", "brass": False, "organ": "synth:organ_jazz",
+    "feels": {"intro": _f(None, "lean", "charleston", ["lead_colour"]),
+              "verse": _f(("x.....x...x.....", "....x.......x...", HAT8), "lean", "charleston", ["guitar"]),
+              "pre": _f(("x.....x...x.....", "....x.......x...", HAT8), "lean", "half", ["pad", "organ"]),
+              "lift": _f(("x.....x.x.x.....", "....x.......x...", "x.x.x.o.x.x.x.o."), "funk", "push",
+                         ["pad", "organ", "guitar", "low_strings"]),
+              "final": _f(("x.....x.x.x.....", "....x.......x...", "x.x.x.o.x.x.x.o."), "funk", "push",
+                          ["pad", "organ", "guitar", "low_strings", "lead_colour"]),
+              "breakdown": _f(None, "pedal", "whole", ["pad"])}}
+PACK_OF.update({"ref_dread": "persona_night", "ref_colour": "persona_city", "ref_tide": "persona_city",
+                "ref_wire": "persona_battle", "ref_safety": "persona_hideout", "ref_lunch": "persona_city",
+                "ref_moon": "persona_city"})
+
 
 # The next LINE ZERO cues (AUDIO_PLAN 3.2: bond, title, tension, station, the Stops).
 def _feel(drums=None, bass=None, comp=None, layers=()):
@@ -654,16 +750,25 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
                     line = [r, third if rng.random() < 0.6 else fifth, fifth if rng.random() < 0.5 else r + 12,
                             nr - 1 if rng.random() < 0.6 else nr + 1]
                     parts["bass"] += [(b + j, 0.9, p, 96 if j == 0 else 84) for j, p in enumerate(line)]
-            elif bstyle in ("bossa", "eighths", "pulse"):
+            elif bstyle in ("bossa", "eighths", "pulse", "disco"):
                 for i, nm in enumerate(sec_bars):
                     root = chord(nm.split("|")[0])[0]
                     r = 33 + (root - 33) % 12
                     b = (b0 + i) * 4
+                    rt = lambda beat: 33 + (chord(chord_at(beat))[0] - 33) % 12  # noqa: E731  the root under a beat
+                    if bstyle == "disco":  # octave 8ths with 16th pickups: about 12 notes a bar (School Days)
+                        for j in range(8):
+                            rj = rt(b + j * 0.5)
+                            parts["bass"].append((b + j * 0.5, 0.22, rj + (12 if j % 2 else 0), 104 if j % 2 == 0 else 90))
+                            if j in (1, 3, 5, 7) and j < 7:
+                                parts["bass"].append((b + j * 0.5 + 0.25, 0.15, rj + 12, 76))
+                        continue
                     if bstyle == "bossa":  # root on 1, fifth on 3 with a pickup root before it
                         parts["bass"] += [(b, 1.4, r, 100), (b + 1.5, .45, r + 7 if r + 7 <= 52 else r - 5, 86),
                                           (b + 2, 1.4, r + 7 if r + 7 <= 52 else r - 5, 96), (b + 3.5, .45, r, 84)]
                     elif bstyle == "eighths":  # driving 8th-note roots with octave pops on the "and" of 4
-                        parts["bass"] += [(b + j * 0.5, 0.4, r + (12 if j == 7 else 0), 104 if j % 2 == 0 else 86) for j in range(8)]
+                        parts["bass"] += [(b + j * 0.5, 0.4, rt(b + j * 0.5) + (12 if j == 7 else 0), 104 if j % 2 == 0 else 86)
+                                          for j in range(8)]
                     else:  # heartbeat pulse: one per beat and a half
                         parts["bass"] += [(b + j * 1.5, 0.6, r, 100 - 10 * (j % 2)) for j in range(3)]
             else:

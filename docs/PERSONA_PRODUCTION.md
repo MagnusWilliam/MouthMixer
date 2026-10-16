@@ -210,3 +210,26 @@ Applied: chip voices (pulse, square, a 16-step triangle, a noise-channel kit) in
 cue swings the Bond theme and doubles it at double speed; Stop 3 puts Soren's song on a square wave over a city-pop
 band; the finale stacks B over H; every cue quotes the same small set of motifs, the way Fox's score does.
 
+## 9. Songs inspired by the reference folder (2026-10-15, late)
+
+The user: "make some songs inspired by the ones I attached". Each takes its reference's measured fingerprint
+(`mouthmixer analyse --stems`, REFERENCE_ANALYSIS.md): tempo, straight or swung, drum and bass density, favourite
+chord moves. Chords, hooks and words are new: no melody, lyric or progression is copied. Songbook 13-19, each over
+two minutes, with a quiet guide melody to sing over:
+
+| Song | Inspired by | What it borrows |
+|---|---|---|
+| 13 Hollow Hour | Burn My Dread | trip-hop at 98, piano loop and strings, sub bass; the flat-II major seventh (Gb in F minor), iv7 to bvii7 |
+| 14 Paint the City | Color Your Night | four kicks a bar at 96, funk bass, Rhodes, sax; chords every two beats, vi7 to V, ii7 to iii7, IV to II7 |
+| 15 High Tide | Full Moon Full Life | straight 16ths at 96, piano and guitars; iii7 to VI7 to ii7, bVImaj7 to vi7 |
+| 16 Down to the Wire | It's Going Down Now | 166 acid-jazz battle, organ, brass; bIIImaj7, bVImaj7 to v7, the half-step slide IImaj7 to bIIImaj7 |
+| 17 Safety Off | Pull the Trigger, A Way of Life | swung boom-bap (0.64) at 94, worn-tape Rhodes, harmon trumpet; bIII to IIsus4 to i; Imaj7 and bVImaj7 in the outro |
+| 18 Lunchbell | School Days, Signs of Love | four on the floor at 118, an octave disco bass (about 12 notes a bar; School Days measured 14); major sevenths stepping up, Vmaj7 to iii7 |
+| 19 Reach for the Stars | When the Moon's Reaching Out Stars | swung shuffle (0.65) at 120, piano, jazz organ, vibraphone; ii7 and iii7 into IVmaj7, IIsus4 to vi7, bVIImaj7 |
+
+Engine additions: a `disco` bass; 8th-note basses follow a split bar's second chord; `skank` and `clav` comping;
+each style's `refs` makes the master match EQ aim at those references' band balance (`render.ref_bands`; the
+analyses stay on the user's machine, and without them it falls back to the nine-song median). After matching,
+the mixes sit within about 2 dB of their reference in every band, except the sub on 16 and 19 (+4 dB, at the
+EQ's 4 dB limit).
+

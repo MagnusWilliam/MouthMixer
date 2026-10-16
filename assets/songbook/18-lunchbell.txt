@@ -1,0 +1,54 @@
+title: Lunchbell
+slot: School days: the daytime routine (inspired by School Days and Signs of Love)
+starter: daily_citypop
+voices: Verse lead = your voice, light | Chorus lead = your voice, bright | Backing = a light harmony on the chorus
+hits: none
+notes: Disco funk in E major, 118: four on the floor, an octave disco bass, piano and guitar on the off-beats, strings. Nearly every chord is a major seventh, sliding up a step (F#maj7 to G#maj7) the way the references do. Light and bouncy.
+---
+Lunchbell
+
+[Intro]
+
+[Verse 1, Verse lead]
+Chalk dust floating in a sunny room,
+someone's humming something out of tune.
+Notes are passing underneath the desks,
+and the clock is slower than the rest.
+
+[Pre-Chorus, Verse lead]
+Tick, tock, just a minute more,
+everybody's looking at the door.
+
+[Chorus, Chorus lead + Backing]
+When the lunchbell rings, we're out of here,
+running down the hall, the sky is clear.
+Every little thing is new again,
+when the lunchbell rings, I'm with my friends.
+
+[Verse 2, Verse lead]
+Rooftop sandwiches and paper planes,
+little arguments that end in games.
+Someone says they saw a ghost last night,
+we just laugh and say it's gonna be alright.
+
+[Pre-Chorus, Verse lead]
+Tick, tock, just a minute more,
+everybody's looking at the door.
+
+[Chorus, Chorus lead + Backing]
+When the lunchbell rings, we're out of here,
+running down the hall, the sky is clear.
+Every little thing is new again,
+when the lunchbell rings, I'm with my friends.
+
+[Bridge, Verse lead]
+Someday we'll be grown and far apart,
+but I'll keep this hour in my heart.
+
+[Final Chorus, Chorus lead + Backing]
+When the lunchbell rings, we're out of here,
+running down the hall, the sky is clear.
+Every little thing is new again,
+when the lunchbell rings, I'm with my friends.
+
+[Outro]

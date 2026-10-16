@@ -156,3 +156,23 @@ def test_new_motifs_are_short_singable_phrases():
         notes = C._shift(C.MOTIFS[m])
         assert 3 <= len(notes) <= 16 and max(p for *_, p in notes) - min(p for *_, p in notes) <= 12, m
         assert all(a[0] <= b[0] for a, b in zip(notes, notes[1:])), m  # in time order
+
+
+def test_reference_inspired_styles_and_the_disco_bass():
+    for k in ("13-hollow-hour", "14-paint-the-city", "15-high-tide", "16-down-to-the-wire", "17-safety-off",
+              "18-lunchbell", "19-reach-for-the-stars"):
+        spec = SB.SPECS[k]
+        assert E.STYLES[spec["style"]]["refs"], k  # each names the references its tone is matched to
+        v = _version([("Intro", 4, "intro"), ("Verse 1", 4, "verse"), ("Chorus", 8, "lift")],
+                     {"Verse 1": ["one two three four five six seven", "eight nine ten"],
+                      "Chorus": ["here we go again tonight", "never slowing down"]})
+        song, _ = E.produce(spec, v, seed=4)
+        names = {t.name for t in song.tracks}
+        assert "Drums" in names and "Guide melody (for singing)" in names, k
+    # the disco bass: octaves on the 8ths and 16th pickups, following the second chord of a split bar
+    spec = {"style": "ref_lunch", "chords": {"verse": ["Emaj7|G#m7"], "intro": ["Emaj7|G#m7"], "chorus": ["Emaj7|G#m7"]}}
+    song, _ = E.produce(spec, _version([("Verse 1", 2, "verse")], {"Verse 1": ["la la la la"]}), seed=1)
+    bass = sorted(next(t for t in song.tracks if t.role == "bass").notes)
+    first = [nt for nt in bass if nt[0] < 4]
+    assert 10 <= len(first) <= 13
+    assert {p % 12 for s, _, p, _ in first if s < 2} == {4} and {p % 12 for s, _, p, _ in first if s >= 2} == {8}

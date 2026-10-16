@@ -310,15 +310,33 @@ REF_BANDS = {"sub": (40, -10.9), "bass": (120, -3.2), "low_mid": (350, -9.1), "m
              "presence": (3500, -13.2), "air": (10000, -15.1)}
 
 
-def match_tone(x: np.ndarray, amount: float = 0.7, limit_db: float = 3.0) -> tuple[np.ndarray, dict]:
+def ref_bands(slugs: list[str]) -> dict | None:
+    """The average band shares of some analysed references (~/MouthMixer/analysis/<slug>/analysis.json, written by
+    `mouthmixer analyse`), or None when none are there (the analyses stay on the user's machine)."""
+    import json
+
+    from .. import config
+
+    got = []
+    for s in slugs:
+        p = config.home() / "analysis" / s / "analysis.json"
+        if p.exists():
+            got.append(json.loads(p.read_text(encoding="utf-8"))["bands_db"])
+    return {k: sum(g[k] for g in got) / len(got) for k in REF_BANDS} if got else None
+
+
+def match_tone(x: np.ndarray, amount: float = 0.7, limit_db: float = 3.0,
+               target: dict | None = None) -> tuple[np.ndarray, dict]:
     """A mix-bus match EQ: broad bells (shelves at the ends) nudging each band's share of the energy toward
-    the reference songs' median, `amount` of the way, at most `limit_db`. Returns (audio, gains)."""
+    the reference songs' median (or `target`, band -> dB share, e.g. one reference's), `amount` of the way, at
+    most `limit_db`. Returns (audio, gains)."""
     from pedalboard import HighShelfFilter, LowShelfFilter, Pedalboard, PeakFilter
 
     from ..reference.analyse import band_shares
 
     have = band_shares(x.mean(axis=0))
-    gains = {k: float(np.clip(amount * (REF_BANDS[k][1] - have[k]), -limit_db, limit_db)) for k in REF_BANDS}
+    want = {k: (target or {}).get(k, REF_BANDS[k][1]) for k in REF_BANDS}
+    gains = {k: float(np.clip(amount * (want[k] - have[k]), -limit_db, limit_db)) for k in REF_BANDS}
     fx = []
     for k, (f, _) in REF_BANDS.items():
         g = gains[k]

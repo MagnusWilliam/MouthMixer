@@ -1,0 +1,54 @@
+title: Reach for the Stars
+slot: Late-game daytime: the city when things are going right (inspired by When the Moon's Reaching Out Stars)
+starter: daily_citypop
+voices: Verse lead = your voice | Chorus lead = your voice, open | Backing = a high harmony on the final chorus
+hits: none
+notes: A swung shuffle in Bb major, 120: piano, a jazz organ, guitar, strings, a vibraphone hook, and a bass that sings in a high register. The chords keep landing on Ebmaj7 (the reference's favourite move, ii and iii into IV). Light on your feet.
+---
+Reach for the Stars
+
+[Intro]
+
+[Verse 1, Verse lead]
+Saturday is spilling out across the square,
+there's a song in every window, music in the air.
+I got nothing in my pockets but a ticket stub,
+and a feeling I could fly if I just looked up.
+
+[Pre-Chorus, Verse lead]
+Lean back, let the evening come,
+we've only just begun.
+
+[Chorus, Chorus lead]
+Reach for the stars, they're not so far,
+just a little higher than the rooftop bars.
+Every night we wander, every light we pass,
+reach for the stars and make it last.
+
+[Verse 2, Verse lead]
+Funny how a city changes when you smile,
+every step I take is worth an extra mile.
+Got a friend on every corner, every train,
+and I'd do it all again, I'd do it all again.
+
+[Pre-Chorus, Verse lead]
+Lean back, let the evening come,
+we've only just begun.
+
+[Chorus, Chorus lead]
+Reach for the stars, they're not so far,
+just a little higher than the rooftop bars.
+Every night we wander, every light we pass,
+reach for the stars and make it last.
+
+[Bridge, Verse lead]
+Even when the moon goes hiding,
+we'll still know the way back home.
+
+[Final Chorus, Chorus lead + Backing]
+Reach for the stars, they're not so far,
+just a little higher than the rooftop bars.
+Every night we wander, every light we pass,
+reach for the stars and make it last.
+
+[Outro]

@@ -1,0 +1,60 @@
+title: Safety Off
+slot: Night hideout, planning the next dive (inspired by Pull the Trigger and A Way of Life)
+starter: night_hiphop
+voices: Verse lead = your voice, laid back | Chorus lead = your voice | Rap = spoken, behind the beat
+hits: none
+notes: Swung boom-bap in E minor, 94: a worn-tape Rhodes, a muted trumpet, strings, vinyl. The verses circle G, F#sus and Em (A Way of Life's favourite move); the outro rocks between C and E major sevenths (Pull the Trigger's tonic-and-flat-six swing). Sing behind the beat.
+---
+Safety Off
+
+[Intro]
+
+[Verse 1, Verse lead]
+Map spread out on a table made of crates,
+coffee going cold while the whole world waits.
+Every plan we make is a plan we break,
+but we're careful with the ones we can't remake.
+
+[Pre-Chorus, Verse lead]
+Somebody laughs and the tension's gone,
+we were never alone, we were never wrong.
+
+[Chorus, Chorus lead]
+Safety off, we're moving slow,
+nothing to prove and nowhere we can't go.
+Keep it low, keep it smooth,
+this is the way of life we choose.
+
+[Rap, Rap]
+Hands in my jacket and the record's still spinning,
+every single loss was a part of the winning.
+I don't need the noise, I don't need the attention,
+just a little room and a quiet intention.
+
+[Verse 2, Verse lead]
+Somebody's drawing on the back of a page,
+every one of us has outgrown a cage.
+When the clock strikes twelve, we'll be on the line,
+but right now there's nothing here but time.
+
+[Pre-Chorus, Verse lead]
+Somebody laughs and the tension's gone,
+we were never alone, we were never wrong.
+
+[Chorus, Chorus lead]
+Safety off, we're moving slow,
+nothing to prove and nowhere we can't go.
+Keep it low, keep it smooth,
+this is the way of life we choose.
+
+[Bridge, Verse lead]
+If the night gets loud, I'll keep it quiet,
+if the world says run, I'll take my time.
+
+[Final Chorus, Chorus lead]
+Safety off, we're moving slow,
+nothing to prove and nowhere we can't go.
+Keep it low, keep it smooth,
+this is the way of life we choose.
+
+[Outro]
