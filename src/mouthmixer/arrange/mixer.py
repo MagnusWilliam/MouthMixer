@@ -320,6 +320,8 @@ class Mixer:
                 stems = {k: (v[:, sung] if isinstance(v, np.ndarray) else v) for k, v in stems.items()}
         else:
             out = music + lead
+        if PACKS[self.v["pack"]].get("match_tone"):  # the mix-bus match EQ toward the reference songs
+            out, _ = render.match_tone(out, amount=0.9, limit_db=4.0)
         mix = render.master(out)
         verdict = critic.judge(song, mix, stems)
         self.record = json.loads((self.dir / "song.json").read_text())  # as it is now

@@ -344,3 +344,6 @@ to 50-85%: the user loved three options that were rejected for leaps").
 | 2026-10-15 | vocal chain tone match | presence and air lifted toward the nine reference vocals' medians (3-6k −18.4, 10-16k −28.2 dB vs 200-1000 Hz), max +4 / +8 dB, 6-10k kept within 2 dB | the user's processed vocal was ~10 dB short above 10 kHz (REFERENCE_ANALYSIS §4) |
 | 2026-10-15 | vocal compressor B | levels at the 90th percentile of the singing instead of the median | at the median it squashed the quiet half and lifted the room between words (VOCALS §13) |
 | 2026-10-15 | vocal match EQ, expander, mic check | third-octave match to the reference vocals (replaces the two-band tone match); expander 1:2 below median −15 dB, max 18 dB; mic check: 3-6 kHz > 7 dB under the references while 1.25-2 kHz is 4+ dB less so | "still sounds away from the mic" (VOCALS §13) |
+| 2026-10-15 | H1 in hand-written arrangements | comping/pad/guitar/brass notes a half step from the sounding melody move down to the next chord tone (`production.clear_of`) | the first Last Train draft had 90 rubs, mostly a 9th or maj7 next to the singer |
+| 2026-10-15 | mix tone (opt-in per style) | mix-bus match EQ toward the nine references' band shares, 90% of the way, at most 4 dB (`render.match_tone`, style flag `match_tone`) | the hand-produced band measured 3.6 dB heavy at 250-500 Hz |
+

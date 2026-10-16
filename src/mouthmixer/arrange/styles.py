@@ -432,3 +432,31 @@ PACKS["boss_choir"] = {
     "rootless": False, "spread": False, "reverb": 0.6, "delay": 0.08, "chorus": False, "drive": False,
     "vocal_preset": "cinematic",
 }
+
+# Sampled and synthesised instruments (arrange/instruments.py, docs/PERSONA_PRODUCTION.md §1). Bank -1 marks
+# them; the program is their General MIDI cousin, used for MIDI export and when a library isn't installed.
+def _register_sampled() -> None:
+    from .instruments import KITS as SAMPLED_KITS, SAMPLED, SFX, SYNTH_KEYS
+
+    for key, spec in SAMPLED.items():
+        gm = INSTRUMENTS[spec["gm"]]
+        lo, hi = spec["range"]
+        INSTRUMENTS[key] = (-1, gm[1], lo, hi, spec["family"], 1.0)
+    organ = INSTRUMENTS["drawbar_organ"]
+    for key, (kind, _) in SYNTH_KEYS.items():
+        INSTRUMENTS[key] = (-1, organ[1] if kind == "organ" else 81, 24, 96, "keys" if kind == "organ" else "synth", 1.0)
+    for key, spec in SAMPLED_KITS.items():
+        KITS[key[4:]] = KITS[spec["gm"][4:]]
+    for key in SFX:
+        INSTRUMENTS[key] = (-1, 119, 0, 127, "fx", 1.0)
+
+
+_register_sampled()
+
+# The hand-produced Persona 5 / Persona 3 Reload band (studio/last_train.py, docs/PERSONA_PRODUCTION.md).
+PACKS["persona_acid_jazz"] = dict(PACKS["heist_funk"]) | {
+    "title": "Persona acid jazz",
+    "describe": "Persona 5 acid-jazz band with a P3R rap pocket: finger bass, Rhodes, live kit with congas and "
+                "triangle, B3 organ, strings and brass in the choruses, clean guitars left and right",
+    "reverb": 0.4, "delay": 0.08, "drive": False, "vocal_preset": "soul", "match_tone": True,
+}

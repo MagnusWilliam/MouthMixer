@@ -1173,6 +1173,17 @@ the Make tab says so plainly if the starters can't load.
 - **Next:** the user listens (A/B files from this session, then the app after rerunning setup from the repo);
   reference-song analysis tool (needs Demucs + PyTorch: ask first), female voice research, production pass.
 
+**Build status (2026-10-15, later): a hand-produced Persona base, real instruments, the reference toolkit.**
+- Research: five YouTube tutorials (yt-dlp transcripts and screenshots, studied by five agents), the ATLUS
+  sound-sources sheet, and stem analysis of nine reference songs (Demucs, installed with the user's OK) ->
+  [`PERSONA_PRODUCTION.md`](PERSONA_PRODUCTION.md).
+- Instruments: an SFZ sample player, free CC0/CC-BY libraries (Rhodes, finger bass, live kit, latin
+  percussion, piano, strings, brass, sax, guitar), a tonewheel organ and an analog synth ->
+  [`INSTRUMENTS.md`](INSTRUMENTS.md). Missing libraries fall back to the soundfont.
+- "Last Train, First Light · Persona band (base)": hand-written arrangement with a guide melody, measured
+  against the references (width, tone, loudness, groove, harmony), added to the user's song as version 17.
+- **Next:** the user listens and sings over it; then iterate on what they hear.
+
 **Rough size:** Phases 1-2 are the biggest technical risk and should come first. Phases 4-5 are the
 biggest amount of work.
 

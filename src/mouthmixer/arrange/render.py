@@ -103,6 +103,14 @@ def _bends(notes: list, spb: float, rng) -> list[tuple[float, int]]:
 
 def render_track(track: Track, bpm: float, total_sec: float, rng, _double: bool = False) -> np.ndarray:
     """One part -> stereo float32 array (2, n)."""
+    from dataclasses import replace
+
+    from . import instruments as IN
+
+    if IN.handles(track.instrument):
+        if IN.available(track.instrument):
+            return _render_sampled(track, bpm, total_sec, rng)
+        track = replace(track, instrument=IN.fallback(track.instrument))  # library not installed: GM cousin
     synth, sfid = _synth()
     spb = 60.0 / bpm
     is_drums = track.instrument.startswith("kit:")
@@ -159,6 +167,22 @@ def render_track(track: Track, bpm: float, total_sec: float, rng, _double: bool 
     return out
 
 
+def _render_sampled(track: Track, bpm: float, total_sec: float, rng) -> np.ndarray:
+    """A sampled or synthesised part (arrange/instruments.py): notes to seconds with a player's small timing
+    and velocity variation (drums tighter), brass and saxes phrased like the soundfont ones."""
+    from . import instruments as IN
+
+    spb = 60.0 / bpm
+    is_drums = track.instrument.startswith("kit:")
+    jitter = 0.003 if is_drums else 0.006
+    family = INSTRUMENTS.get(track.instrument, (0, 0, 0, 0, "", 1))[4]
+    played = family in ("brass", "reed")
+    vels = _phrase_velocities(track.notes, spb) if played else [n[3] for n in track.notes]
+    notes = [(max(0.0, s * spb + rng.normal(0, jitter)), max(0.03, l * spb), int(p),
+              int(np.clip(v + rng.normal(0, 3), 1, 127))) for (s, l, p, _), v in zip(track.notes, vels)]
+    return IN.render(track.instrument, notes, total_sec, rng)
+
+
 def _chordal(notes: list) -> bool:
     """Mostly chords (several notes starting together), like stabs: those aren't doubled."""
     if not notes:
@@ -213,6 +237,10 @@ def _fx(track: Track, pack: dict, bpm: float):
         # Carve room for the melody (docs/ARRANGING.md R2.3): harmony layers dip where the ear listens.
         if role in ("comp", "pad", "arp", "riff", "counter"):
             fx += [PeakFilter(cutoff_frequency_hz=2500, gain_db=-3.0, q=0.7)]
+        if role in ("comp", "pad", "arp", "riff") and track.instrument.startswith(("sfz:", "synth:")):
+            # sampled keys, organ and strings are fuller than the GM ones: keep 250-500 Hz from going boxy
+            # (references keep it near -9 dB of the energy; REFERENCE_ANALYSIS §3)
+            fx += [PeakFilter(cutoff_frequency_hz=320, gain_db=-3.0, q=0.9)]
         if pack.get("chorus") and role in ("comp", "pad"):
             fx += [Chorus(rate_hz=0.6, depth=0.2, mix=0.35)]
         if pack.get("drive") and role == "lead" and "guitar" in track.instrument:
@@ -277,6 +305,31 @@ def render_stem(t: Track, song: Song, rng=None, duck: np.ndarray | None = None, 
     return x.astype(np.float32)
 
 
+# The nine reference songs' median tone: each band's share of the energy in dB (REFERENCE_ANALYSIS §3).
+REF_BANDS = {"sub": (40, -10.9), "bass": (120, -3.2), "low_mid": (350, -9.1), "mid": (1000, -7.0),
+             "presence": (3500, -13.2), "air": (10000, -15.1)}
+
+
+def match_tone(x: np.ndarray, amount: float = 0.7, limit_db: float = 3.0) -> tuple[np.ndarray, dict]:
+    """A mix-bus match EQ: broad bells (shelves at the ends) nudging each band's share of the energy toward
+    the reference songs' median, `amount` of the way, at most `limit_db`. Returns (audio, gains)."""
+    from pedalboard import HighShelfFilter, LowShelfFilter, Pedalboard, PeakFilter
+
+    from ..reference.analyse import band_shares
+
+    have = band_shares(x.mean(axis=0))
+    gains = {k: float(np.clip(amount * (REF_BANDS[k][1] - have[k]), -limit_db, limit_db)) for k in REF_BANDS}
+    fx = []
+    for k, (f, _) in REF_BANDS.items():
+        g = gains[k]
+        if abs(g) < 0.3:
+            continue
+        fx.append(LowShelfFilter(cutoff_frequency_hz=60, gain_db=g, q=0.7) if k == "sub" else
+                  HighShelfFilter(cutoff_frequency_hz=8000, gain_db=g, q=0.7) if k == "air" else
+                  PeakFilter(cutoff_frequency_hz=f, gain_db=g, q=0.8))
+    return (Pedalboard(fx)(x.astype(np.float32), SR) if fx else x), {k: round(v, 1) for k, v in gains.items()}
+
+
 def master(x: np.ndarray, target_lufs: float = -14.0) -> np.ndarray:
     """Mono lows, glue compression, loudness to target, peak limit, fade-out tail."""
     from pedalboard import Compressor, Pedalboard
@@ -293,8 +346,10 @@ def master(x: np.ndarray, target_lufs: float = -14.0) -> np.ndarray:
     return out.astype(np.float32)
 
 
-def mix(song: Song, rng=None) -> tuple[np.ndarray, dict]:
-    """Render, process and master the song. Returns (stereo mix (2, n), stems by role)."""
+def mix(song: Song, rng=None, gains: dict | None = None, target_lufs: float = -14.0,
+        premaster: bool = False) -> tuple[np.ndarray, dict]:
+    """Render, process and master the song. Returns (stereo mix (2, n), stems by role). `gains`: dB per part
+    name on top of its role's level. `premaster`: return the unmastered sum (to master it more than once)."""
     rng = rng or np.random.default_rng(song.seed)
     pack = PACKS[song.pack]
     _, n = song_length(song)
@@ -302,12 +357,12 @@ def mix(song: Song, rng=None) -> tuple[np.ndarray, dict]:
     out = np.zeros((2, n), dtype=np.float32)
     stems: dict[str, np.ndarray] = {}
     for t in song.tracks:
-        x = render_stem(t, song, rng, duck)
+        x = render_stem(t, song, rng, duck, gain_db=(gains or {}).get(t.name, 0.0))
         out += x
         stems[t.role] = stems.get(t.role, 0) + x
     if pack.get("vinyl"):
         out += _vinyl(n, rng)
-    return master(out), stems
+    return (out if premaster else master(out, target_lufs)), stems
 
 
 def texture(name: str, n: int, rng) -> np.ndarray:
