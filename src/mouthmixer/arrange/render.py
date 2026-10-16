@@ -348,8 +348,9 @@ def match_tone(x: np.ndarray, amount: float = 0.7, limit_db: float = 3.0,
     return (Pedalboard(fx)(x.astype(np.float32), SR) if fx else x), {k: round(v, 1) for k, v in gains.items()}
 
 
-def master(x: np.ndarray, target_lufs: float = -14.0) -> np.ndarray:
-    """Mono lows, glue compression, loudness to target, peak limit, fade-out tail."""
+def master(x: np.ndarray, target_lufs: float = -14.0, fade: bool = True) -> np.ndarray:
+    """Mono lows, glue compression, loudness to target, peak limit, fade-out tail (`fade=False` for a loop,
+    which is cut at the form's length instead: `loop_cut`)."""
     from pedalboard import Compressor, Pedalboard
     from scipy.signal import butter, sosfilt
 
@@ -359,9 +360,31 @@ def master(x: np.ndarray, target_lufs: float = -14.0) -> np.ndarray:
     out = Pedalboard([Compressor(threshold_db=-14, ratio=2, attack_ms=15, release_ms=200)])(out.astype(np.float32), SR)
     out = loudness_normalise(out, target_lufs)
     out = limit(out, ceiling_db=-1.0)
-    fade = int(1.5 * SR)
-    out[:, -fade:] *= np.linspace(1, 0, fade)
+    if fade:
+        f = int(1.5 * SR)
+        out[:, -f:] *= np.linspace(1, 0, f)
     return out.astype(np.float32)
+
+
+def loop_cut(x: np.ndarray, loop_samples: int, xfade_s: float = 0.4, head_s: float = 0.003,
+             ceiling_db: float = -1.0) -> np.ndarray:
+    """A seamless loop from an unfaded master (2, n): exactly `loop_samples` long (the form's bars), with the
+    ring-out past the cut (reverb, held notes) laid over the start under a `xfade_s` fade-out, so the end runs
+    straight into bar 1 as it would if the band played the form again. The first `head_s` of bar 1 ramps in
+    from silence so the seam joins the tail's continuation, not a cold onset. Turned down as a whole (never
+    limited) if the overlap pushes a peak over the ceiling."""
+    L = int(loop_samples)
+    out = np.array(x[:, :L], dtype=np.float32)
+    if out.shape[1] < L:
+        out = np.pad(out, ((0, 0), (0, L - out.shape[1])))
+    h = max(1, int(head_s * SR))
+    out[:, :h] *= np.linspace(0, 1, h, endpoint=False)
+    tail = np.array(x[:, L:L + int(xfade_s * SR)], dtype=np.float32)
+    k = min(tail.shape[1], L)
+    if k:
+        out[:, :k] += tail[:, :k] * np.linspace(1, 0, k)
+    peak, ceiling = float(np.abs(out).max()), 10 ** (ceiling_db / 20)
+    return (out * (ceiling / peak) if peak > ceiling else out).astype(np.float32)
 
 
 def mix(song: Song, rng=None, gains: dict | None = None, target_lufs: float = -14.0,
@@ -414,6 +437,41 @@ def texture(name: str, n: int, rng) -> np.ndarray:
     if name == "radio":  # AM static between stations
         x = sosfilt(butter(2, [400, 3500], btype="band", fs=SR, output="sos"), rng.normal(0, 1, (2, n)), axis=1)
         return (x * (0.4 + 0.6 * (np.sin(2 * np.pi * 0.3 * t) > 0.6)) * 0.03).astype(np.float32)
+    if name == "wheels":  # a carriage over rail joints: da-dum, once a second, a low thud with a bright click
+        out = np.zeros((2, n))
+        hit = np.exp(-np.arange(int(0.12 * SR)) / (0.02 * SR))
+        body = hit * np.sin(2 * np.pi * 70 * np.arange(len(hit)) / SR)
+        click = sosfilt(butter(2, 2500, btype="high", fs=SR, output="sos"), rng.normal(0, 1, len(hit))) * hit * 0.3
+        for at in np.arange(0, n / SR, 1.0):
+            for d, v in ((0.0, 0.8), (0.18, 1.0)):
+                i = int((at + d) * SR)
+                m = min(len(hit), n - i)
+                if m > 0:
+                    out[:, i:i + m] += v * (body + click)[:m]
+        rumble = sosfilt(butter(2, [40, 200], btype="band", fs=SR, output="sos"), rng.normal(0, 1, (2, n)), axis=1) * 0.04
+        return (out * 0.3 + rumble).astype(np.float32)
+    if name == "doors":  # train doors closing once, near the end: a pneumatic hiss, then the thunk
+        out = np.zeros((2, n))
+        i0 = max(0, n - int(3.6 * SR))
+        hl = min(int(0.7 * SR), n - i0)
+        hiss = sosfilt(butter(2, [2000, 9000], btype="band", fs=SR, output="sos"), rng.normal(0, 1, hl)) * 0.15
+        out[:, i0:i0 + hl] += hiss * np.linspace(1, 0, hl) ** 2
+        i1 = min(n - 1, i0 + int(0.8 * SR))
+        tl = min(int(0.3 * SR), n - i1)
+        tt = np.arange(tl) / SR
+        out[:, i1:i1 + tl] += np.exp(-tt / 0.05) * np.sin(2 * np.pi * 55 * tt) * 0.6
+        return out.astype(np.float32)
+    if name == "bubbles":  # the Ward's jars: small rising blips now and then
+        out = np.zeros((2, n))
+        for at in rng.integers(0, max(1, n - SR // 10), max(1, int(n / SR * 3))):
+            bl = int(rng.uniform(0.02, 0.05) * SR)
+            tt = np.arange(min(bl, n - at)) / SR
+            f0 = rng.uniform(500, 1400)
+            blip = np.sin(2 * np.pi * (f0 * tt + 0.5 * f0 * 8 * tt ** 2)) * np.exp(-tt / 0.012) * rng.uniform(0.02, 0.06)
+            ch = int(rng.integers(0, 2))
+            out[ch, at:at + len(tt)] += blip
+            out[1 - ch, at:at + len(tt)] += blip * 0.5
+        return out.astype(np.float32)
     if name == "tape":
         return (sosfilt(butter(1, 4000, btype="high", fs=SR, output="sos"), rng.normal(0, 0.01, (2, n)), axis=1)).astype(np.float32)
     return np.zeros((2, n), dtype=np.float32)
@@ -474,7 +532,8 @@ def write_audio(x: np.ndarray, path: Path) -> None:
 
     # Written in chunks: libsndfile's Vorbis encoder can crash on one long write.
     # Vorbis at libsndfile's default is ~130 kbps, which dulls cymbals and the top of a voice; 0.2 is ~280 kbps.
-    fmt = ("OGG", "VORBIS") if path.suffix == ".ogg" else ("WAV", "PCM_16")
+    # FLAC for loops: lossless, so the seam stays exact (Vorbis smears the first and last few ms of a file).
+    fmt = {".ogg": ("OGG", "VORBIS"), ".flac": ("FLAC", "PCM_16")}.get(path.suffix, ("WAV", "PCM_16"))
     kw = {"compression_level": 0.2} if fmt[0] == "OGG" else {}
     with sf.SoundFile(str(path), "w", SR, x.shape[0], format=fmt[0], subtype=fmt[1], **kw) as f:
         for i in range(0, x.shape[1], 32768):

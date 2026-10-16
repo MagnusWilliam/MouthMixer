@@ -179,8 +179,29 @@ variants (`sfz:rhodes_tape`, `sfz:piano_radio`, `sfz:piano_old` detuned 22 cents
 `theme_by_section` so one theme moves between instruments (a "Theme: <instrument>" track each).
 
 **H and B are drafts** (the audio plan leaves both to the user); they live in `cues.MOTIFS` and change everywhere at
-once. Still to make: menu, game over, line0_ride, ward, assault_sting; loop-point export for Roblox (the cues end on a
-chord that leads back to bar 1, but the files still have a mastering fade).
+once.
+
+Third batch (2026-10-16), the rest of AUDIO_PLAN 3.2:
+
+| Cue | Scene | Sound | Motifs | Loops? |
+|---|---|---|---|---|
+| Menu | menu / team screen | Rhodes + finger-bass groove 90, F major, Soren's changes throughout | S on vibraphone, then on flute with B slow on cello under it | loop |
+| Game Over (sting) | defeat | solo piano 60, D minor, 2 bars; then train doors close (`doors` texture: hiss + thunk) | H falling, D A Bb A G: its C and its last A gone, so it never resolves | sting |
+| The Line 0 Ride | the ride down | drone 60, C minor, Cm9 to Dbmaj7 (the flat II); `wheels` (rail joints, da-dum each second) and `hum` (failing lights) | T slowed on violins; then L0 low on horn with T under it; the call once, far off, to end | through-composed, 88 s |
+| The Ward | the jars | clean Rhodes 76, heartbeat sub-bass, D minor; `bubbles` (the jars) and room tone | H with notes 5-6 missing on celesta (the glass); the cello keeps H whole, slow, in the chorus | loop |
+| FULL ASSAULT (sting) | the finisher | 1 bar at 150 (the boss tempo), 1.6 s + ring | the ticket-punch snare roll to ka (beat 2.75) CHK (3); L0's falling third on horn; a C minor brass hit on the CHK | sting |
+
+**Loop export for Roblox.** Every looping cue (all but the stings and the Ride) now also gets `v<n>-loop.flac` next to
+its master, recorded on the version as `loop_file` / `loop_samples`: the same stems, tone match and mastering, but
+`render.master(fade=False)`, cut by `render.loop_cut` at exactly the form's length (bars x 4 x 60 / bpm x 44100 samples),
+with the ring-out past the cut (reverb, held notes) laid over bar 1 under a 0.4 s fade-out, as if the band played the
+form again; bar 1's first 3 ms ramp in from silence so the seam joins the ring-out's own continuation. FLAC because it's
+lossless: Vorbis smears a file's first and last few ms (error ~0.005), which measured as a click at the seam on a clean
+test tone. `cues.export_loop(song_dir, vi)` back-fills a loop for an existing cue. In Roblox: upload the `-loop.flac`,
+set `Sound.Looped = true`; the first play starts with a little of the ending's reverb, which is the price of no gap.
+Tests (`tests/test_loops.py`): the cut is exactly the form, the seam's second difference is under 2x the music's own
+99.9th percentile (a plain cut of the same signal scores over 10), the FLAC round trip keeps it, and the new cues and
+textures behave.
 
 ## 7. Distinct Persona sounds, longer songs, softer night jazz (the user's notes)
 

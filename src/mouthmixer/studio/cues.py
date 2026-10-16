@@ -4,7 +4,8 @@ Each cue is a song form (no words), a style from `engine.STYLES`, chords per sec
 game's motifs. **H (the Hum) and B (the Bond theme) here are drafts** written so the cues have something to
 quote: the audio plan leaves them to the user, and they're swapped everywhere by changing MOTIFS. S (Soren's
 song) is the Fmaj7-E7-Am7-Gm7 C7 turnaround already in the game's code. Loops end on a chord that leads back
-to their first bar; stings are two bars.
+to their first bar; stings are two bars (FULL ASSAULT's is one, at battle tempo). A cue with "loop": False (a
+sting, the through-composed Line 0 ride) gets no loop file; every other cue gets one (`export_loop`).
 """
 
 from __future__ import annotations
@@ -210,6 +211,50 @@ CUES = {
                              "Carriage 4": "vibraphone", "Carriage 5": "sfz:trumpet"},
         "themes2": {"Carriage 3": ("H", -12, 2.0, ()), "Carriage 5": ("H", 0, 2.0, ())}, "theme2_inst": "sfz:cellos",
     },
+    # The rest of AUDIO_PLAN 3.2
+    "menu": {
+        "title": "Menu", "style": "menu", "theme_inst": "vibraphone",
+        "form": [("Verse", 8), ("Chorus", 8)], "feels": {"Verse": "verse", "Chorus": "lift"},
+        # Soren's own changes all the way through: Gm7 C7 leads back to the Fmaj7 of bar 1
+        "chords": {"verse": ["Fmaj7", "E7", "Am7", "Gm7|C7"], "chorus": ["Fmaj7", "E7", "Am7", "Gm7|C7"]},
+        "themes": {"verse": "S", "chorus": "S"}, "theme_by_section": {"Chorus": "flute"},
+        "themes2": {"chorus": ("B", -12, 2.0, ())}, "theme2_inst": "sfz:cellos",
+    },
+    "game_over": {
+        "title": "Game Over (sting)", "style": "game_over", "textures": ["doors"], "loop": False,
+        "form": [("Sting", 2)], "feels": {"Sting": "sting"},
+        "chords": {"verse": ["Dm9", "Gm9|Dm9"]},
+        # the Hum on solo piano, falling: D A Bb A G, its C and its last A gone (it never resolves)
+        "themes": {"Sting": ("H", 0, 1.0, (2, 6))}, "theme_inst": "sfz:piano",
+    },
+    "line0_ride": {
+        "title": "The Line 0 Ride", "style": "line0_ride", "theme_inst": "sfz:violins", "textures": ["wheels", "hum"],
+        "loop": False,  # through-composed, about 1:30
+        "form": [("Intro", 4), ("Verse", 8), ("Chorus", 8), ("Outro", 2)],
+        "feels": {"Intro": "intro", "Verse": "verse", "Chorus": "lift", "Outro": "outro"},
+        "chords": {"intro": ["Cm9"], "verse": ["Cm9", "Cm9", "Dbmaj7", "Dbmaj7"],
+                   "chorus": ["Abmaj7", "G7#5#9", "Cm9", "Dbmaj7"], "outro": ["Cm9"]},
+        # T (the Timetable) slowed on the strings; then the Line 0 call low on horn over it; the call once, far off
+        "themes": {"verse": ("T", -2, 2.0, ()), "chorus": ("L0", -12, 1.0, ()), "outro": [(0, 2, "Eb4"), (2, 6, "C4")]},
+        "theme_by_section": {"Chorus": "sfz:horn", "Outro": "sfz:horn"},
+        "themes2": {"chorus": ("T", -2, 2.0, ())}, "theme2_inst": "sfz:violins",
+    },
+    "ward": {
+        "title": "The Ward", "style": "ward", "theme_inst": "celesta", "textures": ["bubbles", "room"],
+        "form": [("Verse", 8), ("Chorus", 8)], "feels": {"Verse": "verse", "Chorus": "lift"},
+        "chords": {"verse": ["Dm9", "Bbmaj7", "Gm9", "A7sus4|A7"], "chorus": ["Bbmaj7", "Fmaj7", "Gm9", "A7sus4"]},
+        # a fragment of the Hum (notes 5 and 6 missing) in glass; the cello keeps it whole, slow (care vs science)
+        "themes": {"verse": ("H", 12, 1.0, (4, 5)), "chorus": ("H", 12, 1.0, (4, 5))},
+        "themes2": {"chorus": ("H", -12, 2.0, ())}, "theme2_inst": "sfz:cellos",
+    },
+    "assault_sting": {
+        "title": "FULL ASSAULT (sting)", "style": "assault_sting", "theme_inst": "sfz:horn", "loop": False,
+        "form": [("Sting", 1)], "feels": {"Sting": "sting"},
+        "chords": {"verse": ["Cm9"]},
+        # the horn blast is L0's falling third on the punch (ka on 2.75, CHK on 3); the brass hit lands on the CHK
+        "themes": {"Sting": [(2.75, .25, "Eb4"), (3, 1, "C4")]},
+        "themes2": {"Sting": [(3, .6, p) for p in ("C4", "G4", "C5", "Eb5", "G5")]}, "theme2_inst": "sfz:trumpet",
+    },
 }
 
 
@@ -263,6 +308,43 @@ def make(cue_id: str, lib, seed: int = 21) -> tuple[str, int]:
     song, gains = engine.produce(resolved(cue), base, seed)
     vi = add_version(d, song, gains, f"{title} · {style['title']} (draft motifs)", base,
                      {"spec": {**base.get("spec", {}), "production": f"cue:{cue_id}"}, "cue": cue_id})
+    if cue.get("loop", True):
+        export_loop(d, vi)
     record = json.loads((d / "song.json").read_text())
     lib.update_song(sid, record, vi)
     return sid, vi
+
+
+def loop_samples(bars: int, bpm: float) -> int:
+    """The form's exact length in samples: where a loop is cut."""
+    from ..arrange.render import SR
+
+    return int(round(bars * 4 * 60.0 / bpm * SR))
+
+
+def export_loop(song_dir, vi: int, xfade_s: float = 0.4) -> str:
+    """A seamless loop file for Roblox next to version `vi`'s master ("v<n>-loop.flac": lossless, since Vorbis
+    smears a file's edges, which clicks at the seam): the same stems, tone match and mastering, but no fade-out,
+    cut at the form's exact bar length, with the ring-out past the cut laid over bar 1 (render.loop_cut). Recorded on the version as "loop_file" with its length in samples.
+    Returns the file name."""
+    import json
+    from pathlib import Path
+
+    from ..arrange import mixer, render
+
+    song_dir = Path(song_dir)
+    m = mixer.Mixer(song_dir, vi)
+    m.render_stems()
+    sng = m.song(False)
+    _, n_ = render.song_length(sng)
+    music, lead, _, _ = m._stems(n_)
+    out, _ = render.match_tone(music + lead, amount=0.9, limit_db=4.0)
+    L = loop_samples(sng.bars, sng.bpm)
+    loop = render.loop_cut(render.master(out, fade=False), L, xfade_s)
+    name = m.v["file"].rsplit(".", 1)[0] + "-loop.flac"
+    render.write_audio(loop, song_dir / name)
+    rec_path = song_dir / "song.json"
+    record = json.loads(rec_path.read_text())
+    record["versions"][vi].update({"loop_file": name, "loop_samples": L, "loop_bpm": sng.bpm, "loop_bars": sng.bars})
+    mixer.write_json(rec_path, record)
+    return name

@@ -24,7 +24,9 @@ PACK_OF = {"citypop": "persona_city", "night_jazz": "persona_night", "battle_rus
            "velvet": "persona_ballad", "chip_city": "persona_city", "chip_swing": "persona_night", "hope": "persona_boss",
            "bond": "persona_city", "title": "persona_ballad", "tension": "persona_dungeon", "station": "persona_night",
            "classroom": "persona_ballad", "lostfound": "persona_hideout", "waiting": "persona_dungeon",
-           "undertow": "persona_ballad", "radio_flat": "persona_night", "convergence": "persona_boss"}
+           "undertow": "persona_ballad", "radio_flat": "persona_night", "convergence": "persona_boss",
+           "menu": "persona_city", "game_over": "persona_ballad", "line0_ride": "persona_dungeon", "ward": "persona_ballad",
+           "assault_sting": "persona_battle"}
 
 DRUM = {"kick": 36, "snare": 38, "side": 37, "hat": 42, "pedal": 44, "open": 46, "ride": 51, "bell": 53,
         "crash": 49, "crash2": 57, "t1": 50, "t2": 48, "t3": 45, "t4": 41}
@@ -481,6 +483,37 @@ STYLES["convergence"] = {"title": "Stop 7: end of the line", "bpm": 92, "tonic":
                                                ["pad", "low_strings", "scratch", "perc"]),
                                    "s5": _feel(("x.....x.x.......", "....X.......X...", "xxxxxxoxxxxxxxox"), "push", "push",
                                                ["pad", "low_strings", "power", "brass", "congas", "timpani"])}}
+
+# The last of AUDIO_PLAN 3.2: menu, game over, the Line 0 ride, the Ward, the FULL ASSAULT sting.
+STYLES["menu"] = {"title": "LINE ZERO menu", "bpm": 90, "tonic": 5, "mode": "major", "swing": 0.54, "transitions": False,
+                  "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
+                  "lead_colour": "vibraphone", "guitar": None, "brass": False, "organ": None, "drum_gain": -5,
+                  "feels": {"verse": _feel(("x.....x...x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "lean", "charleston"),
+                            "lift": _feel(("x.....x.x.......", "....x.......x...", "x.x.x.x.x.x.x.x."), "lean", "city",
+                                          ["pad"])}}
+STYLES["game_over"] = {"title": "LINE ZERO game over", "bpm": 60, "tonic": 2, "mode": "minor", "transitions": False,
+                       "kit": "kit:muldjord", "bass": None, "comp": "sfz:piano", "pad": "sfz:violins",
+                       "lead_colour": "sfz:piano", "guitar": None, "brass": False, "organ": None,
+                       "feels": {"sting": _feel(None, None, "whole")}}  # solo piano, then the doors (texture)
+STYLES["line0_ride"] = {"title": "LINE ZERO the Line 0 ride", "bpm": 60, "tonic": 0, "mode": "minor", "transitions": False,
+                        "kit": "kit:muldjord", "bass": "synth:sub_bass", "comp": None, "pad": "synth:super_pad",
+                        "lead_colour": "sfz:violins", "guitar": None, "brass": False, "organ": None, "drum_gain": -6,
+                        "feels": {"intro": _feel(None, "pedal", None, ["pad"]),  # a drone and the wheels
+                                  "verse": _feel(None, "pedal", None, ["pad", "low_strings"]),
+                                  "lift": _feel(("x.......x.......", "................", "................"), "pulse", None,
+                                                ["pad", "low_strings", "ostinato", "timpani"]),
+                                  "outro": _feel(None, "pedal", None, ["pad"])}}
+STYLES["ward"] = {"title": "LINE ZERO the Ward", "bpm": 76, "tonic": 2, "mode": "minor", "transitions": False,
+                  "kit": "kit:muldjord", "bass": "synth:sub_bass", "comp": "sfz:rhodes", "pad": "sfz:violins",
+                  "lead_colour": "celesta", "guitar": None, "brass": False, "organ": None,
+                  "feels": {"verse": _feel(None, "pulse", "half"),  # the soft pulse: a heartbeat bass (the jars)
+                            "lift": _feel(None, "pulse", "half", ["pad", "low_strings"])}}
+STYLES["assault_sting"] = {"title": "LINE ZERO FULL ASSAULT", "bpm": 150, "tonic": 0, "mode": "minor", "transitions": False,
+                           "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": None, "pad": "sfz:violins",
+                           "lead_colour": "sfz:horn", "guitar": None, "brass": False, "organ": None,
+                           # the ticket-punch roll: 16ths up to the ka (2.75) and the CHK on 3, kick under the CHK
+                           "feels": {"sting": _feel(("............x...", "xxxxxxxxxxxxX...", "................"), None, None,
+                                                    ["timpani"])}}
 
 # Instrumental cues for LINE ZERO's scenes (studio/cues.py; AUDIO_PLAN section 3.2).
 STYLES["lost_car"] = {
@@ -941,7 +974,7 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
     sw = style.get("swing", 0.5)
     tracks = [Track(nm, role, inst, swing(sorted(notes), sw), pan=pan) for nm, role, inst, notes, pan in tr if notes and inst]
     gains = {"Theme": 0, "Clock": -6, "Ambience: sea": -4, "Ambience: hum": -8, "Ambience: room": -6,
-             "Ambience: radio": -10, "Ambience: tape": -8, "Ambience: rain": -6, "Ambience: vinyl": -8, "Countermelody": -3, "Power guitar": -4, "Scratches": -2, "Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
+             "Ambience: radio": -10, "Ambience: wheels": -6, "Ambience: doors": -4, "Ambience: bubbles": -10, "Ambience: tape": -8, "Ambience: rain": -6, "Ambience: vinyl": -8, "Countermelody": -3, "Power guitar": -4, "Scratches": -2, "Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
              "Low strings": -3, "Organ / pad": -3, "Guitar left": -3, "Guitar right": -3, "Hook": 1, "Choir": -2,
              "String ostinato": -1, "Reverse cymbals": -2, "Boom": -3}
     if style.get("drum_gain") is not None:
