@@ -75,6 +75,12 @@ SAMPLED: dict[str, dict] = {
     "sfz:horn": {"src": ("folder", f"{VSCO}/Brass/F Horn/sus", ""), "gm": "french_horn", "family": "brass",
                  "range": (34, 77)},
 }
+# Variants: (base instrument, character, detune in cents per note)
+VARIANTS = {"sfz:rhodes_tape": ("sfz:rhodes", "tape", 0), "sfz:piano_radio": ("sfz:piano", "radio", 0),
+            "sfz:piano_old": ("sfz:piano", "old", 22), "sfz:piano_prepared": ("sfz:piano", "prepared", 0)}
+for _k, (_b, _c, _d) in VARIANTS.items():
+    SAMPLED[_k] = dict(SAMPLED[_b], variant=(_b, _c, _d))
+
 SYNTH_KEYS = {f"synth:organ_{k}": ("organ", k) for k in synths.ORGANS} | \
     {f"synth:{k}": ("synth", k) for k in synths.SYNTHS} | {f"synth:chip_{k}": ("chip", k) for k in synths.CHIPS}
 # Drum kits on General MIDI drum notes.
@@ -203,6 +209,9 @@ def instrument(key: str) -> sampler.Instrument | None:
     """The loaded instrument, or None when its library isn't installed."""
     if key not in _CACHE:
         spec = SAMPLED.get(key) or KITS.get(key)
+        if spec and spec.get("variant"):
+            _CACHE[key] = instrument(spec["variant"][0])
+            return _CACHE[key]
         path = _materialise(spec["src"], root()) if spec else None
         try:
             inst = sampler.Instrument(path) if path else None
@@ -315,8 +324,43 @@ def render(key: str, notes_sec: list[tuple[float, float, int, int]], total_sec: 
         notes = [(s, l, mp.get(int(p), int(p)) if mp else int(p), v) for s, l, p, v in notes_sec]
         return sampler.render_kit(inst, notes, total_sec, rng)
     shift = SAMPLED[key].get("key_shift", 0)  # libraries mapped as written, an octave above how they sound
+    var = SAMPLED[key].get("variant")
+    if var:
+        base, character, detune = var
+        if character == "prepared":  # muted strings: every note short, a little louder
+            notes_sec = [(s, min(l, 0.18), p, min(127, v + 10)) for s, l, p, v in notes_sec]
+        x = inst.render([(s, l, p + shift + (rng.normal(0, detune / 100) if detune else 0), v) for s, l, p, v in notes_sec],
+                        total_sec, rng)
+        return variant_fx(character, post_fx(base, x, rng), rng)
     x = inst.render([(s, l, p + shift, v) for s, l, p, v in notes_sec], total_sec, rng)
     return post_fx(key, x, rng)
+
+
+def variant_fx(character: str, x: np.ndarray, rng) -> np.ndarray:
+    """Worn tape (wow and flutter, dull top, saturation), a radio through the wall (300-3 kHz, drive), an old
+    upright (detuned per note above, plus a honky mid), a prepared piano (a metallic ring on top)."""
+    from pedalboard import Distortion, Gain, HighpassFilter, LowpassFilter, Pedalboard, PeakFilter
+
+    x = x.astype(np.float32)
+    if character == "tape":
+        t = np.arange(x.shape[1])
+        d = 0.0025 * SR * (1 + np.sin(2 * np.pi * 0.55 * t / SR)) / 2 + 0.0004 * SR * (1 + np.sin(2 * np.pi * 7 * t / SR)) / 2
+        pos = np.clip(t - d - 2, 0, x.shape[1] - 1)
+        i0 = pos.astype(np.int64)
+        fr = (pos - i0).astype(np.float32)
+        x = x[:, i0] * (1 - fr) + x[:, np.minimum(i0 + 1, x.shape[1] - 1)] * fr
+        return Pedalboard([LowpassFilter(5500), Distortion(drive_db=8), Gain(-6)])(x.astype(np.float32), SR)
+    if character == "radio":
+        mono = x.mean(axis=0, keepdims=True).repeat(2, axis=0)
+        return Pedalboard([HighpassFilter(300), LowpassFilter(3000), PeakFilter(cutoff_frequency_hz=1200, gain_db=4, q=0.8),
+                           Distortion(drive_db=12), Gain(-9)])(mono.astype(np.float32), SR)
+    if character == "old":
+        return Pedalboard([PeakFilter(cutoff_frequency_hz=1500, gain_db=4, q=1.2), LowpassFilter(7000)])(x, SR)
+    if character == "prepared":
+        t = np.arange(x.shape[1]) / SR
+        ring = x * np.sin(2 * np.pi * 1730 * t)[None, :] * 0.35
+        return Pedalboard([PeakFilter(cutoff_frequency_hz=900, gain_db=-4, q=0.7)])((x + ring).astype(np.float32), SR)
+    return x
 
 
 def post_fx(key: str, x: np.ndarray, rng) -> np.ndarray:

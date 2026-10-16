@@ -159,10 +159,28 @@ cover. `studio/cues.py`, each added to the app as "LINE ZERO cue: ...":
 | Shop | city shops | swung chip + vibraphone 102 | B, then B at double speed |
 | Finale: First Light | the hope finale | band + chip lead 140 | B leads, H answers as a countermelody, S in the verse |
 
+Second batch (same day, later), each with its own small style in `engine.STYLES`:
+
+| Cue | Scene | Sound | Motifs |
+|---|---|---|---|
+| Bond | hang-outs | soft swing 88, F major | B, then B an octave up |
+| Title | title screen | ballad 78, D minor | H; in the chorus a wordless voice sings H high and slow over it |
+| Tension | before a reveal | pulse 80, F# minor, two-chord vamps | T on violins at half speed |
+| Station | the platform before a dive | night 100, C minor, room tone | a far horn, then L0 an octave down |
+| Stop 1: Empty Classroom | Stop 1 | piano and room tone 70 | BELL (the school bell), then B with notes missing |
+| Stop 2: Lost and Found | Stop 2 | worn-tape Rhodes 80, tape hiss | HARU |
+| Stop 4: Waiting Room | Stop 4 | 60 bpm, fluorescent hum | H bent out of shape on prepared piano; then H clearly on celesta |
+| Stop 5: Undertow | Stop 5 | slow swing 66, the sea | H on guitar; a trombone foghorn far off |
+| Stop 6: Return to Sender | Stop 6 | radio-through-the-wall piano 84, AM static | B; violins take it in the chorus |
+| Stop 7: End of the Line | Stop 7 | builds carriage by carriage, 92 | celesta H with notes missing; flute B; guitar S over cello H; vibraphone B with scratches; trumpet B with H on top |
+
+New engine pieces: ambience tracks (`textures`: sea, hum, room, radio, plus vinyl/rain/wind/tape), instrument
+variants (`sfz:rhodes_tape`, `sfz:piano_radio`, `sfz:piano_old` detuned 22 cents per note, `sfz:piano_prepared`), and
+`theme_by_section` so one theme moves between instruments (a "Theme: <instrument>" track each).
+
 **H and B are drafts** (the audio plan leaves both to the user); they live in `cues.MOTIFS` and change everywhere at
-once. Still to make: bond, title (instrumental), tension, station, menu, game over, the seven Stop themes, line0_ride,
-ward, assault_sting; loop-point export for Roblox (the cues end on a chord that leads back to bar 1, but the files
-still have a mastering fade).
+once. Still to make: menu, game over, line0_ride, ward, assault_sting; loop-point export for Roblox (the cues end on a
+chord that leads back to bar 1, but the files still have a mastering fade).
 
 ## 7. Distinct Persona sounds, longer songs, softer night jazz (the user's notes)
 

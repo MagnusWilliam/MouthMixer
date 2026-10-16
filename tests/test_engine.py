@@ -122,3 +122,37 @@ def test_soren_motif_comes_from_the_game_code():
 
     s = C.MOTIFS["S"]
     assert len(s) == 32 and s[0] == (0.0, 0.45, 65) and s[8][2] == 64  # Fmaj7 starts on F, E7 on E
+
+
+def _cue_base(C, cid):
+    start, secs = 0, []
+    for nm, bars in C.CUES[cid]["form"]:
+        secs.append({"name": nm, "start": start, "bars": bars})
+        start += bars
+    return {"sections": secs, "section_feels": [C.CUES[cid]["feels"][nm] for nm, _ in C.CUES[cid]["form"]],
+            "lyric_sheet": []}
+
+
+def test_scene_cues_produce_with_ambience_and_per_section_themes():
+    from mouthmixer.studio import cues as C
+
+    for cid in ("bond", "title", "tension", "station", "stop1_empty_classroom", "stop2_lost_and_found",
+                "stop4_waiting_room", "stop5_undertow", "stop6_return_to_sender", "stop7_end_of_the_line"):
+        cue = C.CUES[cid]
+        song, gains = E.produce(C.resolved(cue), _cue_base(C, cid), seed=4)
+        names = {t.name for t in song.tracks}
+        assert any(nm.startswith("Theme") for nm in names), cid
+        for tex in cue.get("textures", []):
+            assert f"Ambience: {tex}" in names and f"Ambience: {tex}" in gains, (cid, tex)
+        if cue.get("theme_by_section"):  # each section's instrument gets its own track (Stop 7 builds stem by stem)
+            insts = {t.instrument for t in song.tracks if t.name.startswith("Theme")}
+            assert set(cue["theme_by_section"].values()) <= insts, cid
+
+
+def test_new_motifs_are_short_singable_phrases():
+    from mouthmixer.studio import cues as C
+
+    for m in ("T", "BELL", "HARU", "L0"):
+        notes = C._shift(C.MOTIFS[m])
+        assert 3 <= len(notes) <= 16 and max(p for *_, p in notes) - min(p for *_, p in notes) <= 12, m
+        assert all(a[0] <= b[0] for a, b in zip(notes, notes[1:])), m  # in time order

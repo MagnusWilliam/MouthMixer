@@ -381,6 +381,21 @@ def texture(name: str, n: int, rng) -> np.ndarray:
         x = rng.normal(0, 1, (2, n))
         lfo = 0.6 + 0.4 * np.sin(2 * np.pi * 0.07 * t + rng.uniform(0, 6))
         return (sosfilt(butter(2, [200, 1200], btype="band", fs=SR, output="sos"), x, axis=1) * lfo * 0.3).astype(np.float32)
+    if name == "sea":  # swells every ~8 s, low-passed surf
+        x = rng.normal(0, 1, (2, n))
+        swell = 0.5 + 0.5 * np.sin(2 * np.pi * 0.12 * t + np.array([[0.0], [0.9]])) ** 3
+        return (sosfilt(butter(2, [150, 6000], btype="band", fs=SR, output="sos"), x, axis=1) * swell * 0.18).astype(np.float32)
+    if name == "hum":  # a fluorescent tube: 120 Hz buzz with harmonics, and a flicker now and then
+        buzz = sum(np.sin(2 * np.pi * 120 * k * t) / k for k in (1, 2, 3, 5)) * 0.02
+        flick = np.ones(n)
+        for at in rng.integers(0, max(1, n - SR), max(1, n // (SR * 9))):
+            flick[at:at + int(0.15 * SR)] = rng.uniform(0.0, 0.5)
+        return np.stack([buzz * flick, buzz * flick]).astype(np.float32)
+    if name == "room":  # an empty room's air
+        return (sosfilt(butter(2, [80, 600], btype="band", fs=SR, output="sos"), rng.normal(0, 1, (2, n)), axis=1) * 0.03).astype(np.float32)
+    if name == "radio":  # AM static between stations
+        x = sosfilt(butter(2, [400, 3500], btype="band", fs=SR, output="sos"), rng.normal(0, 1, (2, n)), axis=1)
+        return (x * (0.4 + 0.6 * (np.sin(2 * np.pi * 0.3 * t) > 0.6)) * 0.03).astype(np.float32)
     if name == "tape":
         return (sosfilt(butter(1, 4000, btype="high", fs=SR, output="sos"), rng.normal(0, 0.01, (2, n)), axis=1)).astype(np.float32)
     return np.zeros((2, n), dtype=np.float32)
@@ -425,6 +440,8 @@ def write_midi(song: Song, path: Path) -> None:
     pm = pretty_midi.PrettyMIDI(initial_tempo=song.bpm)
     spb = 60.0 / song.bpm
     for t in song.tracks:
+        if t.instrument.startswith("fx:"):  # ambience is noise, not notes
+            continue
         drums = t.instrument.startswith("kit:")
         prog = 0 if drums else INSTRUMENTS[t.instrument][1]
         inst = pretty_midi.Instrument(program=prog, is_drum=drums, name=f"{t.name} ({t.instrument})")

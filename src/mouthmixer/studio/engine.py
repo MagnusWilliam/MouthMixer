@@ -21,7 +21,10 @@ PACK_OF = {"citypop": "persona_city", "night_jazz": "persona_night", "battle_rus
            "lost_car": "persona_night", "sad": "persona_ballad", "hideout": "persona_hideout", "results": "persona_city",
            "night_brushes": "persona_night", "night_trio": "persona_night", "night_lofi": "persona_hideout",
            "p3_urban": "persona_city", "p4_jpop": "persona_city", "p5_heavy": "persona_battle", "anthem": "persona_boss",
-           "velvet": "persona_ballad", "chip_city": "persona_city", "chip_swing": "persona_night", "hope": "persona_boss"}
+           "velvet": "persona_ballad", "chip_city": "persona_city", "chip_swing": "persona_night", "hope": "persona_boss",
+           "bond": "persona_city", "title": "persona_ballad", "tension": "persona_dungeon", "station": "persona_night",
+           "classroom": "persona_ballad", "lostfound": "persona_hideout", "waiting": "persona_dungeon",
+           "undertow": "persona_ballad", "radio_flat": "persona_night", "convergence": "persona_boss"}
 
 DRUM = {"kick": 36, "snare": 38, "side": 37, "hat": 42, "pedal": 44, "open": 46, "ride": 51, "bell": 53,
         "crash": 49, "crash2": 57, "t1": 50, "t2": 48, "t3": 45, "t4": 41}
@@ -313,6 +316,76 @@ STYLES["hope"] = {  # the finale: band + chip lead, earlier motifs stacked as me
     },
 }
 
+# The next LINE ZERO cues (AUDIO_PLAN 3.2: bond, title, tension, station, the Stops).
+def _feel(drums=None, bass=None, comp=None, layers=()):
+    return {"drums": drums, "bass": bass, "comp": comp, "layers": set(layers)}
+
+
+SOFT_KIT = ("x.........x.....", "....x.......x...", "x.x.x.x.x.x.x.x.")
+STYLES["bond"] = {"title": "LINE ZERO bond", "bpm": 88, "tonic": 5, "mode": "major", "swing": 0.54, "transitions": False,
+                  "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "nylon_guitar", "pad": "sfz:violins",
+                  "lead_colour": "flute", "guitar": None, "brass": False, "organ": None, "drum_gain": -5,
+                  "feels": {"intro": _feel(None, None, "city"), "verse": _feel(SOFT_KIT, "lean", "city", ["rhodes_pad"]),
+                            "lift": _feel(SOFT_KIT, "lean", "city", ["rhodes_pad", "pad"])}}
+STYLES["title"] = {"title": "LINE ZERO title", "bpm": 78, "tonic": 2, "mode": "minor", "transitions": False,
+                   "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes", "pad": "sfz:violins",
+                   "lead_colour": "sfz:rhodes", "guitar": None, "brass": False, "organ": None, "drum_gain": -4,
+                   "feels": {"intro": _feel(),  # the Hum alone, unaccompanied, the first time it is heard
+                             "verse": _feel(None, "pedal", "half", ["pad"]),
+                             "lift": _feel(SOFT_KIT, "lean", "push", ["pad", "low_strings"])}}
+STYLES["tension"] = {"title": "LINE ZERO tension", "bpm": 80, "tonic": 6, "mode": "minor", "transitions": False,
+                     "kit": "kit:muldjord", "bass": "synth:sub_bass", "comp": None, "pad": "synth:super_pad",
+                     "lead_colour": "sfz:violins_pizz", "guitar": None, "brass": False, "organ": None,
+                     "feels": {"verse": _feel(None, "pulse", None, ["pad", "low_strings", "ostinato"]),
+                               "lift": _feel(("x...............", "................", "..x...x...x...x."), "pulse", None,
+                                             ["pad", "low_strings", "ostinato", "timpani"])}}
+STYLES["station"] = {"title": "LINE ZERO station", "bpm": 100, "tonic": 0, "mode": "minor", "transitions": False,
+                     "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:piano_radio", "pad": "sfz:violins",
+                     "lead_colour": "sfz:horn", "guitar": None, "brass": False, "organ": None, "drum_gain": -6,
+                     "feels": {"verse": _feel(("................", "................", "xxxxxxxxxxxxxxxx"), "lean", "half", []),
+                               "lift": _feel(("x.......x.......", "....x.......x...", "xxxxxxxxxxxxxxxx"), "lean", "stab",
+                                             ["pad"])}}
+STYLES["classroom"] = {"title": "Stop 1: empty classroom", "bpm": 70, "tonic": 5, "mode": "major", "transitions": False,
+                       "kit": "kit:muldjord", "bass": None, "comp": "sfz:piano", "pad": "sfz:violins",
+                       "lead_colour": "music_box", "guitar": None, "brass": False, "organ": None,
+                       "feels": {"verse": _feel(None, None, "ballad"), "lift": _feel(None, None, "ballad", ["pad", "low_strings"])}}
+STYLES["lostfound"] = {"title": "Stop 2: lost and found", "bpm": 80, "tonic": 9, "mode": "minor", "transitions": False,
+                       "swing": 0.56, "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:rhodes_tape",
+                       "pad": "sfz:violins", "lead_colour": "celesta", "guitar": None, "brass": False, "organ": None,
+                       "drum_gain": -8,
+                       "feels": {"verse": _feel(None, "pedal", "charleston", ["clock"]),
+                                 "lift": _feel(SOFT_KIT, "lean", "half", ["clock", "pad"])}}
+STYLES["waiting"] = {"title": "Stop 4: waiting room", "bpm": 60, "tonic": 2, "mode": "minor", "transitions": False,
+                     "kit": "kit:muldjord", "bass": "synth:sub_bass", "comp": "sfz:piano_prepared", "pad": "synth:super_pad",
+                     "lead_colour": "celesta", "guitar": None, "brass": False, "organ": None,
+                     "feels": {"verse": _feel(("x..x............", "................", "................"), None, "offbeat",
+                                              ["clock_off"]),
+                               "lift": _feel(("x..x............", "................", "................"), "pedal", "whole",
+                                             ["clock_off", "pad"])}}
+STYLES["undertow"] = {"title": "Stop 5: undertow", "bpm": 66, "tonic": 4, "mode": "minor", "swing": 0.67, "transitions": False,
+                      "kit": "kit:muldjord", "bass": "sfz:bass_finger", "comp": "sfz:guitar_clean", "pad": "choir",
+                      "lead_colour": "sfz:guitar_clean", "guitar": None, "brass": False, "organ": None,
+                      "feels": {"verse": _feel(None, "pedal", "ballad", ["pad"]),
+                                "lift": _feel(None, "pedal", "ballad", ["pad", "low_strings", "lighthouse"])}}
+STYLES["radio_flat"] = {"title": "Stop 6: return to sender", "bpm": 84, "tonic": 5, "mode": "major", "transitions": False,
+                        "swing": 0.55, "kit": "kit:brush", "bass": "acoustic_bass", "comp": "sfz:piano_radio",
+                        "pad": "sfz:violins", "lead_colour": "sfz:piano_old", "guitar": None, "brass": False, "organ": None,
+                        "drum_gain": -6, "ride": True,
+                        "feels": {"verse": _feel(None, "walk", "charleston", []),
+                                  "lift": _feel(("x.......x.......", "....x.......x...", "x..xx..xx..xx..x"), "walk", "half",
+                                                ["pad", "low_strings"])}}
+# Stop 7: the last train. It starts drained; every section a carriage lights and a teammate's instrument joins.
+STYLES["convergence"] = {"title": "Stop 7: end of the line", "bpm": 92, "tonic": 5, "mode": "major", "transitions": True,
+                         "kit": "kit:muldjord", "bass": "acoustic_bass", "comp": "sfz:rhodes_tape", "pad": "sfz:violins",
+                         "lead_colour": "celesta", "guitar": "sfz:guitar_clean", "brass": True, "organ": None,
+                         "feels": {"s1": _feel(None, None, "whole", ["pad"]),
+                                   "s2": _feel(SOFT_KIT, "walk", "half", ["pad"]),
+                                   "s3": _feel(SOFT_KIT, "walk", "half", ["pad", "low_strings"]),
+                                   "s4": _feel(("x.....x...x.....", "....x.......x...", "x.x.x.x.x.x.x.x."), "lean", "push",
+                                               ["pad", "low_strings", "scratch", "perc"]),
+                                   "s5": _feel(("x.....x.x.......", "....X.......X...", "xxxxxxoxxxxxxxox"), "push", "push",
+                                               ["pad", "low_strings", "power", "brass", "congas", "timpani"])}}
+
 # Instrumental cues for LINE ZERO's scenes (studio/cues.py; AUDIO_PLAN section 3.2).
 STYLES["lost_car"] = {
     "transitions": False,
@@ -537,7 +610,7 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
     clear = lambda notes: clear_of(notes, mel, chord_at)  # noqa: E731
     parts: dict[str, list] = {k: [] for k in ("drums", "perc", "bass", "ghost", "comp", "pad", "low", "brass_hi", "brass_lo",
                                               "guitar_l", "guitar_r", "organ", "colour", "choir", "ostinato", "timpani",
-                                              "rim", "fx_rev", "fx_boom", "perc_gm", "theme", "theme2",
+                                              "rim", "fx_rev", "fx_boom", "perc_gm", "theme2",
                                               "power", "scratch", "chip")}
     prev_v = None
     for si, (name, start, length) in enumerate(secs):
@@ -674,6 +747,10 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
                 parts["scratch"] += [(b + 3, 0.45, 60, 100), (b + 3.5, 0.4, 62 if i % 4 == 1 else 64, 92)]
             if "chipkit" in L:  # the noise-channel hats and a triangle kick under the real kit
                 parts["chip"] += grid("x.......x.......", b, 36, 90) + grid("..x...x...x...x.", b, 42, 70, length=0.05)
+            if "clock_off" in L:  # a clock that ticks off the beat (the waiting room: time is wrong)
+                parts["perc_gm"] += [(b + j + 0.62, 0.1, 76, 44) for j in range(4)]
+            if "lighthouse" in L and i % 4 == 0:  # a warm brass chord sweeping in (the lighthouse)
+                parts["brass_lo"] += [(b + 1.0, 2.9, p, 70) for p in upper(first, None, 48, 64, 3)]
             if "clock" in L:  # a ticking clock: a soft wood block on every beat, a deeper tock on 1
                 parts["perc_gm"] += [(b + j, 0.1, 77 if j == 0 else 76, 54 if j == 0 else 40) for j in range(4)]
             if "timpani" in L and i % 2 == 0:
@@ -695,7 +772,8 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
                 for s_, l_, p in th:
                     at = b0 * 4 + k * phrase_beats + s_
                     if at < b1 * 4:
-                        parts["theme"].append((at, l_, n(p) if isinstance(p, str) else p, 96))
+                        parts.setdefault("theme@" + str((spec.get("theme_by_section") or {}).get(name, "")), []).append(
+                            (at, l_, n(p) if isinstance(p, str) else p, 96))
                 k += 1
         th2 = (spec.get("themes2") or {}).get(name) or (spec.get("themes2") or {}).get(_kind(name, feels[name]))
         if th2:
@@ -740,8 +818,6 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
         ("Choir", "pad", "choir", clear(humanise(parts["choir"], rng, 3)), 0.0),
         ("String ostinato", "riff", "sfz:violins_spic", clear(humanise(parts["ostinato"], rng, 4)), -0.3),
         ("Timpani", "timpani", "timpani", humanise(parts["timpani"], rng, 4), 0.0),
-        ("Theme", "counter" if sheet else "lead", spec.get("theme_inst") or style["lead_colour"],
-         clear(humanise(parts["theme"], rng, 4)) if sheet else humanise(parts["theme"], rng, 4), 0.05),
         ("Countermelody", "counter", spec.get("theme2_inst") or "sfz:violins", humanise(parts["theme2"], rng, 4), -0.2),
         ("Power guitar", "arp", "distortion_guitar", clear(humanise(parts["power"], rng, 5)), 0.45),
         ("Scratches", "fx", "sfx:scratch", parts["scratch"], 0.2),
@@ -750,9 +826,17 @@ def produce(spec: dict, version: dict, seed: int = 11) -> tuple:
         ("Reverse cymbals", "fx", "sfx:reverse_crash", parts["fx_rev"], 0.0),
         ("Boom", "fx", "sfx:boom", parts["fx_boom"], 0.0),
     ]
+    for key_ in [k for k in parts if k.startswith("theme@")]:  # theme notes, one track per instrument
+        inst_ = key_[6:] or spec.get("theme_inst") or style["lead_colour"]
+        label = "Theme" if not key_[6:] else "Theme: " + inst_.split(":")[-1].replace("_", " ")
+        tr.append((label, "counter" if sheet else "lead", inst_,
+                   clear(humanise(parts[key_], rng, 4)) if sheet else humanise(parts[key_], rng, 4), 0.05))
+    for tex in spec.get("textures", []):  # ambience under the whole cue (render.texture)
+        tr.append((f"Ambience: {tex}", "fx", f"fx:{tex}", [(0.0, 1.0, 60, 64)], 0.0))
     sw = style.get("swing", 0.5)
-    tracks = [Track(nm, role, inst, swing(sorted(notes), sw), pan=pan) for nm, role, inst, notes, pan in tr if notes]
-    gains = {"Theme": 0, "Clock": -6, "Countermelody": -3, "Power guitar": -4, "Scratches": -2, "Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
+    tracks = [Track(nm, role, inst, swing(sorted(notes), sw), pan=pan) for nm, role, inst, notes, pan in tr if notes and inst]
+    gains = {"Theme": 0, "Clock": -6, "Ambience: sea": -4, "Ambience: hum": -8, "Ambience: room": -6,
+             "Ambience: radio": -10, "Ambience: tape": -8, "Ambience: rain": -6, "Ambience: vinyl": -8, "Countermelody": -3, "Power guitar": -4, "Scratches": -2, "Guide melody (for singing)": -9, "Bass ghost notes": -7, "Percussion": -2, "Rim clicks": -6, "Strings": -2,
              "Low strings": -3, "Organ / pad": -3, "Guitar left": -3, "Guitar right": -3, "Hook": 1, "Choir": -2,
              "String ostinato": -1, "Reverse cymbals": -2, "Boom": -3}
     if style.get("drum_gain") is not None:

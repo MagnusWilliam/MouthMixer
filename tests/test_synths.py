@@ -39,3 +39,23 @@ def test_chip_voices_and_kit():
     assert np.mean(d > 0.05 * np.abs(tri[0, :4000]).max()) < 0.2  # flat stretches between jumps: stepped, NES-like
     kit = SY.chip_drums([(0.0, 0.2, 36, 110), (0.5, 0.2, 38, 110), (1.0, 0.1, 42, 90)], 1.5)
     assert np.isfinite(kit).all() and np.abs(kit[:, :SR // 4]).max() > 0.05
+
+
+def test_ambience_textures_and_instrument_variants():
+    from mouthmixer.arrange import instruments as I
+    from mouthmixer.arrange import render as R
+
+    rng = np.random.default_rng(1)
+    n = R.SR * 4
+    for name in ("sea", "hum", "room", "radio"):
+        x = R.texture(name, n, rng)
+        assert x.shape == (2, n) and 1e-4 < np.sqrt(np.mean(x ** 2)) < 0.3, name
+    radio = R.texture("radio", n, rng)
+    spec = np.abs(np.fft.rfft(radio[0]))
+    f = np.fft.rfftfreq(n, 1 / R.SR)
+    assert spec[(f > 400) & (f < 3500)].mean() > 5 * spec[f > 8000].mean()  # band-limited like AM
+    tone = np.tile(np.sin(2 * np.pi * 220 * np.arange(n) / R.SR) * 0.3, (2, 1)).astype(np.float32)
+    for character in ("tape", "radio", "old", "prepared"):
+        y = I.variant_fx(character, tone, rng)
+        assert y.shape == tone.shape and np.isfinite(y).all() and np.abs(y).max() > 0.01, character
+    assert I.SAMPLED["sfz:piano_old"]["variant"] == ("sfz:piano", "old", 22)

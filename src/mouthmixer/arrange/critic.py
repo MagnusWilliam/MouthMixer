@@ -69,7 +69,7 @@ def judge(song: Song, mix: np.ndarray | None = None, stems: dict | None = None) 
 
     # --- A4: every part inside its instrument's range ----------------------------------------------
     for t in song.tracks:
-        if t.instrument.startswith("kit:") or not t.notes:
+        if t.instrument.startswith(("kit:", "fx:")) or not t.notes:
             continue
         lo, hi = INSTRUMENTS[t.instrument][2:4]
         out = sum(1 for _, _, p, _ in t.notes if not lo <= p <= hi)

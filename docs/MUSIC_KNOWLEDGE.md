@@ -347,3 +347,4 @@ to 50-85%: the user loved three options that were rejected for leaps").
 | 2026-10-15 | H1 in hand-written arrangements | comping/pad/guitar/brass notes a half step from the sounding melody move down to the next chord tone (`production.clear_of`) | the first Last Train draft had 90 rubs, mostly a 9th or maj7 next to the singer |
 | 2026-10-15 | mix tone (opt-in per style) | mix-bus match EQ toward the nine references' band shares, 90% of the way, at most 4 dB (`render.match_tone`, style flag `match_tone`) | the hand-produced band measured 3.6 dB heavy at 250-500 Hz |
 
+| 2026-10-15 | A4 instrument range | ambience tracks (`fx:` textures) are skipped, like drum kits | they are noise beds with one placeholder note, not pitched parts; the check crashed on `fx:room` |
