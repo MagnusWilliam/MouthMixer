@@ -254,3 +254,53 @@ analyses stay on the user's machine, and without them it falls back to the nine-
 the mixes sit within about 2 dB of their reference in every band, except the sub on 16 and 19 (+4 dB, at the
 EQ's 4 dB limit).
 
+## 10. The reference songs, redone from scratch (2026-10-16)
+
+The user on section 9's songs: the wrong instruments for the Persona sound (Safety Off had no trumpets and no
+guitar, an awkwardly simple piano, and felt slower than Pull the Trigger), the balance between instruments off,
+the pacing not matching, too little layering. Redone:
+
+1. **Six stems** (Demucs `htdemucs_6s`, MIT: drums, bass, guitar, piano, vocals, other) of every reference, and
+   a profile of each part (`python -m mouthmixer profile`, `reference/profile.py`): level against the mix, when
+   it plays (a map per bar), how busy, where in the bar, register, notes at once, note length, brightness,
+   width; spectrogram pictures of the loudest 8 bars per stem.
+2. **What it showed:** the bass and drums sit 5-8 LU under the mix in every reference (the bass in mono); the
+   singer is the loudest part (-2 to -6 LU), so an instrumental needs a lead in that place. Guitar is a main
+   instrument in Burn My Dread, Full Moon and It's Going Down Now (-8 to -10) and a busy quiet funk part in Pull
+   the Trigger (11 chops a bar at -19). Pull the Trigger is a triplet shuffle: its bass runs almost every
+   triplet 8th, short (0.13 beats): half-time was the wrong call. The "other" stem (horns, strings, organ,
+   synths) plays 85-96% of the time. Color Your Night is led by the grand piano (-8.8) over a loud staccato bass.
+3. **The sound sheet's gear, with free stand-ins:** Trilian bass to Black And Blue; Scarbee/The Grandeur to
+   jRhodes3d/Salamander; BFD3 and Dance Mega Drums to Unruly Drums with Frankensnare snares and a sampled-break
+   bus; Session Horns / Kick-Ass Brass to a three-horn section (VSCO trumpet, Weresax, VSCO trombone);
+   Vintage Organs to our tonewheel; Virus/ES2/Xpand/Absynth to new synth voices; real electric guitars
+   (Karoryfer Emilyguitar and Black And Green, CC0) clean and through an amp.
+4. **Written part by part** (`studio/refkit.py`, `studio/refsongs.py`): patterns per section energy for each
+   part (triplet grids for the shuffles), fills and crashes, a three-horn section, the lead melody written in
+   scale degrees and fitted to the chords, double-tracked rhythm guitars panned wide.
+5. **Balanced from the stems:** each group of parts (drums, bass, guitar, keys, lead, other) is set to the
+   reference's measured level against the others (`refkit.balance`); the master is matched to the reference's
+   tone and mastered at -11 LUFS (the references are -10 to -12).
+
+| Song | After | Take A | Take B |
+|---|---|---|---|
+| Hollow Hour | Burn My Dread | synth lead, sampled break, double-tracked overdrive, acid synth | violin lead, more piano |
+| Paint the City | Color Your Night | sax lead, grand piano, jazz organ | synth lead with sax answers |
+| High Tide | Full Moon Full Life | synth lead, overdrive throughout | violin lead, clean verses |
+| Down to the Wire | It's Going Down Now | trumpet lead, horn section, rock guitars | organ lead, horns, no guitars |
+| Safety Off | Pull the Trigger, A Way of Life | trumpet lead, grand piano, live kit | tenor sax lead, Rhodes, sampled break |
+| Lunchbell | School Days, Signs of Love | synth lead, synth bass, piano | guitar lead, finger bass, Rhodes |
+| Reach for the Stars | When the Moon's Reaching Out Stars | guitar lead, piano, FM pad | sax lead, Rhodes, vibraphone |
+
+Instrumental (the user's choice): the lead is its own track ("Lead: ..."), to mute for singing.
+
+**Checked like for like.** Each take went through the same six-stem split and profile as its reference. The
+first round showed our drums 1-3 dB light against the mix in most songs, Reach for the Stars' piano 7 dB light,
+Lunchbell's synth bass 4 dB heavy, and our basses dying away much faster than the references' (now a
+compressed `sfz:bass_tight`). Those offsets are `refsongs.TRIMS`; Safety Off's and Reach's drums got busier
+(the references have 14-15 hits a bar). The second round sits within about 1-1.5 dB of the references per group
+(drums still about 1 dB light in some). Round one is in the app's Tossed list.
+
+The demucs "vocals" stem of an instrumental is near silent: the lead lands in "other" (so our "other" reads
+like the reference's vocals and other together), and guitar leads land in "guitar".
+

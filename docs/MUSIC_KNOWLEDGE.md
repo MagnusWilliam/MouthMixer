@@ -349,3 +349,4 @@ to 50-85%: the user loved three options that were rejected for leaps").
 
 | 2026-10-15 | A4 instrument range | ambience tracks (`fx:` textures) are skipped, like drum kits | they are noise beds with one placeholder note, not pitched parts; the check crashed on `fx:room` |
 | 2026-10-15 | mix tone target per style | a style may name `refs`; the master match EQ aims at their average band shares instead of the nine-song median (same 90%, 4 dB limit) | the reference-inspired songs differ by up to 6 dB from the median (Color Your Night is dark, School Days is sub-heavy) |
+| 2026-10-16 | reference-modelled songs: levels and loudness | part groups set to the reference stems' measured spacing (`refkit.balance`, drums as the anchor); master at -11 LUFS instead of -14 | the user: "the volume control between instruments is way off"; the references measure -10 to -12 LUFS |

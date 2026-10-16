@@ -102,6 +102,18 @@ SYNTHS = {
                  "env_amt": 0.5, "adsr": (0.003, 0.2, 0.85, 0.06), "glide": 0.0, "vib": 0},
     "pluck": {"waves": [("square", -5, 0, 1.0), ("saw", 5, 0, 0.6)], "cutoff": 700, "res": 0.3,
               "env_amt": 3.5, "adsr": (0.002, 0.22, 0.0, 0.15), "glide": 0.0, "vib": 0},
+    # The sound sheet's Persona synths (PERSONA_PRODUCTION section 10): Virus "Acid" (Burn My Dread), a Virus lead
+    # (School Days' JamMini) and bass, Xpand's "Percy FM Bass" (A Way of Life), Absynth's "FM Pad" (Moon Reload).
+    "acid": {"waves": [("saw", 0, 0, 1.0)], "cutoff": 380, "res": 0.78, "env_amt": 3.6,
+             "adsr": (0.002, 0.16, 0.55, 0.04), "glide": 0.06, "vib": 0, "drive": 3.0},
+    "virus_lead": {"waves": [("saw", c, 0, 1.0) for c in (-14, -6, 0, 6, 14)] + [("square", 0, -1, 0.35)],
+                   "cutoff": 3200, "res": 0.18, "env_amt": 1.2, "adsr": (0.004, 0.3, 0.8, 0.18), "glide": 0.035,
+                   "vib": 14, "wide": True},
+    "virus_bass": {"waves": [("saw", -4, 0, 1.0), ("square", 4, 0, 0.6), ("sine", 0, -1, 0.3)], "cutoff": 420, "res": 0.3,
+                   "env_amt": 2.6, "adsr": (0.002, 0.14, 0.45, 0.05), "glide": 0.0, "vib": 0, "drive": 1.5},
+    "fm_bass": {"fm": (1.0, 4.5, 0.10, 0.9), "adsr": (0.002, 0.35, 0.55, 0.06), "glide": 0.0, "vib": 0},
+    "fm_pad": {"fm": (2.0, 1.4, 1.2, 0.5), "detune": 9, "adsr": (0.45, 0.9, 0.8, 1.1), "glide": 0.0, "vib": 6,
+               "wide": True},
 }
 
 
@@ -169,6 +181,18 @@ def synth(notes, total_sec: float, preset: str = "saw_lead", rng=None) -> np.nda
         if p["vib"]:
             f *= 2 ** (p["vib"] / 1200 * np.sin(2 * np.pi * 5.5 * t) * np.clip((t - 0.3) / 0.3, 0, 1))
         prev_f = f_target
+        if p.get("fm"):  # two-operator FM: the modulator's depth falls from i0 to i1 over `decay` seconds
+            ratio, i0, decay, i1 = p["fm"]
+            idx = i1 + (i0 - i1) * np.exp(-t / decay) * (0.5 + 0.5 * vel / 127)
+            x = 0
+            for dc in ((0,) if not p.get("detune") else (-p["detune"], p["detune"])):
+                ph = np.cumsum(f * 2 ** (dc / 1200) / SR)
+                x = x + np.sin(2 * np.pi * ph + idx * np.sin(2 * np.pi * ratio * ph))
+            env = np.where(t < a_s, t / max(a_s, 1e-4),
+                           np.where(t < a_s + d_s, 1 - (1 - s_l) * (t - a_s) / max(d_s, 1e-4), s_l))
+            env = np.where(t > length, env * np.exp(-(t - length) / max(r_s / 4, 1e-3)), env)
+            out[a:a + m] += x * env * (0.4 + 0.6 * vel / 127)
+            continue
         x = sum(lv * _wave(sh, f * 2 ** (oc + dc / 1200)) for sh, dc, oc, lv in p["waves"])
         env = np.where(t < a_s, t / max(a_s, 1e-4),
                        np.where(t < a_s + d_s, 1 - (1 - s_l) * (t - a_s) / max(d_s, 1e-4), s_l))
@@ -177,11 +201,13 @@ def synth(notes, total_sec: float, preset: str = "saw_lead", rng=None) -> np.nda
         fenv = np.where(t < a_s + d_s, np.clip(1 - (t - a_s) / max(d_s, 1e-4), 0, 1), 0)
         cutoff = p["cutoff"] * 2 ** (p["env_amt"] * fenv) * (0.6 + 0.4 * vel / 127)
         x = _svf_lowpass(x, cutoff, p["res"])
+        if p.get("drive"):  # the acid squelch and the Virus bass bite
+            x = np.tanh(p["drive"] * x) / np.tanh(p["drive"])
         out[a:a + m] += x * env * (0.4 + 0.6 * vel / 127)
     pk = np.abs(out).max() or 1.0
     out = out / pk * 0.5
     # a touch of stereo: 7 ms Haas copy on the right at -4 dB for pads, dead centre otherwise
-    if preset == "super_pad":
+    if preset == "super_pad" or p.get("wide"):
         d = int(0.007 * SR)
         return np.stack([out, np.r_[np.zeros(d), out[:-d]] * 0.63 + out * 0.37]).astype(np.float32)
     return np.stack([out, out]).astype(np.float32)

@@ -74,10 +74,25 @@ SAMPLED: dict[str, dict] = {
     "sfz:harp": {"src": ("folder", f"{VSCO}/Strings/Harp", ""), "gm": "harp", "family": "strings", "range": (24, 103)},
     "sfz:horn": {"src": ("folder", f"{VSCO}/Brass/F Horn/sus", ""), "gm": "french_horn", "family": "brass",
                  "range": (34, 77)},
+    # Karoryfer Samples (CC0), added 2026-10-16 for the reference-song rebuild (PERSONA_PRODUCTION section 10)
+    "sfz:egtr_clean": {"src": "Emilyguitar/Emilyguitar/emily_clean.sfz", "gm": "clean_guitar", "family": "guitar",
+                       "range": (40, 88)},
+    "sfz:egtr_drive": {"src": "Emilyguitar/Emilyguitar/emily_clean.sfz", "gm": "overdrive_guitar", "family": "guitar",
+                       "range": (40, 88)},
+    "sfz:hollow": {"src": "BlackAndGreen/Programs/04-green_twang.sfz", "gm": "clean_guitar", "family": "guitar",
+                   "range": (40, 86)},
+    "sfz:hollow_stac": {"src": "BlackAndGreen/Programs/05-green_staccato.sfz", "gm": "clean_guitar", "family": "guitar",
+                        "range": (40, 86)},
+    "sfz:weresax": {"src": "Weresax/Weresax/Programs/Sax.sfz", "gm": "alto_sax", "family": "reed", "range": (49, 80)},
+    "sfz:swagbass": {"src": "Swagbass/Swagbass/swagbass_clean.sfz", "gm": "finger_bass", "family": "bass",
+                     "range": (28, 67)},
 }
 # Variants: (base instrument, character, detune in cents per note)
 VARIANTS = {"sfz:rhodes_tape": ("sfz:rhodes", "tape", 0), "sfz:piano_radio": ("sfz:piano", "radio", 0),
-            "sfz:piano_old": ("sfz:piano", "old", 22), "sfz:piano_prepared": ("sfz:piano", "prepared", 0)}
+            "sfz:piano_old": ("sfz:piano", "old", 22), "sfz:piano_prepared": ("sfz:piano", "prepared", 0),
+            # a compressed finger bass: every note holds its level like the references' (their notes stay within
+            # 12 dB of the attack for 0.23-0.31 beats; ours died in 0.04-0.09)
+            "sfz:bass_tight": ("sfz:bass_finger", "squash", 0)}
 for _k, (_b, _c, _d) in VARIANTS.items():
     SAMPLED[_k] = dict(SAMPLED[_b], variant=(_b, _c, _d))
 
@@ -91,7 +106,26 @@ KITS = {
                              49: 58, 57: 59, 52: 60, 55: 59, 50: 61, 48: 62, 47: 63, 45: 63, 43: 64, 41: 64},
                      "choke": {"closed": [52], "open": [53]}},
     "kit:latin": {"src": ("perc", "latin"), "gm": "kit:standard", "map": None, "choke": {}},
+    # Unruly Drums (Karoryfer, CC0): a punchy live kit. Its hi-hat opens with CC4, so the open hat (46) is the same
+    # program loaded with CC4 up; Frankensnare snares swap in per kit below.
+    "kit:unruly": {"src": "UnrulyDrums/Programs/01-kit-sticks.sfz", "gm": "kit:room",
+                   "map": {35: 36, 36: 36, 37: 69, 38: 38, 40: 40, 42: 42, 44: 44, 46: 46, 51: 51, 53: 53, 49: 49,
+                           57: 57, 52: 50, 55: 55, 50: 47, 48: 45, 47: 45, 45: 43, 43: 41, 41: 41, 59: 52},
+                   "choke": {},
+                   "parts": {46: {"cc": {4: 127}, "key": 46, "choked_by": (42, 44)}}},
 }
+# Snare swaps and drum-bus characters built on the kits above: (base kit, {GM note: part}, bus fx)
+KIT_VARIANTS = {
+    # P3-style sampled hip-hop break: a tight steel snare, everything squashed and a little lo-fi
+    "kit:break": ("kit:unruly", {38: {"src": "Frankensnare/Programs/04-12x5steel.sfz", "key": 38, "max_len": 0.28},
+                                 40: {"src": "Frankensnare/Programs/04-12x5steel.sfz", "key": 40, "max_len": 0.28}}, "break"),
+    # a fat maple snare for the live P3R band (BFD3 custom kit in the sound sheet)
+    "kit:band": ("kit:unruly", {38: {"src": "Frankensnare/Programs/06-14x5maple.sfz", "key": 38, "max_len": 0.5}}, "band"),
+    # a dry, tight disco kit (School Days' four on the floor)
+    "kit:disco": ("kit:unruly", {38: {"src": "Frankensnare/Programs/11-14x8birch.sfz", "key": 38, "max_len": 0.3}}, "disco"),
+}
+for _k, (_base, _parts, _fx) in KIT_VARIANTS.items():
+    KITS[_k] = dict(KITS[_base], parts={**KITS[_base].get("parts", {}), **_parts}, bus=_fx)
 # GM percussion notes for the hand percussion kit (VCSL, CC0).
 VCSL = "VCSL"
 PERC = {
@@ -320,9 +354,7 @@ def render(key: str, notes_sec: list[tuple[float, float, int, int]], total_sec: 
         return synths.synth(notes_sec, total_sec, preset, rng)
     inst = instrument(key)
     if key in KITS:
-        mp = KITS[key]["map"]
-        notes = [(s, l, mp.get(int(p), int(p)) if mp else int(p), v) for s, l, p, v in notes_sec]
-        return sampler.render_kit(inst, notes, total_sec, rng)
+        return render_kit(key, inst, notes_sec, total_sec, rng)
     shift = SAMPLED[key].get("key_shift", 0)  # libraries mapped as written, an octave above how they sound
     var = SAMPLED[key].get("variant")
     if var:
@@ -334,6 +366,76 @@ def render(key: str, notes_sec: list[tuple[float, float, int, int]], total_sec: 
         return variant_fx(character, post_fx(base, x, rng), rng)
     x = inst.render([(s, l, p + shift, v) for s, l, p, v in notes_sec], total_sec, rng)
     return post_fx(key, x, rng)
+
+
+_PART_CACHE: dict = {}
+
+
+def _part_instrument(src: str | None, base_src, cc: dict | None):
+    k = (src or str(base_src), tuple(sorted((cc or {}).items())))
+    if k not in _PART_CACHE:
+        p = root() / src if src else _materialise(base_src, root())
+        try:
+            _PART_CACHE[k] = sampler.Instrument(p, cc=cc) if p and p.exists() else None
+        except (ValueError, OSError):
+            _PART_CACHE[k] = None
+    return _PART_CACHE[k]
+
+
+def render_kit(key: str, inst, notes_sec, total_sec: float, rng) -> np.ndarray:
+    """A kit: GM notes through the kit's map; notes with a part of their own (another library's snare, the open
+    hat with its CC up) render through that part, an open hat cut short by the next closed or pedal hat; then
+    the kit's bus character."""
+    spec = KITS[key]
+    mp, parts = spec["map"], spec.get("parts", {})
+    main = [(s, l, mp.get(int(p), int(p)) if mp else int(p), v) for s, l, p, v in notes_sec if int(p) not in parts]
+    out = sampler.render_kit(inst, main, total_sec, rng) if main else np.zeros((2, int(total_sec * SR)), np.float32)
+    for gm, part in parts.items():
+        mine = [(s, l, part.get("key", gm), v) for s, l, p, v in notes_sec if int(p) == gm]
+        pi = _part_instrument(part.get("src"), spec["src"], part.get("cc"))
+        if not mine or pi is None:
+            continue
+        stops = sorted(s for s, _, p, _ in notes_sec if int(p) in part.get("choked_by", ()))
+        for s, l, k, v in mine:
+            x = sampler.render_kit(pi, [(0.0, l, k, v)], min(total_sec - s, 4.0), rng)
+            if part.get("max_len"):  # a swapped snare's ring stops where a drummer's would
+                c = int(part["max_len"] * SR)
+                if c < x.shape[1]:
+                    f = min(int(0.08 * SR), x.shape[1] - c)
+                    x[:, c:c + f] *= np.linspace(1, 0, f)
+                    x[:, c + f:] = 0
+            nxt = next((t for t in stops if t > s + 0.01), None)
+            if nxt is not None and int((nxt - s) * SR) < x.shape[1]:
+                cut = int((nxt - s) * SR)
+                f = min(int(0.01 * SR), x.shape[1] - cut)
+                x[:, cut:cut + f] *= np.linspace(1, 0, f)
+                x[:, cut + f:] = 0
+            a = int(s * SR)
+            m = min(x.shape[1], out.shape[1] - a)
+            if m > 0:
+                out[:, a:a + m] += x[:, :m]
+    return kit_bus(spec.get("bus"), out)
+
+
+def kit_bus(kind: str | None, x: np.ndarray) -> np.ndarray:
+    """Drum-bus characters: 'break' a sampled hip-hop break (hard compression, saturation, 26 kHz resample,
+    dulled top: the Dance Mega Drums / S3000 sound of P3), 'band' a glued live kit, 'disco' dry and tight."""
+    from pedalboard import (Compressor, Distortion, Gain, HighShelfFilter, LowpassFilter, LowShelfFilter, Pedalboard,
+                            PeakFilter, Resample)
+
+    if not kind:
+        return x
+    if kind == "break":
+        fx = [Compressor(threshold_db=-16, ratio=4, attack_ms=6, release_ms=60), Distortion(drive_db=5), Gain(-4),
+              Resample(target_sample_rate=26040), LowpassFilter(11000), PeakFilter(cutoff_frequency_hz=180, gain_db=3, q=0.8),
+              PeakFilter(cutoff_frequency_hz=2200, gain_db=2, q=1.0)]
+    elif kind == "band":
+        fx = [Compressor(threshold_db=-18, ratio=3, attack_ms=10, release_ms=90), LowShelfFilter(cutoff_frequency_hz=90, gain_db=2),
+              HighShelfFilter(cutoff_frequency_hz=8000, gain_db=2)]
+    else:
+        fx = [Compressor(threshold_db=-16, ratio=4, attack_ms=2, release_ms=50), PeakFilter(cutoff_frequency_hz=400, gain_db=-3, q=1.0),
+              HighShelfFilter(cutoff_frequency_hz=9000, gain_db=3)]
+    return Pedalboard(fx)(x.astype(np.float32), SR)
 
 
 def variant_fx(character: str, x: np.ndarray, rng) -> np.ndarray:
@@ -354,6 +456,11 @@ def variant_fx(character: str, x: np.ndarray, rng) -> np.ndarray:
         mono = x.mean(axis=0, keepdims=True).repeat(2, axis=0)
         return Pedalboard([HighpassFilter(300), LowpassFilter(3000), PeakFilter(cutoff_frequency_hz=1200, gain_db=4, q=0.8),
                            Distortion(drive_db=12), Gain(-9)])(mono.astype(np.float32), SR)
+    if character == "squash":
+        from pedalboard import Compressor
+
+        return Pedalboard([Compressor(threshold_db=-30, ratio=8, attack_ms=0.5, release_ms=90), Gain(12),
+                           Distortion(drive_db=3), Gain(-3)])(x, SR)
     if character == "old":
         return Pedalboard([PeakFilter(cutoff_frequency_hz=1500, gain_db=4, q=1.2), LowpassFilter(7000)])(x, SR)
     if character == "prepared":
@@ -365,7 +472,7 @@ def variant_fx(character: str, x: np.ndarray, rng) -> np.ndarray:
 
 def post_fx(key: str, x: np.ndarray, rng) -> np.ndarray:
     """The instrument's own character (docs/PERSONA_PRODUCTION.md rules 1 and 7)."""
-    from pedalboard import Chorus, Distortion, Gain, HighpassFilter, Pedalboard, PeakFilter
+    from pedalboard import Chorus, Distortion, Gain, HighpassFilter, LowpassFilter, Pedalboard, PeakFilter
 
     x = x.astype(np.float32)
     if key == "sfz:rhodes":
@@ -382,6 +489,14 @@ def post_fx(key: str, x: np.ndarray, rng) -> np.ndarray:
         # which thins out on mono speakers); in a band mix they sit nearer the middle: 60% width
         mid, side = x.mean(axis=0), (x[0] - x[1]) / 2
         x = np.stack([mid + 0.6 * side, mid - 0.6 * side])
+    elif key == "sfz:egtr_drive":
+        # an overdriven amp and a 4x12 cab: drive, a mid push, the cab's roll-off above 5 kHz (the BMD/FMFL rhythm guitar)
+        x = Pedalboard([HighpassFilter(90), Gain(6), Distortion(drive_db=22), LowpassFilter(5200),
+                        PeakFilter(cutoff_frequency_hz=750, gain_db=3, q=0.8), PeakFilter(cutoff_frequency_hz=2800, gain_db=-2, q=1.2),
+                        Gain(-14)])(x, SR)
+    elif key in ("sfz:egtr_clean", "sfz:hollow", "sfz:hollow_stac"):
+        x = Pedalboard([HighpassFilter(100), Distortion(drive_db=3), Gain(-2),
+                        PeakFilter(cutoff_frequency_hz=2600, gain_db=2, q=0.9)])(x, SR)
     elif key == "sfz:guitar_clean":
         x = Pedalboard([HighpassFilter(110), Distortion(drive_db=6), Gain(-5),
                         PeakFilter(cutoff_frequency_hz=2400, gain_db=3, q=0.9)])(x, SR)
@@ -396,4 +511,6 @@ def post_fx(key: str, x: np.ndarray, rng) -> np.ndarray:
 def credits() -> list[str]:
     return ["MuldjordKit by the DrumGizmo team (CC-BY 4.0)", "Salamander Grand Piano by Alexander Holm (CC-BY 3.0)",
             "jRhodes3d by Jeff Learman", "Black And Blue Basses by Karoryfer Samples (CC0)",
-            "VSCO-2 Community Edition and VCSL by Versilian Studios (CC0)", "FreePats tenor sax and FSBS guitar (CC0)"]
+            "VSCO-2 Community Edition and VCSL by Versilian Studios (CC0)", "FreePats tenor sax and FSBS guitar (CC0)",
+            "Emilyguitar, Black And Green Guitars, Weresax, Swagbass, Frankensnare and "
+            "Unruly Drums by Karoryfer Samples (CC0)"]

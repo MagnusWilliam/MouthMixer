@@ -20,6 +20,17 @@ cousin when its library isn't installed, so songs still render everywhere.
 | `synth:organ_jazz/gospel/rock/soft` | our tonewheel organ (`arrange/synths.py`) | | ours | drawbars, click, 3rd-harmonic percussion, chorus-vibrato, two-rotor Leslie, drive |
 | `synth:saw_lead/super_pad/brass_stab/sub_bass/pluck` | our analog-style synth | | ours | PolyBLEP oscillators, state-variable low-pass, filter envelope |
 | `sfx:reverse_crash`, `sfx:boom` | the kit's crash reversed; a synthesised sub drop | | | transitions into sections |
+| `sfz:egtr_clean`, `sfz:egtr_drive` | Emilyguitar (electric) | Karoryfer Samples | CC0 | added 2026-10-16; `egtr_drive` runs it through our amp (drive, 750 Hz push, 5.2 kHz cab roll-off) for power chords |
+| `sfz:hollow`, `sfz:hollow_stac` | Black And Green Guitars (green hollowbody: twang, staccato) | Karoryfer Samples | CC0 | the funk chops and city-pop clean parts |
+| `sfz:weresax` | Weresax | Karoryfer Samples | CC0 | the horn section's sax and a lead |
+| `sfz:swagbass` | Swagbass | Karoryfer Samples | CC0 | mapped at sounding pitch |
+| `kit:unruly`, `kit:band`, `kit:break`, `kit:disco` | Unruly Drums (sticks kit), Frankensnare snares | Karoryfer Samples | CC0 | the open hat is the same program with CC4 up; `band` a 14x5 maple snare and glue, `break` a 12x5 steel snare and a sampled-break bus (compression, saturation, 26 kHz resample), `disco` a birch snare, dry and tight |
+| `synth:acid/virus_lead/virus_bass/fm_bass/fm_pad` | our synth | | ours | stand-ins for the sound sheet's Virus "Acid", Virus lead and bass, Xpand "Percy FM Bass", Absynth "FM Pad" |
+
+Downloaded and not used: Bear Sax (its dynamics crossfade on CC1 needs `xfin_locc`, which our player doesn't do:
+only breath noise sounds) and Caveman Cosmonaut (its main program stacks octaves). Both CC0, in
+`instruments/`. The SFZ player now reads CC-switched layers (`loccN`/`hiccN` at `set_ccN` or a given value),
+keyswitches (`sw_last`), includes relative to the top file, and skips `*sine`-style generators.
 
 **Credits for anything released with these sounds:** "Drums: MuldjordKit by the DrumGizmo team (CC-BY 4.0).
 Piano: Salamander Grand Piano by Alexander Holm (CC-BY 3.0)." (`instruments.credits()` lists them all.)

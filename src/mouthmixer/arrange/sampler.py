@@ -9,7 +9,10 @@ choke groups (an open hi-hat cut by the closed one).
 Supported opcodes: sample, default_path, #define/$VAR, #include, key, lokey, hikey, pitch_keycenter, lovel,
 hivel, lorand, hirand, seq_length, seq_position, tune, transpose, volume, amplitude, pan, amp_veltrack,
 ampeg_attack, ampeg_hold, ampeg_decay, ampeg_sustain, ampeg_release, loop_mode (one_shot), offset, end,
-group, off_by, trigger (release triggers are skipped), note names (c4, f#3; c4 = 60).
+group, off_by, trigger (release triggers are skipped), note names (c4, f#3; c4 = 60). Layers switched by a MIDI
+CC (loccN/hiccN) play at the CC's set_ccN default or a value the caller gives; keyswitched articulations
+(sw_last) play the sw_default one or the one the caller picks; built-in generators (*sine) and CC-triggered
+regions are skipped.
 """
 
 from __future__ import annotations
@@ -63,13 +66,17 @@ class Region:
     end: int = 0
     group: int = 0
     off_by: int = 0
+    cc_ranges: dict = field(default_factory=dict)
+    sw: int | None = None
 
 
 _KEYS = {"lokey", "hikey", "pitch_keycenter", "key"}
 
 
-def parse(path: Path) -> list[Region]:
-    """Regions of an SFZ file, with <global>/<master>/<group> opcodes inherited."""
+def parse(path: Path, cc: dict | None = None, keyswitch: int | None = None) -> list[Region]:
+    """Regions of an SFZ file, with <global>/<master>/<group> opcodes inherited. `cc`: CC number -> value for
+    CC-switched layers (default: the file's set_ccN, else 0); `keyswitch`: which sw_last articulation (default:
+    sw_default, else the lowest)."""
     path = Path(path)
     defines: dict[str, str] = {}
 
@@ -83,8 +90,9 @@ def parse(path: Path) -> list[Region]:
                 defines[m[1]] = m[2]
                 continue
             m = re.match(r'\s*#include\s+"([^"]+)"', line)
-            if m:
-                out.append(read(p.parent / m[1]))
+            if m:  # relative to the top file (the SFZ spec); older libraries mean the including file
+                inc = path.parent / m[1]
+                out.append(read(inc if inc.exists() else p.parent / m[1]))
                 continue
             out.append(line)
         return "\n".join(out)
@@ -125,13 +133,44 @@ def parse(path: Path) -> list[Region]:
             default_path = current["default_path"].replace("\\", "/")
     if level == "region" and current is not None:
         regions.append(_region(current, path.parent, default_path))
-    return [r for r in regions if r is not None]
+    regions = [r for r in regions if r is not None]
+    ccv = {}
+    for scope in (scopes["control"], scopes["global"]):
+        for k, v in scope.items():
+            m = re.fullmatch(r"set_cc(\d+)", k)
+            if m:
+                try:
+                    ccv[int(m[1])] = float(v)
+                except ValueError:
+                    pass
+    ccv.update(cc or {})
+    regions = [r for r in regions if all(lo <= ccv.get(n, 0) <= hi for n, (lo, hi) in r.cc_ranges.items())]
+    sws = sorted({r.sw for r in regions if r.sw is not None})
+    if sws:
+        dflt = scopes["control"].get("sw_default") or scopes["global"].get("sw_default")
+        pick = keyswitch if keyswitch is not None else (note_number(dflt) if dflt else sws[0])
+        regions = [r for r in regions if r.sw is None or r.sw == pick]
+    return regions
 
 
 def _region(o: dict, base: Path, default_path: str) -> Region | None:
-    if "sample" not in o or o.get("trigger", "attack") != "attack":
+    if "sample" not in o or o.get("trigger", "attack") != "attack" or o["sample"].startswith("*") \
+            or any(k.startswith(("on_locc", "on_hicc")) for k in o):
         return None
     r = Region(sample=(base / (default_path + o["sample"].replace("\\", "/"))).resolve())
+    for k, v in o.items():
+        m = re.fullmatch(r"(lo|hi)cc(\d+)", k)
+        if m:
+            lo, hi = r.cc_ranges.get(int(m[2]), (0.0, 127.0))
+            try:
+                r.cc_ranges[int(m[2])] = (float(v), hi) if m[1] == "lo" else (lo, float(v))
+            except ValueError:
+                pass
+    if "sw_last" in o:
+        try:
+            r.sw = note_number(o["sw_last"])
+        except (ValueError, KeyError):
+            pass
     if "key" in o:
         k = note_number(o["key"])
         r.lokey = r.hikey = r.center = k
@@ -184,9 +223,9 @@ def load_sample(p: Path) -> np.ndarray:
 class Instrument:
     """A parsed SFZ instrument that renders note lists."""
 
-    def __init__(self, sfz: Path):
+    def __init__(self, sfz: Path, cc: dict | None = None, keyswitch: int | None = None):
         self.path = Path(sfz)
-        self.regions = parse(self.path)
+        self.regions = parse(self.path, cc, keyswitch)
         if not self.regions:
             raise ValueError(f"no playable regions in {sfz}")
 

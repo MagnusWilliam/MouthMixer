@@ -59,3 +59,23 @@ def test_ambience_textures_and_instrument_variants():
         y = I.variant_fx(character, tone, rng)
         assert y.shape == tone.shape and np.isfinite(y).all() and np.abs(y).max() > 0.01, character
     assert I.SAMPLED["sfz:piano_old"]["variant"] == ("sfz:piano", "old", 22)
+
+
+
+def test_persona_sheet_synths_play_in_tune():
+    import librosa
+
+    for preset, key in (("acid", 43), ("virus_lead", 72), ("virus_bass", 36), ("fm_bass", 36), ("fm_pad", 60)):
+        x = SY.synth([(0.05, 0.9, key, 100)], 1.2, preset).mean(axis=0)
+        assert np.isfinite(x).all() and np.sqrt(np.mean(x ** 2)) > 0.01, preset
+        f0, v, _ = librosa.pyin(x[: int(0.9 * SY.SR)], fmin=30, fmax=1500, sr=SY.SR)
+        assert abs(librosa.hz_to_midi(np.nanmedian(f0[v])) - key) < 0.6, preset
+    # FM: the modulator's depth falls, so the tone gets purer (fewer upper partials) as the note holds
+    x = SY.synth([(0.0, 1.5, 48, 110)], 1.6, "fm_bass").mean(axis=0)
+    f = np.fft.rfftfreq(4096, 1 / SY.SR)
+
+    def share(seg):
+        s = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
+        return s[f > 400].sum() / s.sum()
+
+    assert share(x[441:441 + 4096]) > share(x[int(1.0 * SY.SR):int(1.0 * SY.SR) + 4096]) * 1.5

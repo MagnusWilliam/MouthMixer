@@ -73,3 +73,29 @@ def test_round_robin_and_choke(tmp_path):
 def test_note_names():
     assert SM.note_number("c4") == 60 and SM.note_number("a3") == 57 and SM.note_number("f#2") == 42
     assert SM.note_number("bb1") == 34 and SM.note_number("64") == 64
+
+
+
+def test_cc_layers_keyswitches_generators_and_includes(tmp_path):
+    d = tmp_path / "samples"
+    d.mkdir()
+    for name, f in (("closed", 300), ("open", 600), ("legato", 220), ("stac", 440)):
+        sf.write(str(d / f"{name}.wav"), _tone(f), SR)
+    (tmp_path / "maps").mkdir()
+    # an include written relative to the top file (the SFZ spec), from a file in a subfolder
+    (tmp_path / "maps" / "hats.sfz").write_text(
+        "<region> sample=closed.wav key=46 locc4=0 hicc4=63\n<region> sample=open.wav key=46 locc4=64 hicc4=127\n")
+    (tmp_path / "maps" / "all.sfz").write_text('#include "maps/hats.sfz"\n')
+    (tmp_path / "kit.sfz").write_text("""
+<control> default_path=samples/ set_cc4=10
+#include "maps/all.sfz"
+<region> sample=*sine key=50
+<region> sample=legato.wav key=60 sw_last=24
+<region> sample=stac.wav key=60 sw_last=25
+""")
+    inst = SM.Instrument(tmp_path / "kit.sfz")
+    assert sorted(r.sample.name for r in inst.regions) == ["closed.wav", "legato.wav"]  # set_cc default, lowest switch
+    inst2 = SM.Instrument(tmp_path / "kit.sfz", cc={4: 127}, keyswitch=25)
+    assert sorted(r.sample.name for r in inst2.regions) == ["open.wav", "stac.wav"]
+    x = inst2.render([(0.0, 0.5, 46, 100)], 0.6, np.random.default_rng(0))
+    assert abs(_f0(x.mean(axis=0)) - 600) < 10

@@ -92,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("target", type=Path, help="an audio file, or a folder of them")
     rp.add_argument("--stems", action="store_true", help="split into stems first (needs Demucs)")
     rp.add_argument("--out", type=Path, help="default: <library>/analysis")
+    pp = sub.add_parser("profile", help="instrument profiles from six stems (reference/profile.py)")
+    pp.add_argument("mix", type=Path, help="the reference audio file")
+    pp.add_argument("song_dir", type=Path, help="its analysis folder (with stems6/)")
     a = ap.parse_args(argv)
 
     if a.cmd in (None, "launch"):
@@ -127,6 +130,10 @@ def main(argv: list[str] | None = None) -> int:
         from .reference import analyse
 
         analyse.run(a.target, a.out or config.home() / "analysis", with_stems=a.stems)
+    elif a.cmd == "profile":
+        from .reference import profile
+
+        profile.profile(a.song_dir, a.mix)
     return 0
 
 
