@@ -118,3 +118,25 @@ Checks before anyone listened:
 
 Not done yet: listening (the user), falls/rips on strings and brass (the player has no pitch bends), a real P3R synth layer, and the user's vocal over it.
 
+## 5. The engine: every songbook song (2026-10-15, later)
+
+The user liked the Last Train base and asked for more songs to sing over (and, later, instrumentals for game
+scenes). `studio/engine.py` generalises the hand-written production:
+- **Styles** (`engine.STYLES`): city pop (G, 112), night jazz (A minor, 86, swung 0.62), battle rush (E minor,
+  158, band hits on shout words), rain bossa (D, 132), boss orchestra (C minor, 150, string ostinato, timpani,
+  choir), ending ballad (F, 76, piano left hand, harp), labyrinth pulse (F# minor, 120). Each says how every
+  section feel is played: drums, bass style, comping rhythm, and which layers come in.
+- **Song specs** (`songbook_productions.SPECS`): chords per section, the song's hook motif, hit words. Return to
+  Sender's hook quotes the main theme's "Ride, ride, ride" line; its chorus uses the main theme's chorus chords.
+- **The melody writer** (`engine.write_melody`): rhythm from the syllables (stress on beats, held last
+  syllable, a breath before the next line, a pickup into verse lines), pitches by beam search (chord tones on
+  strong beats, steps preferred, an arch per line, open odd and closed even endings, register by section:
+  verse low, chorus up to G4), and repeated words sung the same way so hooks stay hooks.
+- `songbook_productions.make(id)` creates the song through Make (so the words, sections and Sing work) and adds
+  the engine's production as version 2.
+
+All six measured before going in: 0 half-step rubs between melody and band, guide melodies in A3-G4, and the
+-10 LUFS listening masters within reach of the references (width -5.9 to -10.9 dB, low-mid -6.4 to -8.0 dB,
+crest 11.9-12.4 dB). They are short (38-56 bars, about a minute to a minute and a half): the songbook wrote
+them as game cues.
+

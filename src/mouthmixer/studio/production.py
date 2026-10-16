@@ -21,8 +21,8 @@ NOTE = {"C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "F": 5, "F#"
 SHAPES = {
     "": ([0, 4, 7], "maj"), "m": ([0, 3, 7], "min"), "7": ([0, 4, 7, 10], "dom7"), "9": ([0, 4, 7, 10, 14], "dom9"),
     "m7": ([0, 3, 7, 10], "min7"), "m9": ([0, 3, 7, 10, 14], "min9"), "m11": ([0, 3, 7, 10, 14, 17], "min11"),
-    "maj7": ([0, 4, 7, 11], "maj7"), "maj9": ([0, 4, 7, 11, 14], "maj9"), "6/9": ([0, 4, 7, 9, 14], "maj6"),
-    "sus4": ([0, 5, 7], "sus4"), "7sus4": ([0, 5, 7, 10], "dom7sus4"), "7#5#9": ([0, 4, 8, 10, 15], "dom7s9"),
+    "maj7": ([0, 4, 7, 11], "maj7"), "6/9": ([0, 4, 7, 9, 14], "maj6"),
+    "sus4": ([0, 5, 7], "sus4"), "m7b5": ([0, 3, 6, 10], "min7b5"), "maj9": ([0, 4, 7, 11, 14], "maj9"), "7sus4": ([0, 5, 7, 10], "dom7sus4"), "7#5#9": ([0, 4, 8, 10, 15], "dom7s9"),
 }
 
 
@@ -194,3 +194,67 @@ def build_song(pack: str, bpm: float, tonic: int, mode: str, sections, chords_by
             ch.append((bar * 4 + j * 4 / len(parts), 4 / len(parts), theory.Chord(root, quality, "", "C")))
     return Song(pack=pack, bpm=bpm, tonic=tonic, mode=mode, swing=0.5, sections=sections, chords=ch, tracks=tracks,
                 seed=seed)
+
+
+def swing(notes: list, amount: float) -> list:
+    """Swung 8ths: every note on an off-beat 8th moves later, to `amount` of the beat (0.5 straight, 0.62
+    a jazz swing, 0.67 a full triplet)."""
+    if abs(amount - 0.5) < 1e-3:
+        return notes
+    out = []
+    for s, l, p, v in notes:
+        frac = s % 1
+        if abs(frac - 0.5) < 1e-3:
+            s = s - 0.5 + amount
+        out.append((s, l, p, v))
+    return out
+
+
+def add_version(song_dir, song: Song, gains: dict, title: str, base: dict | None = None, extra: dict | None = None) -> int:
+    """Put a produced song into an app song as a new version: summary, mixer state (levels and pans from
+    `gains` and the tracks), stems through the app's mixer, the match-EQ'd master and the critic's verdict.
+    `base`: the version the words and section feels come from (default: the newest with a lyric sheet, or the
+    newest). Backs up song.json first. Returns the version index."""
+    import json
+    import shutil
+    import time
+    from pathlib import Path
+
+    from ..arrange import critic, mixer, render
+    from ..arrange.songwriter import song_summary
+
+    song_dir = Path(song_dir)
+    rec_path = song_dir / "song.json"
+    shutil.copy2(rec_path, song_dir / f"song.backup-{time.strftime('%Y%m%d-%H%M%S')}.json")
+    record = json.loads(rec_path.read_text())
+    if base is None:
+        base = next((v for v in reversed(record["versions"]) if v.get("lyric_sheet")), record["versions"][-1])
+    idx_file = mixer.next_version_index(song_dir, record)
+    new = {k: v for k, v in base.items() if k not in ("vocal_stem", "vocal_stems", "vocals", "vocal_tracks",
+                                                       "audio_parts", "working", "mixed_from", "mixed_at")}
+    new.update(song_summary(song))
+    new.update({"file": f"v{idx_file}.ogg", "midi": f"v{idx_file}.mid", "title": title, "made_at": time.time(),
+                "added": [t.name for t in song.tracks], "critic": {"ok": True, "score": 0.0}, "score": 0.0})
+    new.update(extra or {})
+    record["versions"].append(new)
+    vi = len(record["versions"]) - 1
+    parts = [{"id": f"p{i}", "name": t.name, "role": t.role, "instrument": t.instrument, "kind": f"orig:{t.role}",
+              "mine": False, "muted": False, "gain_db": float(gains.get(t.name, 0.0)), "pan": t.pan,
+              "notes": [list(x) for x in t.notes]} for i, t in enumerate(song.tracks)]
+    mixer.write_json(song_dir / f"mixer-v{vi}.json", {"version": vi, "parts": parts, "next_id": len(parts),
+                                                      "lead_mode": "duck"})
+    mixer.write_json(rec_path, record)
+    m = mixer.Mixer(song_dir, vi)
+    m.render_stems()
+    sng = m.song(False)
+    _, n_ = render.song_length(sng)
+    music, lead, _, stems = m._stems(n_)
+    out, _ = render.match_tone(music + lead, amount=0.9, limit_db=4.0)
+    mix = render.master(out)
+    verdict = critic.judge(sng, mix, stems)
+    render.write_audio(mix, song_dir / f"v{idx_file}.ogg")
+    render.write_midi(sng, song_dir / f"v{idx_file}.mid")
+    record = json.loads(rec_path.read_text())
+    record["versions"][vi].update({"critic": verdict, "score": verdict["score"]})
+    mixer.write_json(rec_path, record)
+    return vi

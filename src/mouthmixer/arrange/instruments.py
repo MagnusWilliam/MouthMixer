@@ -26,7 +26,9 @@ SR = sampler.SR
 
 
 def root() -> Path:
-    return config.home() / "instruments"
+    import os
+
+    return Path(os.environ["MOUTHMIXER_INSTRUMENTS"]) if os.environ.get("MOUTHMIXER_INSTRUMENTS") else config.home() / "instruments"
 
 
 VSCO = "VSCO-2-CE"
@@ -67,6 +69,7 @@ SAMPLED: dict[str, dict] = {
                      "range": (34, 72)},
     "sfz:trombone_stac": {"src": ("folder", f"{VSCO}/Brass/Tenor Trombone/stac", ""), "gm": "trombone",
                           "family": "brass", "range": (34, 72)},
+    "sfz:harp": {"src": ("folder", f"{VSCO}/Strings/Harp", ""), "gm": "harp", "family": "strings", "range": (24, 103)},
     "sfz:horn": {"src": ("folder", f"{VSCO}/Brass/F Horn/sus", ""), "gm": "french_horn", "family": "brass",
                  "range": (34, 77)},
 }
@@ -96,7 +99,7 @@ PERC = {
     82: ("Idiophones/Struck Idiophones/Shaker, Small", "Mid_ShakerHighFaster"),
 }
 
-_NOTE_RE = re.compile(r"_([A-G]#?)(-?\d)_v(\d+)(?:_(?:rr|RR)?(\d+))?", re.I)
+_NOTE_RE = re.compile(r"_([A-G]#?)(-?\d)(?:_v(\d+))?(?:_(?:rr|RR)?(\d+))?(?=[_.])", re.I)
 
 
 def folder_sfz(folder: Path, name_filter: str = "") -> str:
@@ -110,7 +113,7 @@ def folder_sfz(folder: Path, name_filter: str = "") -> str:
         if not m:
             continue
         key = sampler.note_number(m[1].lower() + m[2])
-        files.setdefault((key, int(m[3])), []).append(p.name)
+        files.setdefault((key, int(m[3] or 1)), []).append(p.name)
     if not files:
         return ""
     keys = sorted({k for k, _ in files})

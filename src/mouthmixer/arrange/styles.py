@@ -460,3 +460,9 @@ PACKS["persona_acid_jazz"] = dict(PACKS["heist_funk"]) | {
                 "triangle, B3 organ, strings and brass in the choruses, clean guitars left and right",
     "reverb": 0.4, "delay": 0.08, "drive": False, "vocal_preset": "soul", "match_tone": True,
 }
+
+for _k, _t, _rv in (("persona_city", "Persona city pop", 0.45), ("persona_night", "Persona night jazz", 0.65),
+                    ("persona_battle", "Persona battle rush", 0.3), ("persona_bossa", "Persona rain bossa", 0.55),
+                    ("persona_boss", "Persona boss orchestra", 0.55), ("persona_ballad", "Persona ending ballad", 0.75),
+                    ("persona_dungeon", "Persona labyrinth pulse", 0.6)):
+    PACKS[_k] = dict(PACKS["persona_acid_jazz"]) | {"title": _t, "describe": _t + " (studio/engine.py)", "reverb": _rv}
